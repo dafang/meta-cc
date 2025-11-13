@@ -53,101 +53,135 @@ update_usage_count(F) = atomic_write(F, {usage_count: +1, updated: now()})
 
 ## Phase 2: Optimize Prompt
 
+**Data Flow**: collect_history → analyze_quality → extract_patterns → detect_gaps → generate_alternatives
+
 refine :: Raw_Prompt → Optimized_Prompts
-refine(P) = search_similar(P) → analyze_quality(candidates) → extract_patterns(quality_analysis) → detect_gaps(P, patterns) → generate_alternatives(P, gaps, patterns)
-
----
-
-### Step 2.1: Search Similar Historical Prompts
-
-**CRITICAL**: This step MUST execute MCP tool `query_user_messages` to search project history.
-
-search_similar :: Prompt → [Historical_Prompts]
-search_similar(P) = {
-  keywords: extract_keywords(P),
-  regex_pattern: keywords |> join("|") |> escape_regex,
-
-  // ⚠️ REQUIRED MCP TOOL CALL ⚠️
-  // Use query_user_messages to search historical prompts
-  mcp_call: query_user_messages({
-    pattern: regex_pattern,
-    scope: "project",
-    limit: 10
-  }),
-
-  // Expected return format: [{turn, timestamp, content}]
-  results: mcp_call |> sort_by(.timestamp) |> reverse,
-
-  // Display candidates to user
-  display: if (|results| > 0):
-    "Found " + |results| + " similar historical prompts:\n" + format_table(results),
-  else:
-    "No similar historical prompts found. Proceeding with best practices analysis.",
-
-  return: results
+refine(P) = {
+  history: collect_history(P),
+  quality: analyze_quality(history),
+  patterns: extract_patterns(quality),
+  gaps: detect_gaps(P, patterns),
+  alternatives: generate_alternatives(P, gaps, patterns),
+  return: output(P, gaps, patterns, alternatives)
 }
 
 ---
 
-### Step 2.2: Analyze Quality Metrics
+### Collect Historical Data
 
-**CRITICAL**: This step MUST execute multiple MCP tools to assess prompt quality.
+**EXECUTION**: Call MCP tools below to gather project history data.
 
-analyze_quality :: [Historical_Prompts] → [Quality_Analysis]
-analyze_quality(candidates) = if (|candidates| == 0): [], else: candidates |> map(c → {
-  prompt: c,
-  turn: c.turn,
-  timestamp: c.timestamp,
+collect_history :: Prompt → Historical_Context
+collect_history(P) = {
+  keywords: extract_keywords(P),
+  regex: join(keywords, "|"),
 
-  // ⚠️ REQUIRED MCP TOOL CALL 1: Error Rate Analysis ⚠️
-  // Query tool errors within 1 hour after this prompt
-  errors_mcp: query_tool_errors({
-    scope: "project",
-    limit: 100
-  }),
-  errors: errors_mcp
-    |> filter(e → e.timestamp > c.timestamp
-                 ∧ timestamp_diff(e.timestamp, c.timestamp) < 3600),
-  error_count: |errors|,
+  // ============================================
+  // MCP TOOL CALLS (Required - Do Not Skip)
+  // ============================================
 
-  // ⚠️ REQUIRED MCP TOOL CALL 2: Conversation Efficiency ⚠️
-  // Query conversation flow to count turns to completion
-  conversation_mcp: query_conversation_flow({
-    scope: "project",
-    limit: 100
-  }),
-  conversation_segment: conversation_mcp
-    |> filter(msg → msg.turn >= c.turn)
-    |> takeWhile(msg → !(msg.type == "user" ∧ msg.turn > c.turn)),
-  turns_to_complete: |conversation_segment|,
+  similar_prompts: mcp_meta_cc.query_user_messages(
+    pattern=regex,
+    scope="project",
+    limit=10
+  ),
 
-  // ⚠️ REQUIRED MCP TOOL CALL 3: Token Efficiency ⚠️
-  // Query token usage for this time window
-  tokens_mcp: query_token_usage({
-    scope: "project",
-    limit: 100
-  }),
-  tokens: tokens_mcp
-    |> filter(t → t.timestamp >= c.timestamp
-                 ∧ timestamp_diff(t.timestamp, c.timestamp) < 3600)
-    |> sum(.input_tokens + .output_tokens),
+  tool_errors: mcp_meta_cc.query_tool_errors(
+    scope="project",
+    limit=100
+  ),
 
-  // Calculate quality score
-  quality_score: calculate_quality_score(error_count, turns_to_complete, tokens, |c.content|),
+  conversation: mcp_meta_cc.query_conversation_flow(
+    scope="project",
+    limit=100
+  ),
+
+  token_data: mcp_meta_cc.query_token_usage(
+    scope="project",
+    limit=100
+  ),
+
+  // ============================================
+
+  display: "📊 Collected " + |similar_prompts| + " similar prompts, " + |tool_errors| + " errors, " + |conversation| + " conversation turns from history",
 
   return: {
-    prompt: c.content,
-    turn: c.turn,
-    timestamp: c.timestamp,
-    metrics: {
-      error_count: error_count,
-      turns_to_complete: turns_to_complete,
-      total_tokens: tokens,
-      prompt_length: |c.content|
-    },
-    quality_score: quality_score
+    prompts: similar_prompts,
+    errors: tool_errors,
+    flow: conversation,
+    tokens: token_data
   }
-})
+}
+
+**NOTE**: If MCP tools return empty results, Phase 2 proceeds with best practices analysis only (no quality scoring).
+
+---
+
+### Analyze Quality Metrics
+
+**EXECUTION**: Process collected history to compute quality scores for each historical prompt.
+
+analyze_quality :: Historical_Context → Quality_Analysis
+analyze_quality(H) = {
+  // Early exit if no historical prompts found
+  if (|H.prompts| == 0): {
+    display: "⚠️ No historical prompts found. Skipping quality analysis.",
+    return: []
+  },
+
+  // For each historical prompt, calculate quality metrics
+  scored_prompts: H.prompts |> map(prompt → {
+    // Filter errors in time window [prompt.timestamp, +1 hour]
+    relevant_errors: H.errors |> filter(e →
+      e.timestamp > prompt.timestamp ∧
+      timestamp_diff(e.timestamp, prompt.timestamp) < 3600
+    ),
+
+    // Find conversation segment from this prompt to next user message
+    conversation_segment: H.flow |> filter(msg →
+      msg.turn >= prompt.turn
+    ) |> takeWhile(msg →
+      !(msg.type == "user" ∧ msg.turn > prompt.turn)
+    ),
+
+    // Filter token usage in time window
+    relevant_tokens: H.tokens |> filter(t →
+      t.timestamp >= prompt.timestamp ∧
+      timestamp_diff(t.timestamp, prompt.timestamp) < 3600
+    ),
+
+    // Compute metrics
+    error_count: |relevant_errors|,
+    turns_to_complete: |conversation_segment|,
+    total_tokens: sum(relevant_tokens.input_tokens + relevant_tokens.output_tokens),
+    prompt_length: |prompt.content|,
+
+    // Calculate quality score
+    quality_score: calculate_quality_score(
+      error_count,
+      turns_to_complete,
+      total_tokens,
+      prompt_length
+    ),
+
+    return: {
+      prompt: prompt.content,
+      turn: prompt.turn,
+      timestamp: prompt.timestamp,
+      metrics: {
+        error_count: error_count,
+        turns_to_complete: turns_to_complete,
+        total_tokens: total_tokens,
+        prompt_length: prompt_length
+      },
+      quality_score: quality_score
+    }
+  }),
+
+  display: "✅ Analyzed " + |scored_prompts| + " prompts, found " + count(scored_prompts, s → s.quality_score >= 0.6) + " high-quality (score ≥0.6)",
+
+  return: scored_prompts
+}
 
 calculate_quality_score :: (Errors, Turns, Tokens, Length) → Float
 calculate_quality_score(E, T, K, L) = {
@@ -163,18 +197,21 @@ calculate_quality_score(E, T, K, L) = {
 
 ---
 
-### Step 2.3: Extract Success Patterns
+### Extract Success Patterns
 
-**CRITICAL**: Analyze quality metrics to extract common patterns from high-quality prompts.
+**EXECUTION**: Identify common structural patterns in high-quality prompts.
 
-extract_patterns :: [Quality_Analysis] → Success_Patterns
+extract_patterns :: Quality_Analysis → Success_Patterns
 extract_patterns(QA) = {
   // Filter high-quality prompts (score >= 0.6)
   high_quality: QA |> filter(q → q.quality_score >= 0.6),
   total_count: |QA|,
 
-  // Extract structural features from high-quality prompts
-  features: high_quality |> analyze_features,
+  // If no quality data, return empty patterns (will trigger best practices mode)
+  if (total_count == 0): {
+    display: "ℹ️ No quality data available. Using best practices defaults.",
+    return: default_patterns()
+  },
 
   patterns: {
     // Pattern 1: Clear Goals
@@ -230,17 +267,32 @@ extract_patterns(QA) = {
       |> take(15)
   },
 
-  // Display insights
   display: format_pattern_insights(patterns, total_count, |high_quality|),
 
   return: patterns
 }
 
+default_patterns :: () → Success_Patterns
+default_patterns() = {
+  has_clear_goal: {count: 0, percentage: 60, examples: []},
+  has_constraints: {count: 0, percentage: 55, examples: []},
+  has_file_refs: {count: 0, percentage: 45, examples: []},
+  has_agent_refs: {count: 0, percentage: 35, examples: []},
+  has_locations: {count: 0, percentage: 30, examples: []},
+  has_acceptance: {count: 0, percentage: 40, examples: []},
+  avg_length: 150,
+  avg_turns: 5,
+  avg_tokens: 3000,
+  common_keywords: ["implement", "fix", "test", "refactor", "add", "update", "create", "remove", "check", "verify"]
+}
+
 ---
 
-### Step 2.4: Detect Gaps & Generate Alternatives
+### Detect Gaps & Generate Alternatives
 
-detect_gaps :: (Prompt, Patterns) → [Improvement_Areas]
+**EXECUTION**: Compare input prompt against extracted patterns and generate optimized versions.
+
+detect_gaps :: (Prompt, Patterns) → Gap_Analysis
 detect_gaps(P, S) = {
   current_features: {
     has_goal: matches(P, /goal:|objective:|implement|create|fix|refactor/i),
@@ -260,21 +312,19 @@ detect_gaps(P, S) = {
     missing_locations: ¬current_features.has_locations ∧ S.has_locations.percentage > 30,
     missing_acceptance: ¬current_features.has_acceptance ∧ S.has_acceptance.percentage > 40,
 
-    // Length analysis
     too_long: current_features.length > S.avg_length * 1.5,
     too_short: current_features.length < S.avg_length * 0.5,
 
-    // Keyword gap
     current_keywords: extract_keywords(P),
     keyword_gap: S.common_keywords |> filter(kw → kw ∉ current_keywords) |> take(5)
   },
 
-  significant_gaps: gaps |> filter(g → g.value == true) |> keys,
+  significant_gaps: gaps |> filter(g → g == true) |> keys,
 
   return: {gaps: gaps, significant: significant_gaps}
 }
 
-generate_alternatives :: (Prompt, Gap_Analysis, Patterns) → [Optimized_Prompts]
+generate_alternatives :: (Prompt, Gap_Analysis, Patterns) → Optimized_Prompts
 generate_alternatives(P, G, S) = {
   alternatives: [],
 
@@ -302,13 +352,8 @@ generate_alternatives(P, G, S) = {
       current_length: |P|
     }),
 
-  // Collect non-null alternatives
   candidates: [alt1, alt2, alt3] |> filter(not_null),
-
-  // Rank by expected quality improvement
   ranked: candidates |> rank_by(expected_quality_improvement),
-
-  // Take top 3
   final: ranked |> take(3),
 
   return: final
@@ -320,7 +365,7 @@ output(P, G, S, A) = {
     original: P,
 
     analysis: {
-      patterns_found: S.has_clear_goal.count + S.has_constraints.count + S.has_file_refs.count + S.has_agent_refs.count + " patterns from " + |S.high_quality| + " high-quality prompts",
+      patterns_found: "Analyzed based on " + (S.has_clear_goal.count > 0 ? "historical data" : "best practices"),
       gaps_detected: G.significant,
       improvement_potential: estimate_improvement(G, S)
     },
