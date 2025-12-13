@@ -1,0 +1,96 @@
+@startuml
+!theme amiga
+title BAIME Agent系统 - 优化理论视角
+
+!define AGENT_COLOR #FFE5B4
+!define META_COLOR #E6F3FF
+!define VALUE_COLOR #E8F5E9
+
+package "价值空间 S" as VS {
+  component "项目状态 s ∈ S" as STATE {
+    [代码]
+    [测试]
+    [文档]
+    [架构]
+    [依赖]
+    [指标]
+  }
+
+  note right of STATE
+    高维空间
+    |S| ≈ 10^1000+
+  end note
+}
+
+package "价值函数 V: S → ℝ" as VF {
+  rectangle "V(s) = V_instance(s) + V_meta(s)" as VFUNC VALUE_COLOR
+
+  note right of VFUNC
+    ∂V/∂s 存在 (可微)
+    局部最大值
+    无全局最大值
+  end note
+}
+
+package "Agent Set Aₙ" as AGENTS {
+  component "Agent A ≈ ∇V(s)" as AGENT AGENT_COLOR {
+    rectangle "一阶优化器" as FIRST {
+      * coder: ∂V/∂code
+      * tester: ∂V/∂tests
+      * doc-writer: ∂V/∂docs
+      * 领域特化Agent
+    }
+
+    note bottom of FIRST
+      A(s) 指向更高价值
+      |A(s)| 表示改进潜力
+
+      更新规则:
+      s_{i+1} = s_i + α·A(s_i)
+    end note
+  }
+}
+
+package "Meta-Agent Set Mₙ" as META {
+  component "Meta-Agent M ≈ ∇²V(s)" as MAGENT META_COLOR {
+    rectangle "二阶优化器" as SECOND {
+      **能力**
+      * observe: 分析当前状态 s
+      * plan: 选择最优 Agent A*
+      * execute: 应用 Agent
+      * reflect: 计算 V(s_{i+1})
+      * evolve: 创建新Agent
+    }
+
+    note bottom of SECOND
+      M 选择最优 Agent
+      M 估计收敛率
+      M 适应局部拓扑
+
+      Agent选择:
+      A* = argmax_A [V(s + α·A(s))]
+    end note
+  }
+}
+
+STATE -right-> VFUNC : 评估
+VFUNC -down-> AGENT : 计算梯度
+VFUNC -down-> MAGENT : 计算曲率
+MAGENT -down-> AGENT : 协调/选择
+AGENT -left-> STATE : 转换\ns_i → s_{i+1}
+
+note as N1
+  **优化类比**
+
+  传统ML          BAIME
+  ─────────────   ──────────────
+  损失函数 L(θ)   价值函数 V(s)
+  参数 θ          项目状态 s
+  梯度 ∇L(θ)      Agent A(s)
+  SGD优化器       Meta-Agent M
+  训练数据        项目历史
+  收敛            V(s) ≥ 阈值
+  学习模型        (O, Aₙ, Mₙ)
+end note
+
+@enduml

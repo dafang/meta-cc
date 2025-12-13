@@ -1,0 +1,74 @@
+@startuml
+!theme amiga
+title BAIME 双层价值函数
+
+package "V_total(s) = V_instance(s) + V_meta(s)" {
+
+  package "V_instance(s) - 任务质量" #LightBlue {
+    card "领域特定组件\n(因项目而异)" as VI {
+      rectangle "测试策略示例" as TEST {
+        * 代码覆盖率: 0.30
+        * 测试质量: 0.30
+        * 稳定性: 0.20
+        * 性能: 0.20
+      }
+
+      rectangle "可观测性示例" as OBS {
+        * 覆盖范围: 0.25
+        * 可操作性: 0.25
+        * 性能: 0.25
+        * 一致性: 0.25
+      }
+
+      rectangle "依赖健康示例" as DEP {
+        * 安全性: 0.40
+        * 新鲜度: 0.30
+        * 许可证: 0.15
+        * 稳定性: 0.15
+      }
+    }
+
+    note bottom of VI
+      目标: V_instance ≥ 0.80
+      含义: 任务完成得很好
+      验证: 项目特定指标
+    end note
+  }
+
+  package "V_meta(s) - 方法论质量" #LightGreen {
+    card "通用组件\n(跨项目一致)" as VM {
+      rectangle "标准评估" as STD {
+        * 完整性 (0.25)
+          - 方法论文档齐全
+        * 有效性 (0.25)
+          - 提效倍数
+        * 可复用性 (0.25)
+          - 跨项目可转移性
+        * 验证性 (0.25)
+          - 经验证据
+      }
+    }
+
+    note bottom of VM
+      目标: V_meta ≥ 0.80
+      含义: 方法论可复用
+      验证: 跨项目测试
+    end note
+  }
+}
+
+VI -down[hidden]-> VM
+
+note as N1
+  **双层优化创造复合价值**
+
+  不仅完成任务 (V_instance)
+  还产出可复用方法 (V_meta)
+
+  **收敛模式**:
+  1. 标准双收敛: 两者都 ≥ 0.80
+  2. 元聚焦收敛: V_meta ≥ 0.80, V_instance ≥ 0.55
+  3. 实用收敛: 质量超过指标
+end note
+
+@enduml

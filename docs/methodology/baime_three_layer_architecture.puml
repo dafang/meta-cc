@@ -1,0 +1,87 @@
+@startuml
+!theme amiga
+title BAIME 三层架构 - 方法论集成
+
+package "Layer 3: Value Optimization (量化评估层)" {
+  component [双层价值函数] as VF {
+    [V_instance(s)]
+    [V_meta(s)]
+  }
+  component [收敛准则] as CC {
+    [系统稳定]
+    [双阈值 ≥0.80]
+    [收敛模式]
+  }
+  component [优化数学] as OM {
+    [Agent ≈ ∇V]
+    [Meta-Agent ≈ ∇²V]
+  }
+}
+
+package "Layer 2: Empirical Methodology (科学基础层)" {
+  component [观察工具] as OT {
+    [meta-cc]
+    [Git分析]
+    [代码度量]
+  }
+  component [模式提取] as PE {
+    [数据驱动]
+    [假设验证]
+  }
+  component [科学验证] as SV {
+    [回顾验证]
+    [前瞻验证]
+  }
+}
+
+package "Layer 1: OCA Cycle (核心框架层)" {
+  component [Observe] as O {
+    [收集数据]
+    [识别差距]
+  }
+  component [Codify] as C {
+    [提取模式]
+    [文档化]
+  }
+  component [Automate] as A {
+    [构建工具]
+    [CI/CD集成]
+  }
+  component [Evolve] as E {
+    [Agent进化]
+    [Meta-Agent进化]
+  }
+
+  O -right-> C
+  C -right-> A
+  A -down-> E
+  E -left-> O
+}
+
+' 层间关系
+OT -down-> O : 支持
+PE -down-> C : 支持
+SV -down-> A : 支持
+VF -down-> E : 指导
+CC -down-> E : 决策
+OM -down-> E : 理论
+
+note right of VF
+  量化层提供评估指标
+  V_instance: 任务质量
+  V_meta: 方法论质量
+end note
+
+note right of PE
+  科学层提供验证方法
+  数据驱动决策
+  经验证据
+end note
+
+note right of C
+  核心层提供执行框架
+  三元组输出: (O, Aₙ, Mₙ)
+  自引用反馈循环
+end note
+
+@enduml

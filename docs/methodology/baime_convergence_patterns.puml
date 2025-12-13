@@ -1,0 +1,92 @@
+@startuml
+!theme amiga
+title BAIME 收敛模式分类
+
+package "收敛模式" {
+
+  card "标准双收敛\n(Standard Dual Convergence)" as SDC #E8F5E9 {
+    rectangle "准则" {
+      * V_instance ≥ 0.80
+      * V_meta ≥ 0.80
+      * Mₙ = Mₙ₋₁
+      * Aₙ = Aₙ₋₁
+      * ΔV < 0.02
+    }
+
+    rectangle "适用场景" {
+      * 两个目标同等重要
+      * 实例和方法论都需要
+    }
+
+    rectangle "验证案例" {
+      * 可观测性 (Bootstrap-009)
+      * 依赖健康 (Bootstrap-010)
+      * 技术债务 (Bootstrap-012)
+      * 横切关注点 (Bootstrap-013)
+    }
+  }
+
+  card "元聚焦收敛\n(Meta-Focused Convergence)" as MFC #E1F5FE {
+    rectangle "准则" {
+      * V_meta ≥ 0.80
+      * V_instance ≥ 0.55 (实用充分)
+      * Mₙ = Mₙ₋₁
+      * Aₙ = Aₙ₋₁
+      * 稳定 ≥2 次迭代
+    }
+
+    rectangle "适用场景" {
+      * 方法论是主要目标
+      * 实例是方法论的载体
+      * 实例差距是基础设施非方法论
+    }
+
+    rectangle "验证案例" {
+      * 知识转移 (Bootstrap-011)
+        V_meta = 0.877
+        V_instance = 0.585
+        95%+ 可转移性
+    }
+  }
+
+  card "实用收敛\n(Practical Convergence)" as PC #FFF3E0 {
+    rectangle "准则" {
+      * V_instance + V_meta ≥ 1.60
+      * 质量证据超过原始指标
+      * 合理的部分准则
+      * ΔV < 0.02
+    }
+
+    rectangle "适用场景" {
+      * 某些组件未达标但整体质量优秀
+      * 子系统卓越补偿聚合指标
+      * 进一步迭代收益递减
+    }
+
+    rectangle "验证案例" {
+      * 测试策略 (Bootstrap-002)
+        V_instance = 0.848
+        核心包覆盖率 86-94%
+        15x 提效已验证
+    }
+  }
+}
+
+note bottom of SDC
+  **最常见**: 6/8 实验
+  **特点**: 两层都完全达标
+end note
+
+note bottom of MFC
+  **稀有**: 1/8 实验
+  **特点**: 方法论优秀, 实例充分
+  **权衡**: 接受实例不完美换取方法论可转移性
+end note
+
+note bottom of PC
+  **中等**: 1/8 实验
+  **特点**: 质量超过指标
+  **依据**: Bootstrap-002 建立先例
+end note
+
+@enduml
