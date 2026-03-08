@@ -388,7 +388,7 @@ bundle-release: sync-plugin-files
 	@for platform in $(PLATFORMS); do \
 		PLATFORM_NAME=$${platform%/*}-$${platform#*/}; \
 		BUNDLE_DIR=$(BUILD_DIR)/bundles/meta-cc-$(VERSION)-$$PLATFORM_NAME; \
-		mkdir -p $$BUNDLE_DIR/bin $$BUNDLE_DIR/commands $$BUNDLE_DIR/agents $$BUNDLE_DIR/.claude-plugin $$BUNDLE_DIR/lib; \
+		mkdir -p $$BUNDLE_DIR/bin $$BUNDLE_DIR/commands $$BUNDLE_DIR/agents $$BUNDLE_DIR/skills $$BUNDLE_DIR/.claude-plugin $$BUNDLE_DIR/lib; \
 		if [ "$${platform%/*}" = "windows" ]; then \
 			cp $(BUILD_DIR)/$(MCP_BINARY_NAME)-$$PLATFORM_NAME.exe $$BUNDLE_DIR/bin/ 2>/dev/null || true; \
 		else \
@@ -396,8 +396,12 @@ bundle-release: sync-plugin-files
 		fi; \
 		cp -r $(DIST_DIR)/commands/* $$BUNDLE_DIR/commands/; \
 		cp -r $(DIST_DIR)/agents/* $$BUNDLE_DIR/agents/; \
+		cp -r $(DIST_DIR)/skills/* $$BUNDLE_DIR/skills/ 2>/dev/null || true; \
 		cp -r lib/* $$BUNDLE_DIR/lib/; \
 		cp -r .claude-plugin/* $$BUNDLE_DIR/.claude-plugin/; \
+		cp .claude/.claude-plugin/plugin.json $$BUNDLE_DIR/.claude-plugin/ 2>/dev/null || true; \
+		cp .claude/.mcp.json $$BUNDLE_DIR/ 2>/dev/null || true; \
+		jq '.plugins[0].source = "."' $$BUNDLE_DIR/.claude-plugin/marketplace.json > $$BUNDLE_DIR/.claude-plugin/marketplace.json.tmp && mv $$BUNDLE_DIR/.claude-plugin/marketplace.json.tmp $$BUNDLE_DIR/.claude-plugin/marketplace.json 2>/dev/null || true; \
 		cp scripts/install/install.sh $$BUNDLE_DIR/; \
 		cp scripts/install/uninstall.sh $$BUNDLE_DIR/ 2>/dev/null || true; \
 		cp README.md $$BUNDLE_DIR/; \
