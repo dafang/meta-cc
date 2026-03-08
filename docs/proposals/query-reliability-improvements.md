@@ -35,6 +35,8 @@ This validation must be implemented centrally—either in `handleToolsCall` or i
 
 For the `scope` parameter specifically, valid values (`"project"` and `"session"`) should be checked explicitly; unrecognized values should be rejected with an informative error rather than silently defaulting.
 
+**Implementation dependency**: Enabling strict parameter validation will reject any parameter used by a handler but not declared in the tool's schema. A known instance is `content_type` in `query_user_messages`: the handler extracts it via `getStringParam(args, "content_type", "string")` but it is not declared in the schema in `tools.go`. This must be remediated (by adding `content_type` to the schema) before or alongside the validation rollout — see Problem 4.
+
 **Complexity: Medium-to-High.** The validation logic itself is straightforward, but wiring it requires making the schema definitions available at dispatch time (currently they are only used to populate `tools/list`) and ensuring the validation works correctly for all parameter types including optional standard parameters shared across tools.
 
 ---
@@ -139,6 +141,8 @@ The names `min_content_length` / `max_content_length` are chosen to avoid confus
 Using `min_length` / `max_length` (as in an earlier draft) would conflict with the established naming pattern around `max_message_length` and create ambiguity about which operation is being performed.
 
 **Content type consideration**: `query_user_messages` already distinguishes string content (`content_type: "string"`) from array content (`content_type: "array"`). The `| length` jq operator has different semantics for each: for strings it returns character count; for arrays it returns element count (typically 1–3 for structured tool result messages, not a character count). Length filtering is therefore most meaningful for string content. The implementation should document this limitation; if array content filtering is needed, a separate mechanism (e.g., summing text field lengths within the array) would be required.
+
+**Schema gap**: The `content_type` parameter is already used by the handler (`getStringParam(args, "content_type", "string")` in `handleQueryUserMessages`) but is not declared in the `query_user_messages` tool schema in `tools.go`. Once Problem 1's parameter validation is implemented (rejecting undeclared parameters), `content_type` will be rejected as unknown. The implementation of Problem 4 must add `content_type` to the schema alongside `min_content_length` and `max_content_length`.
 
 ---
 

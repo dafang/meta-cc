@@ -66,6 +66,7 @@ Stages 29.1–29.2 and Stages 29.3–29.4 are independent tracks that can be dev
 **Acceptance criteria**:
 - `processFile` handles lines up to 4 MB without error.
 - Both `query_executor.go` and `reader.go` reference the same named constant.
+- Regression test: a 2 MB line (the previous `reader.go` limit) is processed correctly without error, confirming backward compatibility.
 - `make commit` passes.
 
 **Estimated lines**: ~60–80 (10 constant definition + 2 substitutions + 50–70 test lines)
@@ -89,6 +90,15 @@ Stages 29.1–29.2 and Stages 29.3–29.4 are independent tracks that can be dev
 3. Update `executeQuery` to return `(QueryResult, error)` and propagate the `QueryResult` from `streamFiles`.
 4. Update all 10 convenience handlers to return `(QueryResult, error)` instead of `([]interface{}, error)`.
 5. Update `buildResponse` in `executor.go` to accept `QueryResult` instead of `parsedData []interface{}`. `buildResponse` extracts `result.Entries` as `parsedData []interface{}` and passes it to the existing sub-methods (`buildStatsOnlyResponse`, `buildStatsFirstResponse`, `buildStandardResponse`) unchanged — those three sub-methods do NOT change their signatures and continue to accept `[]interface{}`. After getting the sub-method result, `buildResponse` wraps the final response to include a `warnings` field alongside the existing response fields before returning the serialized output. This means all three response paths (stats-only, stats-first, standard) carry warnings, and the `warnings` field is added at the `buildResponse` level — NOT inside `adaptResponse`.
+
+   **`ExecuteTool` call site update**: In `ExecuteTool` (executor.go), the handler call site currently receives `parsedData []interface{}` from handlers and passes it to `buildResponse`. Since handlers now return `(QueryResult, error)`, `ExecuteTool` receives a `QueryResult` and passes it directly to `buildResponse`. Inside `buildResponse`, extract `result.Entries` as `parsedData` for the sub-methods, and extract `result.Warnings` to add to the final response. The three sub-methods (`buildStatsOnlyResponse`, `buildStatsFirstResponse`, `buildStandardResponse`) continue to accept `[]interface{}` unchanged.
+
+   **Warnings in the MCP response**: `buildResponse` currently returns `(string, error)` where the string is serialized JSON (e.g., `{"mode":"inline","data":[...]}` for inline mode). When `QueryResult.Warnings` is non-empty, `buildResponse` deserializes the sub-method's JSON string into a `map[string]interface{}`, adds a `"warnings"` key with the warnings slice, and re-serializes. For the stats-only path (which returns plain text, not JSON), warnings are appended as a `--- warnings ---` section. Example output for inline mode with warnings:
+   ```json
+   {"mode":"inline","data":[...],"warnings":["path/to/file.jsonl: bufio.Scanner: token too long"]}
+   ```
+   When no files were skipped, the `warnings` field is an empty array `[]`.
+
 6. Run all tests; confirm `make commit` passes.
 
 **Key files**: `query_executor.go`, `handlers_convenience.go`, `executor.go`, `response_adapter.go` (if serialization changes needed), `query_executor_test.go`
@@ -108,7 +118,7 @@ Stages 29.1–29.2 and Stages 29.3–29.4 are independent tracks that can be dev
 
 **Problem addressed**: P1 (tool schemas in `tools.go` are documentation-only; dispatch layer has no accessor to retrieve per-tool schema at runtime)
 
-**Architectural context**: The dispatch layer currently has no per-tool schema accessor. `getToolDefinitions()` returns all tool schemas as a flat list used only for the `tools/list` response. The key architectural change in this stage is introducing `getToolSchemaByName(name string) (ToolSchema, error)` — a function that the dispatch path can call to retrieve a specific tool's schema by name at runtime. The full validation logic (rejecting unknown parameters) is Stage 29.4; this stage only makes the schema accessible.
+**Architectural context**: The dispatch layer currently has no per-tool schema accessor. `getToolDefinitions()` returns all tool schemas as a flat list used only for the `tools/list` response. The key architectural change in this stage is introducing `getToolSchemaByName(name string) (ToolSchema, error)` — a function that the dispatch path can call to retrieve a specific tool's schema by name at runtime. The `ToolSchema` struct (defined in `tools.go`) contains `Properties map[string]Property`, which is what Stage 29.4 needs for parameter key validation. The full validation logic (rejecting unknown parameters) is Stage 29.4; this stage only makes the schema accessible.
 
 **Scope**: Schema validation applies only to query tools dispatched through the main switch statement in `ExecuteTool` (query_user_messages, query_tools, etc.). Special tools handled by `executeSpecialTool` (cleanup_temp_files, list_capabilities, get_capability, get_session_directory, inspect_session_files, execute_stage2_query, get_session_metadata) are out of scope for Stage 29.3 and 29.4 — they each perform their own parameter handling and are exempt from the central dispatch validation introduced here.
 
@@ -150,7 +160,7 @@ Stages 29.1–29.2 and Stages 29.3–29.4 are independent tracks that can be dev
    - `scope: "sessions"` (invalid): expect error listing `"project"` and `"session"` as valid values.
    - `scope: "session"` (valid): expect success.
 2. Implement central unknown-key validation in the dispatch path using the schema accessor from Stage 29.3. Compare incoming `args` keys against the schema's `Properties` map; return a structured error for any unrecognized key.
-3. Implement scope value validation in `ExecuteTool`, immediately after the `scope := determineScope(...)` call (line 174 in executor.go) and before the `executeSpecialTool` check. Check that scope is one of `{"project", "session"}`; return an informative error otherwise. Placing it here means all tools — both special tools and query tools — receive scope validation at dispatch time, without modifying `determineScope` itself (which should remain a pure extraction function).
+3. Implement scope value validation in `ExecuteTool`, after `executeSpecialTool` returns `handled=false` and before the schema retrieval added in Stage 29.3. Check that scope is one of `{"project", "session"}`; return an informative error otherwise. This ensures only query tools receive scope validation, consistent with the exemption for special tools established in Stage 29.3 (special tools handle their own parameter semantics). `determineScope` itself remains a pure extraction function — it is not modified.
 4. Run full test suite; fix any regressions from tools that may be passing unexpected keys internally.
 5. Confirm `make commit` passes.
 
@@ -160,6 +170,7 @@ Stages 29.1–29.2 and Stages 29.3–29.4 are independent tracks that can be dev
 - Calling any tool with an unrecognized key returns an explicit error (not empty results).
 - Calling any tool with `scope: "sessions"` returns an explicit error naming valid values.
 - All existing tool calls with correct parameters continue to work.
+- Audit of all `ExecuteTool` call sites completed and documented; any internal callers passing undeclared parameters are covered by an allowlist with test coverage.
 - `make commit` passes.
 
 **Estimated lines**: ~100–120 (50–60 validation logic + 50–60 additional tests)
@@ -222,7 +233,7 @@ Stages 30.3 and 30.4 are independent of the `working_dir` track and can proceed 
 
 **Acceptance criteria**:
 - `getQueryBaseDir` and `executeQuery` accept `workingDir` parameter.
-- Empty `workingDir` preserves existing CWD-based behavior.
+- Empty `workingDir` (empty string `""`) is treated as "use CWD" — this contract is documented at the `getQueryBaseDir` and `executeQuery` function signatures via parameter comments (e.g., `// workingDir: override for CWD-based resolution; empty string means use os.Getwd()`).
 - All existing tests pass unchanged.
 - `make commit` passes.
 
@@ -278,7 +289,7 @@ Stages 30.3 and 30.4 are independent of the `working_dir` track and can proceed 
    - Pass `{content_type: "string", min_content_length: 20}`: assert filter applies to string content length (character count).
    - Pass `{content_type: "array", min_content_length: 2}`: assert implementation returns an error (or the documented fallback behavior), not silent filtering. Content length filtering is meaningful for string content only — for array content, `| length` returns element count (1–3 for structured tool result messages), which is not a character count and is not a useful proxy for content length. The schema description for `min_content_length` and `max_content_length` must document this limitation explicitly.
 2. Extend `handleQueryUserMessages` to extract `min_content_length` and `max_content_length` via `getIntParam`, and append jq length predicates to the filter when non-zero.
-3. Add `min_content_length` and `max_content_length` to `query_user_messages` schema in `tools.go` with descriptions clarifying: (a) the distinction from `max_message_length` (truncation vs. filtering), and (b) that length filtering applies to string content only — specifying this in combination with `content_type: "array"` returns an error.
+3. Add `min_content_length` and `max_content_length` to `query_user_messages` schema in `tools.go` with descriptions clarifying: (a) the distinction from `max_message_length` (truncation vs. filtering), and (b) that length filtering applies to string content only — specifying this in combination with `content_type: "array"` returns an error. **Pre-requisite**: `content_type` is already used by the handler (`getStringParam(args, "content_type", "string")` in `handleQueryUserMessages`) but is NOT declared in the `query_user_messages` schema in `tools.go`. It must be added to the schema as part of this stage. This is necessary because Stage 29.4's parameter validation will reject undeclared parameters, and `content_type` would be rejected despite being a functional parameter.
 4. Write an integration test confirming that combined use of `max_message_length` (truncation) and `max_content_length` (filtering) works correctly and independently.
 5. Confirm `make commit` passes.
 
