@@ -88,6 +88,31 @@ if [ -f "$PLUGIN_JSON" ]; then
     fi
 fi
 
+# 6. .mcp.json exists and is valid
+MCP_JSON=".claude/.mcp.json"
+if [ ! -f "$MCP_JSON" ]; then
+    check ".mcp.json exists at $MCP_JSON" "fail"
+else
+    check ".mcp.json exists at $MCP_JSON" "pass"
+    if jq . "$MCP_JSON" > /dev/null 2>&1; then
+        check ".mcp.json is valid JSON" "pass"
+    else
+        check ".mcp.json is valid JSON" "fail"
+    fi
+    # Check meta-cc server entry exists (flat or wrapped format)
+    if jq -e '.mcpServers["meta-cc"] // .["meta-cc"]' "$MCP_JSON" > /dev/null 2>&1; then
+        check ".mcp.json contains meta-cc server entry" "pass"
+    else
+        check ".mcp.json contains meta-cc server entry" "fail"
+    fi
+    # Check uses CLAUDE_PLUGIN_ROOT
+    if grep -q 'CLAUDE_PLUGIN_ROOT' "$MCP_JSON"; then
+        check ".mcp.json uses \${CLAUDE_PLUGIN_ROOT}" "pass"
+    else
+        check ".mcp.json uses \${CLAUDE_PLUGIN_ROOT}" "fail"
+    fi
+fi
+
 echo ""
 if [ "$ERRORS" -eq 0 ]; then
     echo "✓ All plugin JSON validations passed"

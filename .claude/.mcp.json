@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "meta-cc": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/meta-cc-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}
