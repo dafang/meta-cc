@@ -1,4 +1,5 @@
 {
+  "_deprecated": "Deprecated: Use .mcp.json at plugin root instead. This file is kept for backwards compatibility with manual installations and will be removed in a future release.",
   "mcpServers": {
     "meta-cc": {
       "command": "meta-cc-mcp",
