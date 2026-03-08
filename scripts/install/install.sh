@@ -107,11 +107,14 @@ install_claude_files() {
 # Merge MCP configuration
 merge_mcp_config() {
     MCP_CONFIG="${HOME}/.claude/mcp.json"
-    MCP_TEMPLATE="lib/mcp-config.json"
 
-    # Check if template exists
-    if [ ! -f "$MCP_TEMPLATE" ]; then
-        warn "MCP config template not found, skipping MCP configuration"
+    # Prefer .mcp.json (new standard), fall back to lib/mcp-config.json (legacy)
+    if [ -f ".mcp.json" ]; then
+        MCP_TEMPLATE=".mcp.json"
+    elif [ -f "lib/mcp-config.json" ]; then
+        MCP_TEMPLATE="lib/mcp-config.json"
+    else
+        warn "No MCP config template found (.mcp.json or lib/mcp-config.json), skipping MCP configuration"
         return
     fi
 
