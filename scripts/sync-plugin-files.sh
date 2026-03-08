@@ -61,8 +61,10 @@ else
         exit 1
     fi
 
-    # Create dist directories
+    # Create dist directories (clean agents and commands to remove stale files)
     mkdir -p "$DIST_DIR/commands" "$DIST_DIR/agents" "$DIST_DIR/skills"
+    rm -f "$DIST_DIR/agents/"*.md 2>/dev/null || true
+    rm -f "$DIST_DIR/commands/"*.md 2>/dev/null || true
 
     # Copy published commands
     echo "  Copying published commands from .claude/commands/..."
