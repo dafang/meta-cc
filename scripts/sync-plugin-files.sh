@@ -33,7 +33,7 @@ if [ "$VERIFY_MODE" = true ]; then
 
     echo "[2/3] Checking file count..."
     DIST_CMD_COUNT=$(find "$DIST_DIR/commands" -name "*.md" 2>/dev/null | wc -l)
-    EXPECTED_COUNT=1
+    EXPECTED_COUNT=4
 
     if [ "$DIST_CMD_COUNT" -ne "$EXPECTED_COUNT" ]; then
         echo "❌ ERROR: Command file count mismatch: expected $EXPECTED_COUNT, got $DIST_CMD_COUNT"
@@ -43,11 +43,13 @@ if [ "$VERIFY_MODE" = true ]; then
     echo ""
 
     echo "[3/3] Verifying file content..."
-    if [ ! -f "$DIST_DIR/commands/meta.md" ]; then
-        echo "❌ ERROR: meta.md not found in dist/commands/"
-        exit 1
-    fi
-    echo "✓ meta.md verified"
+    for cmd in meta prompt-find prompt-list prompt-show; do
+        if [ ! -f "$DIST_DIR/commands/${cmd}.md" ]; then
+            echo "❌ ERROR: ${cmd}.md not found in dist/commands/"
+            exit 1
+        fi
+    done
+    echo "✓ All 4 commands verified"
     echo ""
 
     echo "✅ Plugin file sync verification passed"
@@ -59,28 +61,30 @@ else
         exit 1
     fi
 
-    if [ ! -d "$CAPABILITIES_DIR/commands" ]; then
-        echo "ERROR: $CAPABILITIES_DIR/commands directory not found"
-        exit 1
-    fi
-
     # Create dist directories
     mkdir -p "$DIST_DIR/commands" "$DIST_DIR/agents" "$DIST_DIR/skills"
 
-    # Copy ONLY the unified meta command (capabilities are distributed separately)
-    echo "  Copying unified meta command from .claude/commands/..."
-    cp "$PROJECT_ROOT/.claude/commands/meta.md" "$DIST_DIR/commands/"
+    # Copy published commands
+    echo "  Copying published commands from .claude/commands/..."
+    PUBLISHED_COMMANDS="meta prompt-find prompt-list prompt-show"
+    for cmd in $PUBLISHED_COMMANDS; do
+        if [ -f "$PROJECT_ROOT/.claude/commands/${cmd}.md" ]; then
+            cp "$PROJECT_ROOT/.claude/commands/${cmd}.md" "$DIST_DIR/commands/"
+        else
+            echo "  WARNING: Expected command not found: .claude/commands/${cmd}.md"
+        fi
+    done
 
-    # Copy agents
-    echo "  Copying agents from .claude/agents/..."
-    if ls "$PROJECT_ROOT/.claude/agents/"*.md 1> /dev/null 2>&1; then
-        cp "$PROJECT_ROOT/.claude/agents/"*.md "$DIST_DIR/agents/"
-    fi
-
-    if [ -d "$CAPABILITIES_DIR/agents" ] && ls "$CAPABILITIES_DIR/agents/"*.md 1> /dev/null 2>&1; then
-        echo "  Copying agents from $CAPABILITIES_DIR/agents/..."
-        cp "$CAPABILITIES_DIR/agents/"*.md "$DIST_DIR/agents/"
-    fi
+    # Copy only published agents (not dev-only ones like feature-developer, phase-planner-executor)
+    echo "  Copying published agents from .claude/agents/..."
+    PUBLISHED_AGENTS="iteration-executor iteration-prompt-designer knowledge-extractor project-planner stage-executor"
+    for agent in $PUBLISHED_AGENTS; do
+        if [ -f "$PROJECT_ROOT/.claude/agents/${agent}.md" ]; then
+            cp "$PROJECT_ROOT/.claude/agents/${agent}.md" "$DIST_DIR/agents/"
+        else
+            echo "  WARNING: Expected agent not found: .claude/agents/${agent}.md"
+        fi
+    done
 
     # Copy skills directory with all supporting files
     echo "  Copying skills from .claude/skills/..."

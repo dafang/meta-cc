@@ -363,6 +363,32 @@ for agent in "${EXPECTED_AGENTS[@]}"; do
     fi
 done
 
+
+# Test 3.8: No dev-only agents in archive
+DEV_AGENTS=("agents/feature-developer.md" "agents/phase-planner-executor.md")
+for agent in "${DEV_AGENTS[@]}"; do
+    if [ -f "$agent" ]; then
+        test_result "Dev-only agent NOT in archive: $agent" "fail" "Dev-only agent found in release package"
+    else
+        test_result "Dev-only agent NOT in archive: $agent" "pass"
+    fi
+done
+
+# Test 3.9: All published commands present
+EXPECTED_COMMANDS=(
+    "commands/meta.md"
+    "commands/prompt-find.md"
+    "commands/prompt-list.md"
+    "commands/prompt-show.md"
+)
+for cmd in "${EXPECTED_COMMANDS[@]}"; do
+    if [ -f "$cmd" ]; then
+        test_result "Command exists: $cmd" "pass"
+    else
+        test_result "Command exists: $cmd" "fail" "Expected command file missing"
+    fi
+done
+
 echo ""
 
 # ==================================================================
