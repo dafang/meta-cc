@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/yaleh/meta-cc/internal/config"
 )
 
 // TestQueryToolsHaveSchemaDocumentation verifies that all query tools include
@@ -98,3 +100,242 @@ func TestJqFilterDescriptionFormat(t *testing.T) {
 
 // TestQueryToolSchemaMatchesImplementation removed in Phase 27 Stage 27.1
 // The query tool was deleted to simplify the query interface
+
+// Phase 29 Stage 29.3: Schema accessor tests
+
+func TestGetToolSchemaByName_KnownTools(t *testing.T) {
+	// Reset cached index to ensure clean test
+	toolSchemaIndex = nil
+
+	// All 10 query tool names that should have schemas
+	queryTools := []string{
+		"query_user_messages",
+		"query_tools",
+		"query_tool_errors",
+		"query_token_usage",
+		"query_conversation_flow",
+		"query_system_errors",
+		"query_file_snapshots",
+		"query_timestamps",
+		"query_summaries",
+		"query_tool_blocks",
+	}
+
+	for _, name := range queryTools {
+		t.Run(name, func(t *testing.T) {
+			schema, err := getToolSchemaByName(name)
+			if err != nil {
+				t.Fatalf("expected no error for %s, got: %v", name, err)
+			}
+			if schema.Type != "object" {
+				t.Errorf("expected schema type 'object', got '%s'", schema.Type)
+			}
+			if len(schema.Properties) == 0 {
+				t.Errorf("expected non-empty properties for %s", name)
+			}
+		})
+	}
+}
+
+func TestGetToolSchemaByName_QueryUserMessages_HasPattern(t *testing.T) {
+	toolSchemaIndex = nil
+
+	schema, err := getToolSchemaByName("query_user_messages")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := schema.Properties["pattern"]; !ok {
+		t.Error("expected 'pattern' in query_user_messages properties")
+	}
+}
+
+func TestGetToolSchemaByName_NonExistent(t *testing.T) {
+	toolSchemaIndex = nil
+
+	_, err := getToolSchemaByName("query_nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent tool, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown tool") {
+		t.Errorf("expected 'unknown tool' in error message, got: %v", err)
+	}
+}
+
+func TestGetToolSchemaByName_SpecialTools(t *testing.T) {
+	toolSchemaIndex = nil
+
+	// Special tools handled by executeSpecialTool should also have schemas
+	specialTools := []string{
+		"cleanup_temp_files",
+		"list_capabilities",
+		"get_capability",
+		"get_session_directory",
+		"inspect_session_files",
+		"execute_stage2_query",
+		"get_session_metadata",
+	}
+
+	for _, name := range specialTools {
+		t.Run(name, func(t *testing.T) {
+			schema, err := getToolSchemaByName(name)
+			if err != nil {
+				t.Fatalf("expected no error for %s, got: %v", name, err)
+			}
+			if schema.Type != "object" {
+				t.Errorf("expected schema type 'object', got '%s'", schema.Type)
+			}
+		})
+	}
+}
+
+func TestExecuteTool_UnknownToolFailsEarly(t *testing.T) {
+	toolSchemaIndex = nil
+
+	executor := NewToolExecutor()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	_, err = executor.ExecuteTool(cfg, "totally_fake_tool", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("expected error for unknown tool, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown tool") {
+		t.Errorf("expected 'unknown tool' in error, got: %v", err)
+	}
+}
+
+// Phase 29 Stage 29.4: Dispatch validation tests
+
+func TestExecuteTool_UnknownParameterReturnsError(t *testing.T) {
+	toolSchemaIndex = nil
+
+	executor := NewToolExecutor()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// "match" is not a valid parameter for query_user_messages
+	_, err = executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"match":   "foo",
+		"pattern": "test",
+	})
+	if err == nil {
+		t.Fatal("expected error for unknown parameter 'match', got nil")
+	}
+	if !strings.Contains(err.Error(), "match") {
+		t.Errorf("expected error to mention 'match', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "unknown parameter") {
+		t.Errorf("expected 'unknown parameter' in error, got: %v", err)
+	}
+}
+
+func TestExecuteTool_ValidParameterSucceeds(t *testing.T) {
+	toolSchemaIndex = nil
+
+	executor := NewToolExecutor()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// "pattern" is a valid parameter for query_user_messages
+	// This may fail with session-not-found but should NOT fail with parameter validation error
+	_, err = executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern": "test",
+	})
+	if err != nil && strings.Contains(err.Error(), "unknown parameter") {
+		t.Errorf("valid parameter 'pattern' should not trigger validation error, got: %v", err)
+	}
+}
+
+func TestExecuteTool_InvalidScopeReturnsError(t *testing.T) {
+	toolSchemaIndex = nil
+
+	executor := NewToolExecutor()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// "sessions" is not a valid scope value (should be "session")
+	_, err = executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern": "test",
+		"scope":   "sessions",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid scope 'sessions', got nil")
+	}
+	if !strings.Contains(err.Error(), "sessions") {
+		t.Errorf("expected error to mention 'sessions', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "project") && !strings.Contains(err.Error(), "session") {
+		t.Errorf("expected error to mention valid scope values, got: %v", err)
+	}
+}
+
+func TestExecuteTool_ValidScopeSucceeds(t *testing.T) {
+	toolSchemaIndex = nil
+
+	executor := NewToolExecutor()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// "session" is a valid scope value
+	_, err = executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern": "test",
+		"scope":   "session",
+	})
+	if err != nil && strings.Contains(err.Error(), "invalid scope") {
+		t.Errorf("valid scope 'session' should not trigger scope validation error, got: %v", err)
+	}
+}
+
+func TestExecuteTool_SpecialToolsExemptFromValidation(t *testing.T) {
+	toolSchemaIndex = nil
+
+	executor := NewToolExecutor()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// Special tools should not be subject to parameter validation
+	// cleanup_temp_files with an extra param should not fail with "unknown parameter"
+	_, err = executor.ExecuteTool(cfg, "cleanup_temp_files", map[string]interface{}{
+		"max_age_days": float64(7),
+		"extra_param":  "should_be_ignored",
+	})
+	if err != nil && strings.Contains(err.Error(), "unknown parameter") {
+		t.Errorf("special tool cleanup_temp_files should be exempt from parameter validation, got: %v", err)
+	}
+}
+
+func TestExecuteTool_MultipleUnknownParamsListsAll(t *testing.T) {
+	toolSchemaIndex = nil
+
+	executor := NewToolExecutor()
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	// Both "match" and "foo" are unknown params
+	_, err = executor.ExecuteTool(cfg, "query_tool_errors", map[string]interface{}{
+		"match": "bar",
+		"foo":   "baz",
+	})
+	if err == nil {
+		t.Fatal("expected error for unknown parameters, got nil")
+	}
+	// Error should mention at least one unknown param
+	if !strings.Contains(err.Error(), "unknown parameter") {
+		t.Errorf("expected 'unknown parameter' in error, got: %v", err)
+	}
+}

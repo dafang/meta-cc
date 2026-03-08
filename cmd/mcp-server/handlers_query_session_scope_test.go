@@ -75,7 +75,7 @@ func TestGetQueryBaseDirSessionScope(t *testing.T) {
 	}
 
 	// Test session scope - should return directory of most recent session
-	baseDir, err := getQueryBaseDir("session")
+	baseDir, err := getQueryBaseDir("session", "")
 	if err != nil {
 		t.Fatalf("getQueryBaseDir(session) failed: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestGetQueryBaseDirSessionScope(t *testing.T) {
 
 	// Verify that session scope returns different result than project scope
 	// (session = single session dir, project = all sessions dir)
-	projectBaseDir, err := getQueryBaseDir("project")
+	projectBaseDir, err := getQueryBaseDir("project", "")
 	if err != nil {
 		t.Fatalf("getQueryBaseDir(project) failed: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestGetQueryBaseDirSessionScopeNoSessions(t *testing.T) {
 	defer os.Unsetenv("META_CC_PROJECTS_ROOT")
 
 	// Test session scope with no sessions - should return error
-	_, err = getQueryBaseDir("session")
+	_, err = getQueryBaseDir("session", "")
 	if err == nil {
 		t.Error("expected error for session scope with no sessions, got nil")
 	}
@@ -185,7 +185,7 @@ func TestGetQueryBaseDirSessionScopeSingleSession(t *testing.T) {
 	}
 
 	// Test session scope - should succeed with single session
-	baseDir, err := getQueryBaseDir("session")
+	baseDir, err := getQueryBaseDir("session", "")
 	if err != nil {
 		t.Fatalf("getQueryBaseDir(session) failed: %v", err)
 	}

@@ -207,7 +207,7 @@ func handleGetSessionMetadata(ctx context.Context, args map[string]interface{}) 
 	}
 
 	// Get base directory for the scope
-	baseDir, err := getQueryBaseDir(scope)
+	baseDir, err := getQueryBaseDir(scope, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get base directory for scope %s: %w", scope, err)
 	}

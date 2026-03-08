@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -178,8 +179,27 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 		return output, err
 	}
 
+	// Validate scope value before any further processing
+	if scope != "project" && scope != "session" {
+		recordToolFailure(toolName, scope, start, "validation_error")
+		return "", fmt.Errorf("invalid scope %q: must be \"project\" or \"session\"", scope)
+	}
+
+	// Validate tool exists via schema lookup before dispatch
+	schema, schemaErr := getToolSchemaByName(toolName)
+	if schemaErr != nil {
+		recordToolFailure(toolName, scope, start, "validation_error")
+		return "", fmt.Errorf("unknown tool %s in executor: %w", toolName, mcerrors.ErrUnknownTool)
+	}
+
+	// Validate that all provided argument keys are declared in the tool schema
+	if validationErr := validateArgKeys(args, schema); validationErr != nil {
+		recordToolFailure(toolName, scope, start, "validation_error")
+		return "", validationErr
+	}
+
 	config := newToolPipelineConfig(args)
-	var parsedData []interface{}
+	var queryResult QueryResult
 	var err error
 
 	switch toolName {
@@ -187,32 +207,27 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 	// Use the 10 shortcut query tools instead
 
 	// Layer 1: Convenience Tools (10 high-frequency queries)
-	// Phase 27 Stage 27.5: These tools now return []interface{} directly
+	// Phase 27 Stage 27.5: These tools now return QueryResult directly
 	case "query_user_messages":
-		parsedData, err = e.handleQueryUserMessages(cfg, scope, args)
+		queryResult, err = e.handleQueryUserMessages(cfg, scope, args)
 	case "query_tools":
-		parsedData, err = e.handleQueryTools(cfg, scope, args)
+		queryResult, err = e.handleQueryTools(cfg, scope, args)
 	case "query_tool_errors":
-		parsedData, err = e.handleQueryToolErrors(cfg, scope, args)
+		queryResult, err = e.handleQueryToolErrors(cfg, scope, args)
 	case "query_token_usage":
-		parsedData, err = e.handleQueryTokenUsage(cfg, scope, args)
+		queryResult, err = e.handleQueryTokenUsage(cfg, scope, args)
 	case "query_conversation_flow":
-		parsedData, err = e.handleQueryConversationFlow(cfg, scope, args)
+		queryResult, err = e.handleQueryConversationFlow(cfg, scope, args)
 	case "query_system_errors":
-		parsedData, err = e.handleQuerySystemErrors(cfg, scope, args)
+		queryResult, err = e.handleQuerySystemErrors(cfg, scope, args)
 	case "query_file_snapshots":
-		parsedData, err = e.handleQueryFileSnapshots(cfg, scope, args)
+		queryResult, err = e.handleQueryFileSnapshots(cfg, scope, args)
 	case "query_timestamps":
-		parsedData, err = e.handleQueryTimestamps(cfg, scope, args)
+		queryResult, err = e.handleQueryTimestamps(cfg, scope, args)
 	case "query_summaries":
-		parsedData, err = e.handleQuerySummaries(cfg, scope, args)
+		queryResult, err = e.handleQuerySummaries(cfg, scope, args)
 	case "query_tool_blocks":
-		parsedData, err = e.handleQueryToolBlocks(cfg, scope, args)
-	default:
-		// All query tools must be handled explicitly above.
-		// No CLI fallback - all tools use internal/query library.
-		recordToolFailure(toolName, scope, start, "validation_error")
-		return "", fmt.Errorf("unknown tool %s in executor: %w", toolName, mcerrors.ErrUnknownTool)
+		queryResult, err = e.handleQueryToolBlocks(cfg, scope, args)
 	}
 
 	if err != nil {
@@ -226,15 +241,15 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 		return "", err
 	}
 
-	// Phase 27 Stage 27.5: Convenience tools now return []interface{} directly
+	// Phase 27 Stage 27.5: Convenience tools now return QueryResult directly
 	// No need to parse JSONL or apply jq filters (filters are already applied internally)
 	// Note: Phase 25 originally introduced these convenience tools with jq execution
 
 	if toolName == "query_user_messages" && config.requiresMessageFilters() {
-		parsedData = e.applyMessageFiltersToData(parsedData, config.maxMessageLength, config.contentSummary)
+		queryResult.Entries = e.applyMessageFiltersToData(queryResult.Entries, config.maxMessageLength, config.contentSummary)
 	}
 
-	output, err := e.buildResponse(cfg, parsedData, args, toolName, config)
+	output, err := e.buildResponse(cfg, queryResult, args, toolName, config)
 	if err != nil {
 		return "", err
 	}
@@ -248,16 +263,49 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 	return output, nil
 }
 
-func (e *ToolExecutor) buildResponse(cfg *config.Config, parsedData []interface{}, args map[string]interface{}, toolName string, pipeline toolPipelineConfig) (string, error) {
+func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, args map[string]interface{}, toolName string, pipeline toolPipelineConfig) (string, error) {
+	parsedData := result.Entries
+
+	var output string
+	var err error
+
 	if pipeline.statsOnly {
-		return e.buildStatsOnlyResponse(parsedData, toolName)
+		output, err = e.buildStatsOnlyResponse(parsedData, toolName)
+	} else if pipeline.statsFirst {
+		output, err = e.buildStatsFirstResponse(cfg, parsedData, args, toolName)
+	} else {
+		output, err = e.buildStandardResponse(cfg, parsedData, args, toolName)
 	}
 
-	if pipeline.statsFirst {
-		return e.buildStatsFirstResponse(cfg, parsedData, args, toolName)
+	if err != nil {
+		return "", err
 	}
 
-	return e.buildStandardResponse(cfg, parsedData, args, toolName)
+	// Inject warnings into the JSON response
+	return injectWarnings(output, result.Warnings)
+}
+
+// injectWarnings adds a "warnings" field to a JSON response string.
+// If the output is valid JSON object, it adds the field. Otherwise returns as-is.
+func injectWarnings(output string, warnings []string) (string, error) {
+	if warnings == nil {
+		warnings = []string{}
+	}
+
+	// Try to parse as JSON object
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
+		// Not a JSON object (e.g., stats_only plain text) — skip injection
+		return output, nil
+	}
+
+	parsed["warnings"] = warnings
+
+	result, err := json.Marshal(parsed)
+	if err != nil {
+		return "", fmt.Errorf("failed to re-serialize response with warnings: %w", err)
+	}
+	return string(result), nil
 }
 
 func (e *ToolExecutor) buildStatsOnlyResponse(parsedData []interface{}, toolName string) (string, error) {
@@ -440,4 +488,36 @@ func getFloatParam(args map[string]interface{}, key string, defaultVal float64) 
 		return v
 	}
 	return defaultVal
+}
+
+// validateArgKeys checks that all keys in args are declared in the tool schema.
+// Returns an error listing unknown keys and the valid options.
+func validateArgKeys(args map[string]interface{}, schema ToolSchema) error {
+	if len(args) == 0 {
+		return nil
+	}
+
+	var unknown []string
+	for key := range args {
+		if _, ok := schema.Properties[key]; !ok {
+			unknown = append(unknown, key)
+		}
+	}
+
+	if len(unknown) == 0 {
+		return nil
+	}
+
+	// Sort for deterministic error messages
+	sort.Strings(unknown)
+
+	var valid []string
+	for key := range schema.Properties {
+		valid = append(valid, key)
+	}
+	sort.Strings(valid)
+
+	return fmt.Errorf("unknown parameter(s): %s; valid parameters are: %s",
+		strings.Join(unknown, ", "),
+		strings.Join(valid, ", "))
 }

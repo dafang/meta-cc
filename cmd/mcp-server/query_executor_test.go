@@ -259,14 +259,14 @@ func TestStreamFiles(t *testing.T) {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
-	results := executor.streamFiles(ctx, []string{file}, code, 0)
+	qr := executor.streamFiles(ctx, []string{file}, code, 0)
 
 	// Should have 2 user messages
-	if len(results) != 2 {
-		t.Errorf("expected 2 results, got %d", len(results))
+	if len(qr.Entries) != 2 {
+		t.Errorf("expected 2 results, got %d", len(qr.Entries))
 	}
 
-	for _, result := range results {
+	for _, result := range qr.Entries {
 		resultMap, ok := result.(map[string]interface{})
 		if !ok {
 			t.Fatalf("expected map[string]interface{}, got %T", result)
@@ -311,15 +311,15 @@ func TestStreamFilesWithLimit(t *testing.T) {
 	}
 
 	// Test with limit=5
-	results := executor.streamFiles(ctx, []string{file}, code, 5)
-	if len(results) != 5 {
-		t.Errorf("expected 5 results with limit=5, got %d", len(results))
+	qr := executor.streamFiles(ctx, []string{file}, code, 5)
+	if len(qr.Entries) != 5 {
+		t.Errorf("expected 5 results with limit=5, got %d", len(qr.Entries))
 	}
 
 	// Test with limit=0 (no limit)
-	results = executor.streamFiles(ctx, []string{file}, code, 0)
-	if len(results) != 10 {
-		t.Errorf("expected 10 results with limit=0, got %d", len(results))
+	qr = executor.streamFiles(ctx, []string{file}, code, 0)
+	if len(qr.Entries) != 10 {
+		t.Errorf("expected 10 results with limit=0, got %d", len(qr.Entries))
 	}
 }
 
@@ -397,7 +397,7 @@ func TestQueryExecutionPerformance(t *testing.T) {
 
 	// Measure execution time
 	start := time.Now()
-	results := executor.streamFiles(ctx, []string{file}, code, 0)
+	qr := executor.streamFiles(ctx, []string{file}, code, 0)
 	elapsed := time.Since(start)
 
 	// Should complete in < 100ms for 1000 records
@@ -406,11 +406,193 @@ func TestQueryExecutionPerformance(t *testing.T) {
 	}
 
 	// Verify results
-	if len(results) != 100 {
-		t.Errorf("expected 100 results, got %d", len(results))
+	if len(qr.Entries) != 100 {
+		t.Errorf("expected 100 results, got %d", len(qr.Entries))
 	}
 
 	t.Logf("Processed 1000 records in %v", elapsed)
+}
+
+// TestProcessFileLargeLines tests that processFile handles lines up to 4 MB
+func TestProcessFileLargeLines(t *testing.T) {
+	tests := []struct {
+		name string
+		size int // approximate line size in bytes
+	}{
+		{"1.5 MB line", 1_500_000},
+		{"2 MB line (regression)", 2_000_000},
+		{"4 MB line", 4_000_000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			file := filepath.Join(tmpDir, "large-line.jsonl")
+
+			// Build a JSON object with a large "data" field to reach target size.
+			// {"data":"AAA..."}  — overhead is ~12 bytes for the JSON wrapper.
+			padding := make([]byte, tt.size-12)
+			for i := range padding {
+				padding[i] = 'A'
+			}
+			entry := map[string]interface{}{
+				"data": string(padding),
+			}
+			lineBytes, err := json.Marshal(entry)
+			if err != nil {
+				t.Fatalf("failed to marshal entry: %v", err)
+			}
+			lineBytes = append(lineBytes, '\n')
+
+			if err := os.WriteFile(file, lineBytes, 0644); err != nil {
+				t.Fatalf("failed to write test file: %v", err)
+			}
+
+			executor := NewQueryExecutor(tmpDir)
+			ctx := context.Background()
+
+			code, err := executor.compileExpression(".")
+			if err != nil {
+				t.Fatalf("failed to compile expression: %v", err)
+			}
+
+			results, err := executor.processFile(ctx, file, code)
+			if err != nil {
+				t.Fatalf("processFile returned error for %s: %v", tt.name, err)
+			}
+			if len(results) != 1 {
+				t.Errorf("expected 1 result, got %d", len(results))
+			}
+		})
+	}
+}
+
+// TestStreamFilesWithWarnings tests that streamFiles returns partial results and warnings
+// when some files cannot be read (e.g., unreadable permissions or scanner errors)
+func TestStreamFilesWithWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a valid JSONL file
+	validFile := filepath.Join(tmpDir, "valid.jsonl")
+	validEntries := []map[string]interface{}{
+		{"type": "user", "id": 1},
+		{"type": "assistant", "id": 2},
+	}
+	f, err := os.Create(validFile)
+	if err != nil {
+		t.Fatalf("failed to create valid file: %v", err)
+	}
+	for _, entry := range validEntries {
+		data, _ := json.Marshal(entry)
+		f.Write(data)
+		f.WriteString("\n")
+	}
+	f.Close()
+
+	// Create a file that cannot be read (no read permissions)
+	unreadableFile := filepath.Join(tmpDir, "unreadable.jsonl")
+	if err := os.WriteFile(unreadableFile, []byte(`{"type":"user"}`+"\n"), 0000); err != nil {
+		t.Fatalf("failed to create unreadable file: %v", err)
+	}
+
+	executor := NewQueryExecutor(tmpDir)
+	ctx := context.Background()
+
+	code, err := executor.compileExpression(".")
+	if err != nil {
+		t.Fatalf("failed to compile expression: %v", err)
+	}
+
+	// Process both files: valid first, then unreadable
+	result := executor.streamFiles(ctx, []string{validFile, unreadableFile}, code, 0)
+
+	// Should have entries from the valid file
+	if len(result.Entries) != 2 {
+		t.Errorf("expected 2 entries from valid file, got %d", len(result.Entries))
+	}
+
+	// Should have a warning about the unreadable file
+	if len(result.Warnings) == 0 {
+		t.Error("expected warnings about unreadable file, got none")
+	}
+
+	// Verify warning contains the file path
+	found := false
+	for _, w := range result.Warnings {
+		if stringContains(w, "unreadable.jsonl") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected warning mentioning unreadable file, got: %v", result.Warnings)
+	}
+}
+
+// TestStreamFilesNoWarnings tests that streamFiles returns empty warnings on success
+func TestStreamFilesNoWarnings(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	file := filepath.Join(tmpDir, "ok.jsonl")
+	if err := os.WriteFile(file, []byte(`{"type":"user","id":1}`+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	executor := NewQueryExecutor(tmpDir)
+	ctx := context.Background()
+
+	code, err := executor.compileExpression(".")
+	if err != nil {
+		t.Fatalf("failed to compile expression: %v", err)
+	}
+
+	result := executor.streamFiles(ctx, []string{file}, code, 0)
+
+	if len(result.Entries) != 1 {
+		t.Errorf("expected 1 entry, got %d", len(result.Entries))
+	}
+	if len(result.Warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", result.Warnings)
+	}
+}
+
+// TestStreamFilesNonexistentFile tests warning for non-existent files
+func TestStreamFilesNonexistentFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	validFile := filepath.Join(tmpDir, "valid.jsonl")
+	if err := os.WriteFile(validFile, []byte(`{"id":1}`+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	nonexistent := filepath.Join(tmpDir, "does-not-exist.jsonl")
+
+	executor := NewQueryExecutor(tmpDir)
+	ctx := context.Background()
+
+	code, err := executor.compileExpression(".")
+	if err != nil {
+		t.Fatalf("failed to compile expression: %v", err)
+	}
+
+	result := executor.streamFiles(ctx, []string{validFile, nonexistent}, code, 0)
+
+	if len(result.Entries) != 1 {
+		t.Errorf("expected 1 entry from valid file, got %d", len(result.Entries))
+	}
+	if len(result.Warnings) != 1 {
+		t.Errorf("expected 1 warning, got %d: %v", len(result.Warnings), result.Warnings)
+	}
+}
+
+// stringContains is a helper to check if a string contains a substring
+func stringContains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 // TestContextCancellation tests context cancellation during streaming
@@ -442,10 +624,10 @@ func TestContextCancellation(t *testing.T) {
 	// Cancel context immediately
 	cancel()
 
-	results := executor.streamFiles(ctx, []string{file}, code, 0)
+	qr := executor.streamFiles(ctx, []string{file}, code, 0)
 
 	// Should return early due to cancellation
-	if len(results) > 100 {
-		t.Errorf("expected few results due to cancellation, got %d", len(results))
+	if len(qr.Entries) > 100 {
+		t.Errorf("expected few results due to cancellation, got %d", len(qr.Entries))
 	}
 }

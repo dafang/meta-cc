@@ -111,9 +111,9 @@ func BenchmarkQueryExecution(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				results := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.streamFiles(ctx, files, code, 0)
 				count := 0
-				for range results {
+				for range qr.Entries {
 					count++
 				}
 			}
@@ -130,9 +130,9 @@ func BenchmarkQueryExecution(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				results := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.streamFiles(ctx, files, code, 0)
 				count := 0
-				for range results {
+				for range qr.Entries {
 					count++
 				}
 			}
@@ -149,9 +149,9 @@ func BenchmarkQueryExecution(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				results := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.streamFiles(ctx, files, code, 0)
 				count := 0
-				for range results {
+				for range qr.Entries {
 					count++
 				}
 			}
@@ -198,9 +198,9 @@ func BenchmarkStreamProcessing(b *testing.B) {
 	b.Run("streaming", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			results := executor.streamFiles(ctx, files, code, 0)
+			qr := executor.streamFiles(ctx, files, code, 0)
 			count := 0
-			for range results {
+			for range qr.Entries {
 				count++
 			}
 		}
@@ -209,9 +209,9 @@ func BenchmarkStreamProcessing(b *testing.B) {
 	b.Run("streaming_with_limit_10", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			results := executor.streamFiles(ctx, files, code, 10)
+			qr := executor.streamFiles(ctx, files, code, 10)
 			count := 0
-			for range results {
+			for range qr.Entries {
 				count++
 			}
 		}
@@ -220,9 +220,9 @@ func BenchmarkStreamProcessing(b *testing.B) {
 	b.Run("streaming_with_limit_100", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			results := executor.streamFiles(ctx, files, code, 100)
+			qr := executor.streamFiles(ctx, files, code, 100)
 			count := 0
-			for range results {
+			for range qr.Entries {
 				count++
 			}
 		}
@@ -296,9 +296,9 @@ func BenchmarkConcurrentQueries(b *testing.B) {
 		ctx := context.Background()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			results := executor.streamFiles(ctx, files, code, 0)
+			qr := executor.streamFiles(ctx, files, code, 0)
 			count := 0
-			for range results {
+			for range qr.Entries {
 				count++
 			}
 		}
@@ -309,9 +309,9 @@ func BenchmarkConcurrentQueries(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			ctx := context.Background()
 			for pb.Next() {
-				results := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.streamFiles(ctx, files, code, 0)
 				count := 0
-				for range results {
+				for range qr.Entries {
 					count++
 				}
 			}
@@ -336,10 +336,10 @@ func BenchmarkMemoryUsage(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				results := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.streamFiles(ctx, files, code, 0)
 				// Collect all results to measure memory
 				count := 0
-				for range results {
+				for range qr.Entries {
 					count++
 				}
 			}

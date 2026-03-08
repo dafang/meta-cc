@@ -56,15 +56,15 @@ func TestExecuteQuery_ReturnsSliceNotString(t *testing.T) {
 
 	// Execute: Create executor and run query
 	executor := &ToolExecutor{}
-	results, err := executor.executeQuery("session", `.[] | select(.type == "user")`, 0)
+	results, err := executor.executeQuery("session", `.[] | select(.type == "user")`, 0, "")
 
-	// Assert: Verify return type is []interface{}
+	// Assert: Verify return type is QueryResult
 	require.NoError(t, err, "executeQuery should not return error")
-	assert.IsType(t, []interface{}{}, results, "executeQuery should return []interface{}, not string")
-	assert.Greater(t, len(results), 0, "should return at least one result")
+	assert.IsType(t, []interface{}{}, results.Entries, "executeQuery should return QueryResult with []interface{} Entries")
+	assert.Greater(t, len(results.Entries), 0, "should return at least one result")
 
 	// Verify each result is a proper map
-	for i, result := range results {
+	for i, result := range results.Entries {
 		record, ok := result.(map[string]interface{})
 		assert.True(t, ok, "result %d should be a map", i)
 		assert.Equal(t, "user", record["type"], "result %d should have type=user", i)
@@ -236,10 +236,10 @@ func TestHybridOutputMode(t *testing.T) {
 				t.Fatalf("failed to compile expression: %v", err)
 			}
 
-			results := executor.streamFiles(ctx, []string{file}, code, 0)
+			qr := executor.streamFiles(ctx, []string{file}, code, 0)
 
 			// Serialize results to check size
-			jsonData, err := json.Marshal(results)
+			jsonData, err := json.Marshal(qr.Entries)
 			if err != nil {
 				t.Fatalf("failed to marshal results: %v", err)
 			}
@@ -284,7 +284,7 @@ func TestGetQueryBaseDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			baseDir, err := getQueryBaseDir(tt.scope)
+			baseDir, err := getQueryBaseDir(tt.scope, "")
 
 			// Both session and project scope use SessionLocator
 			// We expect "no sessions found" error in test environment
@@ -347,7 +347,7 @@ func TestGetQueryBaseDirIntegration(t *testing.T) {
 		defer os.Chdir(originalWd)
 		os.Chdir(projectPath)
 
-		baseDir, err := getQueryBaseDir("project")
+		baseDir, err := getQueryBaseDir("project", "")
 
 		// We expect this to fail with "no sessions found" because we haven't
 		// created the session directory structure. But it should NOT fail with

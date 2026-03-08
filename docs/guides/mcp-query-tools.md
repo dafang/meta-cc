@@ -544,10 +544,16 @@ query_tools({
 
 **Parameters**:
 - `pattern` (string, **required**): Regex pattern to match
-- `max_message_length` (number): Max chars per message (default: 0 = no truncation)
+- `content_type` (string): Content type filter: `"string"` (default) or `"array"` (tool results)
+- `max_message_length` (number): Max chars per message content (truncation, default: 0 = no truncation)
+- `min_content_length` (number): Minimum content length in characters (filtering, string content only)
+- `max_content_length` (number): Maximum content length in characters (filtering, string content only)
 - `limit` (number): Max results (no limit by default)
 - `content_summary` (boolean): Return only turn/timestamp/preview (100 chars)
+- `working_dir` (string): Override working directory for session lookup (defaults to MCP server CWD)
 - Standard parameters (jq_filter, scope, stats_only, etc.)
+
+> **Note**: `max_message_length` *truncates* message content. `min/max_content_length` *filters* messages by length. These operate independently and can be combined.
 
 **Example**:
 ```javascript
@@ -555,6 +561,18 @@ query_user_messages({
   pattern: "error|bug",
   max_message_length: 500,
   limit: 20
+})
+
+// Filter messages by length (exclude short commands and long templates)
+query_user_messages({
+  min_content_length: 20,
+  max_content_length: 500
+})
+
+// Query a different project's sessions
+query_user_messages({
+  pattern: "deploy",
+  working_dir: "/path/to/other/project"
 })
 ```
 
@@ -785,6 +803,21 @@ query({
   scope: "session"
 })
 ```
+
+### `working_dir` (string)
+Override working directory for session lookup. Defaults to MCP server CWD.
+
+Use this to query sessions from a different project without restarting the MCP server.
+
+**Example**:
+```javascript
+query_tools({
+  working_dir: "/path/to/other/project",
+  scope: "project"
+})
+```
+
+> **Note**: Available on all 10 convenience query tools. Not yet available on `get_session_directory` or `get_session_metadata`.
 
 ### `jq_filter` (string)
 jq expression for filtering. Defaults to `.[]` when omitted.
@@ -1031,6 +1064,20 @@ Read({file_path: "/tmp/mcp-output-abc123.jsonl"})
 - ❌ Manually implement pagination
 - ❌ Assume inline results are always complete
 - ❌ Ignore file_ref outputs
+
+---
+
+## Reliability Features (Phase 29–30)
+
+### Parameter Validation
+All query tools now validate parameter names. Unknown parameters return an explicit error listing the unrecognized key and valid options. Scope values are also validated — only `"project"` and `"session"` are accepted.
+
+### Partial Result Warnings
+When session files cannot be read (e.g., oversized lines), the response includes a `warnings` field:
+```json
+{"mode":"inline","data":[...],"warnings":["path/to/file.jsonl: bufio.Scanner: token too long"]}
+```
+When no files are skipped, `warnings` is an empty array `[]`.
 
 ---
 

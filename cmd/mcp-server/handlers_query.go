@@ -15,13 +15,15 @@ import (
 // Users should use the 10 shortcut query tools instead
 
 // executeQuery is an internal helper for convenience tools
-// It executes a jq query and returns results as []interface{}
+// It executes a jq query and returns results as QueryResult
 // This allows proper JSONL formatting by response adapters
-func (e *ToolExecutor) executeQuery(scope string, jqFilter string, limit int) ([]interface{}, error) {
+// workingDir specifies the project directory for session lookup;
+// empty string ("") means use os.Getwd() as fallback (backward compatible).
+func (e *ToolExecutor) executeQuery(scope string, jqFilter string, limit int, workingDir string) (QueryResult, error) {
 	// Get base directory using pipeline infrastructure
-	baseDir, err := getQueryBaseDir(scope)
+	baseDir, err := getQueryBaseDir(scope, workingDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get base directory: %w", err)
+		return QueryResult{}, fmt.Errorf("failed to get base directory: %w", err)
 	}
 
 	// Create query executor
@@ -30,36 +32,42 @@ func (e *ToolExecutor) executeQuery(scope string, jqFilter string, limit int) ([
 	// Compile expression
 	code, err := executor.compileExpression(jqFilter)
 	if err != nil {
-		return nil, fmt.Errorf("invalid jq expression: %w", err)
+		return QueryResult{}, fmt.Errorf("invalid jq expression: %w", err)
 	}
 
 	// Get all JSONL files in directory
 	files, err := getJSONLFiles(baseDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list JSONL files: %w", err)
+		return QueryResult{}, fmt.Errorf("failed to list JSONL files: %w", err)
 	}
 
 	if len(files) == 0 {
-		return nil, fmt.Errorf("no JSONL files found in %s", baseDir)
+		return QueryResult{}, fmt.Errorf("no JSONL files found in %s", baseDir)
 	}
 
 	// Execute query with streaming
 	ctx := context.Background()
-	results := executor.streamFiles(ctx, files, code, limit)
+	result := executor.streamFiles(ctx, files, code, limit)
 
-	// Return results directly as []interface{}
+	// Return QueryResult directly
 	// Response adapters will handle serialization (inline or file_ref)
-	return results, nil
+	return result, nil
 }
 
-// getQueryBaseDir returns the base directory for the given scope
-// For session scope: returns directory of most recently modified session file
-// For project scope: returns directory containing all session files
-func getQueryBaseDir(scope string) (string, error) {
-	// Get current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		cwd = "."
+// getQueryBaseDir returns the base directory for the given scope.
+// For session scope: returns directory of most recently modified session file.
+// For project scope: returns directory containing all session files.
+// workingDir specifies the project directory for session lookup;
+// empty string ("") means use os.Getwd() as fallback (backward compatible).
+func getQueryBaseDir(scope, workingDir string) (string, error) {
+	// Determine effective project path: use workingDir if non-empty, else CWD
+	projectPath := workingDir
+	if projectPath == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			cwd = "."
+		}
+		projectPath = cwd
 	}
 
 	loc := locator.NewSessionLocator()
@@ -67,7 +75,7 @@ func getQueryBaseDir(scope string) (string, error) {
 	// Session scope: return directory of most recently modified session file
 	if scope == "session" {
 		// Use FromProjectPath to find the newest session file
-		sessionFile, err := loc.FromProjectPath(cwd)
+		sessionFile, err := loc.FromProjectPath(projectPath)
 		if err != nil {
 			return "", fmt.Errorf("failed to locate current session: %w", err)
 		}
@@ -78,9 +86,6 @@ func getQueryBaseDir(scope string) (string, error) {
 
 	// Project scope: use SessionLocator to find all session files
 	// This matches the behavior of buildPipelineOptions + SessionPipeline.Load
-
-	// Determine project path (same logic as buildPipelineOptions)
-	projectPath := cwd
 
 	// AllSessionsFromProject returns the list of session files
 	// We need to return the directory containing those files

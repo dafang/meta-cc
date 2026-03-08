@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 
 	"github.com/itchyny/gojq"
+
+	"github.com/yaleh/meta-cc/internal/parser"
 )
 
 // QueryExecutor executes jq queries on JSONL session data with expression caching
@@ -37,6 +40,12 @@ type QueryRequest struct {
 // QueryResponse represents query results
 type QueryResponse struct {
 	Entries []interface{}
+}
+
+// QueryResult represents query results with optional warnings about skipped files
+type QueryResult struct {
+	Entries  []interface{}
+	Warnings []string
 }
 
 // NewQueryExecutor creates a new query executor
@@ -99,32 +108,35 @@ func (e *QueryExecutor) compileExpression(expr string) (*gojq.Code, error) {
 }
 
 // streamFiles processes multiple JSONL files with streaming
-func (e *QueryExecutor) streamFiles(ctx context.Context, files []string, code *gojq.Code, limit int) []interface{} {
-	var results []interface{}
+func (e *QueryExecutor) streamFiles(ctx context.Context, files []string, code *gojq.Code, limit int) QueryResult {
+	var result QueryResult
 
 	for _, file := range files {
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
-			return results
+			return result
 		default:
 		}
 
 		fileResults, err := e.processFile(ctx, file, code)
 		if err != nil {
-			// Log error but continue processing other files
+			// Log warning and continue processing other files
+			slog.Warn("skipping file due to read error", "file", file, "error", err)
+			result.Warnings = append(result.Warnings, fmt.Sprintf("skipped %s: %s", file, err.Error()))
 			continue
 		}
 
-		results = append(results, fileResults...)
+		result.Entries = append(result.Entries, fileResults...)
 
 		// Check limit
-		if limit > 0 && len(results) >= limit {
-			return results[:limit]
+		if limit > 0 && len(result.Entries) >= limit {
+			result.Entries = result.Entries[:limit]
+			return result
 		}
 	}
 
-	return results
+	return result
 }
 
 // processFile processes a single JSONL file
@@ -139,9 +151,8 @@ func (e *QueryExecutor) processFile(ctx context.Context, filepath string, code *
 	scanner := bufio.NewScanner(file)
 
 	// Increase buffer size for large lines
-	const maxCapacity = 1024 * 1024 // 1MB
-	buf := make([]byte, maxCapacity)
-	scanner.Buffer(buf, maxCapacity)
+	buf := make([]byte, parser.MaxScannerLineBytes)
+	scanner.Buffer(buf, parser.MaxScannerLineBytes)
 
 	lineNum := 0
 	for scanner.Scan() {

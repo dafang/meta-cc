@@ -119,11 +119,19 @@ func getToolDefinitions() []Tool {
 				Type:        "number",
 				Description: "Max results (no limit by default, rely on hybrid output mode)",
 			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
 		}),
 		buildTool("query_token_usage", "Query assistant messages with token usage stats. Default scope: project.", map[string]Property{
 			"limit": {
 				Type:        "number",
 				Description: "Max results (no limit by default, rely on hybrid output mode)",
+			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
 			},
 		}),
 		buildTool("query_conversation_flow", "Query user and assistant conversation flow. Default scope: project.", map[string]Property{
@@ -135,11 +143,19 @@ func getToolDefinitions() []Tool {
 				Type:        "string",
 				Description: "Optional jq transform for parent-child relationships",
 			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
 		}),
 		buildTool("query_system_errors", "Query system API errors. Default scope: project.", map[string]Property{
 			"limit": {
 				Type:        "number",
 				Description: "Max results (no limit by default, rely on hybrid output mode)",
+			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
 			},
 		}),
 		buildTool("query_file_snapshots", "Query file history snapshots. Default scope: project.", map[string]Property{
@@ -147,11 +163,19 @@ func getToolDefinitions() []Tool {
 				Type:        "number",
 				Description: "Max results (no limit by default, rely on hybrid output mode)",
 			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
 		}),
 		buildTool("query_timestamps", "Query all entries with timestamps. Default scope: project.", map[string]Property{
 			"limit": {
 				Type:        "number",
 				Description: "Max results (no limit by default, rely on hybrid output mode)",
+			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
 			},
 		}),
 		buildTool("query_summaries", "Query session summaries. Default scope: project.", map[string]Property{
@@ -163,6 +187,10 @@ func getToolDefinitions() []Tool {
 				Type:        "number",
 				Description: "Max results (no limit by default, rely on hybrid output mode)",
 			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
 		}),
 		buildTool("query_tool_blocks", "Query tool use or tool result blocks. Default scope: project.", map[string]Property{
 			"block_type": {
@@ -172,6 +200,10 @@ func getToolDefinitions() []Tool {
 			"limit": {
 				Type:        "number",
 				Description: "Max results (no limit by default, rely on hybrid output mode)",
+			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
 			},
 		}, "block_type"),
 
@@ -190,6 +222,10 @@ func getToolDefinitions() []Tool {
 				Type:        "number",
 				Description: "Max results (no limit by default, rely on hybrid output mode)",
 			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
 			// Override jq_filter with schema (snake_case fields)
 			"jq_filter": jqFilterWithSchema(map[string]string{
 				"tool_name": "string - Tool identifier (e.g., \"Bash\", \"Read\", \"mcp__meta-cc__query_tools\")",
@@ -207,10 +243,28 @@ func getToolDefinitions() []Tool {
 				Type:        "string",
 				Description: "Regex pattern to match (required)",
 			},
-			// Tier 3: Range
+			// Tier 2: Content type
+			"content_type": {
+				Type:        "string",
+				Description: "Content type filter: 'string' (default) or 'array' (tool results)",
+			},
+			// Tier 3: Range / Length filtering
 			"max_message_length": {
 				Type:        "number",
-				Description: "Max chars per message content (default: 0 = no truncation, rely on hybrid mode for large results)",
+				Description: "Max chars per message content (default: 0 = no truncation, rely on hybrid mode for large results). Truncates content, does not filter.",
+			},
+			"min_content_length": {
+				Type:        "number",
+				Description: "Minimum content length in characters. Only messages with content at least this long are returned. Only applies to string content type.",
+			},
+			"max_content_length": {
+				Type:        "number",
+				Description: "Maximum content length in characters. Only messages with content at most this long are returned. Only applies to string content type. Unlike max_message_length which truncates, this filters out messages entirely.",
+			},
+			// Tier 5: Cross-project
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
 			},
 			// Tier 4: Output Control
 			"limit": {
@@ -344,4 +398,30 @@ type Property struct {
 	Type        string    `json:"type"`
 	Description string    `json:"description"`
 	Items       *Property `json:"items,omitempty"` // For array types
+}
+
+// toolSchemaIndex caches the mapping from tool name to ToolSchema.
+var toolSchemaIndex map[string]ToolSchema
+
+// buildToolSchemaIndex builds the index from tool definitions, lazily on first call.
+func buildToolSchemaIndex() map[string]ToolSchema {
+	if toolSchemaIndex != nil {
+		return toolSchemaIndex
+	}
+	defs := getToolDefinitions()
+	toolSchemaIndex = make(map[string]ToolSchema, len(defs))
+	for _, t := range defs {
+		toolSchemaIndex[t.Name] = t.InputSchema
+	}
+	return toolSchemaIndex
+}
+
+// getToolSchemaByName returns the ToolSchema for the named tool, or an error if not found.
+func getToolSchemaByName(name string) (ToolSchema, error) {
+	index := buildToolSchemaIndex()
+	schema, ok := index[name]
+	if !ok {
+		return ToolSchema{}, fmt.Errorf("unknown tool %s: no schema found", name)
+	}
+	return schema, nil
 }
