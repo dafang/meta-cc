@@ -44,26 +44,55 @@ if [ -f "$INSTALL_DIR/meta-cc" ]; then
     info "Legacy CLI binary removed from $INSTALL_DIR"
 fi
 
-# Remove slash commands
-if ls "$CLAUDE_DIR/commands/meta-"* >/dev/null 2>&1; then
-    rm -f "$CLAUDE_DIR/commands/meta-"* 2>/dev/null || true
-    info "Slash commands removed from $CLAUDE_DIR/commands"
+# Remove slash commands (explicit list)
+PUBLISHED_COMMANDS="meta prompt-find prompt-list prompt-show"
+CMD_REMOVED=0
+for cmd in $PUBLISHED_COMMANDS; do
+    if [ -f "$CLAUDE_DIR/commands/${cmd}.md" ]; then
+        rm -f "$CLAUDE_DIR/commands/${cmd}.md" 2>/dev/null || true
+        CMD_REMOVED=$((CMD_REMOVED + 1))
+    fi
+done
+if [ "$CMD_REMOVED" -gt 0 ]; then
+    info "Slash commands removed ($CMD_REMOVED files) from $CLAUDE_DIR/commands"
 else
     warn "No slash commands found in $CLAUDE_DIR/commands"
 fi
 
-# Remove subagents
-if ls "$CLAUDE_DIR/agents/meta-"* >/dev/null 2>&1; then
-    rm -f "$CLAUDE_DIR/agents/meta-"* 2>/dev/null || true
-    info "Subagents removed from $CLAUDE_DIR/agents"
+# Remove subagents (explicit list — agents are NOT prefixed with meta-)
+PUBLISHED_AGENTS="iteration-executor iteration-prompt-designer knowledge-extractor project-planner stage-executor"
+AGENT_REMOVED=0
+for agent in $PUBLISHED_AGENTS; do
+    if [ -f "$CLAUDE_DIR/agents/${agent}.md" ]; then
+        rm -f "$CLAUDE_DIR/agents/${agent}.md" 2>/dev/null || true
+        AGENT_REMOVED=$((AGENT_REMOVED + 1))
+    fi
+done
+if [ "$AGENT_REMOVED" -gt 0 ]; then
+    info "Agents removed ($AGENT_REMOVED files) from $CLAUDE_DIR/agents"
 else
-    warn "No subagents found in $CLAUDE_DIR/agents"
+    warn "No agents found in $CLAUDE_DIR/agents"
+fi
+
+# Remove MCP server registration from ~/.claude/mcp.json
+MCP_CONFIG="${HOME}/.claude/mcp.json"
+if [ -f "$MCP_CONFIG" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        if jq -e '.mcpServers["meta-cc"]' "$MCP_CONFIG" > /dev/null 2>&1; then
+            jq 'del(.mcpServers["meta-cc"])' "$MCP_CONFIG" > "$MCP_CONFIG.tmp"
+            mv "$MCP_CONFIG.tmp" "$MCP_CONFIG"
+            info "MCP server registration removed from $MCP_CONFIG"
+        else
+            info "MCP server 'meta-cc' not found in $MCP_CONFIG (already removed)"
+        fi
+    else
+        warn "jq not found — cannot auto-remove MCP config"
+        warn "Manually remove 'meta-cc' from .mcpServers in $MCP_CONFIG"
+    fi
+else
+    info "No MCP config at $MCP_CONFIG (nothing to remove)"
 fi
 
 echo ""
 echo "Uninstallation complete!"
-echo ""
-echo "Note: MCP configuration at ~/.claude/mcp.json was preserved."
-echo "To remove the meta-cc MCP server, manually edit ~/.claude/mcp.json"
-echo "and remove the 'meta-cc' entry from mcpServers."
 echo ""
