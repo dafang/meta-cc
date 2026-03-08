@@ -247,8 +247,8 @@ func TestApplyContentSummary(t *testing.T) {
 				},
 			},
 			expectPreview:  strings.Repeat("b", 100) + "...",
-			expectFields:   []string{"timestamp", "content_preview"},
-			unexpectFields: []string{"message", "type", "uuid"},
+			expectFields:   []string{"timestamp", "content_preview", "turn_sequence", "uuid"},
+			unexpectFields: []string{"message", "type"},
 		},
 		{
 			name: "nested message.content short",
@@ -263,7 +263,7 @@ func TestApplyContentSummary(t *testing.T) {
 				},
 			},
 			expectPreview:  "short nested",
-			expectFields:   []string{"timestamp", "content_preview"},
+			expectFields:   []string{"timestamp", "content_preview", "turn_sequence", "uuid"},
 			unexpectFields: []string{"message"},
 		},
 	}
@@ -314,6 +314,64 @@ func TestApplyContentSummary(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestApplyContentSummary_TurnSequenceAndUUID verifies turn_sequence is array index and uuid is passed through
+func TestApplyContentSummary_TurnSequenceAndUUID(t *testing.T) {
+	messages := []interface{}{
+		map[string]interface{}{
+			"type":      "user",
+			"timestamp": "2026-03-08T07:00:00Z",
+			"uuid":      "first-uuid",
+			"message":   map[string]interface{}{"content": "msg0", "role": "user"},
+		},
+		map[string]interface{}{
+			"type":      "user",
+			"timestamp": "2026-03-08T07:01:00Z",
+			"uuid":      "second-uuid",
+			"message":   map[string]interface{}{"content": "msg1", "role": "user"},
+		},
+		map[string]interface{}{
+			"type":      "user",
+			"timestamp": "2026-03-08T07:02:00Z",
+			"uuid":      "third-uuid",
+			"message":   map[string]interface{}{"content": "msg2", "role": "user"},
+		},
+	}
+
+	result := ApplyContentSummary(messages)
+
+	for i, r := range result {
+		m := r.(map[string]interface{})
+
+		// turn_sequence should be array index
+		ts, ok := m["turn_sequence"].(int)
+		if !ok {
+			t.Errorf("result[%d]: turn_sequence should be int, got %T", i, m["turn_sequence"])
+			continue
+		}
+		if ts != i {
+			t.Errorf("result[%d]: expected turn_sequence=%d, got %d", i, i, ts)
+		}
+
+		// uuid should be passed through from original
+		uuid, ok := m["uuid"].(string)
+		if !ok {
+			t.Errorf("result[%d]: uuid should be string", i)
+			continue
+		}
+		expectedUUID := messages[i].(map[string]interface{})["uuid"].(string)
+		if uuid != expectedUUID {
+			t.Errorf("result[%d]: expected uuid=%q, got %q", i, expectedUUID, uuid)
+		}
+
+		// content_preview should match
+		preview := m["content_preview"].(string)
+		expectedPreview := "msg" + string(rune('0'+i))
+		if preview != expectedPreview {
+			t.Errorf("result[%d]: expected preview=%q, got %q", i, expectedPreview, preview)
+		}
 	}
 }
 

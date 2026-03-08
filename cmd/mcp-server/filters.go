@@ -112,7 +112,8 @@ func ApplyContentSummary(messages []interface{}) []interface{} {
 
 		// Create summary object
 		summary[i] = map[string]interface{}{
-			"turn_sequence":   msgMap["turn_sequence"],
+			"turn_sequence":   i,
+			"uuid":            msgMap["uuid"],
 			"timestamp":       msgMap["timestamp"],
 			"content_preview": preview,
 		}

@@ -55,7 +55,7 @@ func (e *ToolExecutor) handleQueryUserMessages(cfg *config.Config, scope string,
 // handleQueryTools implements query_tools convenience tool
 // Maps to Query 2 from frequent-jsonl-queries.md
 func (e *ToolExecutor) handleQueryTools(cfg *config.Config, scope string, args map[string]interface{}) (QueryResult, error) {
-	toolName := getStringParam(args, "tool_name", "")
+	toolName := getStringParam(args, "tool", "")
 	limit := getIntParam(args, "limit", 0)
 	workingDir := getStringParam(args, "working_dir", "")
 

@@ -446,6 +446,54 @@ func TestQueryUserMessagesSchemaHasContentLengthParams(t *testing.T) {
 	}
 }
 
+// TestHandleQueryTools_ToolParamFilters verifies that the "tool" parameter
+// (as declared in the schema) actually filters tool calls by name.
+// Regression test for bug: schema used "tool" but handler read "tool_name".
+func TestHandleQueryTools_ToolParamFilters(t *testing.T) {
+	testData := `{"type":"assistant","timestamp":"2025-01-01T10:00:00Z","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/foo"}}],"usage":{"input_tokens":10,"output_tokens":5}}}
+{"type":"assistant","timestamp":"2025-01-01T10:00:01Z","message":{"content":[{"type":"tool_use","id":"t2","name":"Bash","input":{"command":"ls"}}],"usage":{"input_tokens":10,"output_tokens":5}}}
+`
+	projectPath := setupTestSessionDir(t, testData)
+
+	originalWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		if chErr := os.Chdir(originalWd); chErr != nil {
+			t.Fatalf("failed to restore working directory: %v", chErr)
+		}
+	}()
+	if err := os.Chdir(projectPath); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	t.Run("filter_by_tool_param_returns_only_matching", func(t *testing.T) {
+		result, err := executor.handleQueryTools(cfg, "session", map[string]interface{}{
+			"tool": "Read",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Entries) != 1 {
+			t.Errorf("expected 1 result when filtering by tool=Read, got %d", len(result.Entries))
+		}
+	})
+
+	t.Run("no_filter_returns_all", func(t *testing.T) {
+		result, err := executor.handleQueryTools(cfg, "session", map[string]interface{}{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Entries) != 2 {
+			t.Errorf("expected 2 results with no filter, got %d", len(result.Entries))
+		}
+	})
+}
+
 func TestHandleQueryToolBlocks(t *testing.T) {
 	t.Skip("Skipping - underlying handleQuery() is already tested")
 	executor, cfg, cleanup := setupConvenienceToolTest(t)
