@@ -42,7 +42,7 @@ if ! command -v jq &> /dev/null; then
 fi
 
 # Get current version
-CURRENT=$(jq -r '.version' .claude-plugin/plugin.json)
+CURRENT=$(jq -r '.version' .claude/.claude-plugin/plugin.json)
 echo "Current plugin version: $CURRENT"
 
 # Parse version components
@@ -70,7 +70,7 @@ echo ""
 
 # Confirm with user
 echo "This will update:"
-echo "  - .claude-plugin/plugin.json: $CURRENT → $NEW_VERSION"
+echo "  - .claude/.claude-plugin/plugin.json: $CURRENT → $NEW_VERSION"
 echo "  - .claude-plugin/marketplace.json: $CURRENT → $NEW_VERSION"
 echo ""
 echo "Press Enter to continue, or Ctrl+C to abort..."
@@ -78,8 +78,8 @@ read
 
 # Update plugin.json version
 echo "Updating plugin.json..."
-jq --arg ver "$NEW_VERSION" '.version = $ver' .claude-plugin/plugin.json > .claude-plugin/plugin.json.tmp
-mv .claude-plugin/plugin.json.tmp .claude-plugin/plugin.json
+jq --arg ver "$NEW_VERSION" '.version = $ver' .claude/.claude-plugin/plugin.json > .claude/.claude-plugin/plugin.json.tmp
+mv .claude/.claude-plugin/plugin.json.tmp .claude/.claude-plugin/plugin.json
 echo "✓ plugin.json updated to $NEW_VERSION"
 
 # Update marketplace.json version
@@ -91,7 +91,7 @@ echo ""
 
 # Commit changes
 echo "Committing version bump..."
-git add .claude-plugin/plugin.json .claude-plugin/marketplace.json
+git add .claude/.claude-plugin/plugin.json .claude-plugin/marketplace.json
 git commit -m "chore: bump plugin version to $NEW_VERSION
 
 Updated plugin.json and marketplace.json version.

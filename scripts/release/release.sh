@@ -142,6 +142,25 @@ else
     mv .claude-plugin/marketplace.json.tmp .claude-plugin/marketplace.json
     echo "✓ marketplace.json updated to $VERSION_NUM"
     echo ""
+
+    # Update plugin.json version (must match marketplace.json)
+    PLUGIN_JSON=".claude/.claude-plugin/plugin.json"
+    if [ -f "$PLUGIN_JSON" ]; then
+        jq --arg ver "$VERSION_NUM" '.version = $ver' "$PLUGIN_JSON" > "$PLUGIN_JSON.tmp"
+        mv "$PLUGIN_JSON.tmp" "$PLUGIN_JSON"
+        echo "✓ plugin.json updated to $VERSION_NUM"
+        echo ""
+    fi
+
+    # Verify version parity
+    MARKET_VER=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
+    PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "N/A")
+    if [ "$MARKET_VER" != "$PLUGIN_VER" ]; then
+        echo "ERROR: Version mismatch after update: marketplace=$MARKET_VER plugin=$PLUGIN_VER"
+        exit 1
+    fi
+    echo "✓ Version parity verified: $MARKET_VER"
+    echo ""
 fi
 
 # ==================================================================
