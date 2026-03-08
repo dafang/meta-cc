@@ -39,14 +39,27 @@ func TruncateMessageContent(messages []interface{}, maxLen int) []interface{} {
 			continue
 		}
 
-		// Create copy to avoid mutating original
+		// Create shallow copy to avoid mutating original
 		newMap := make(map[string]interface{})
 		for k, v := range msgMap {
 			newMap[k] = v
 		}
 
-		// Truncate content field if present and exceeds maxLen
-		if content, ok := newMap["content"].(string); ok {
+		// Try nested message.content first
+		if msgObj, ok := newMap["message"].(map[string]interface{}); ok {
+			if content, ok := msgObj["content"].(string); ok && len(content) > maxLen {
+				// Deep copy the message map to avoid mutating original
+				newMsg := make(map[string]interface{})
+				for k, v := range msgObj {
+					newMsg[k] = v
+				}
+				newMsg["content"] = content[:maxLen] + "... [TRUNCATED]"
+				newMap["message"] = newMsg
+				newMap["content_truncated"] = true
+				newMap["original_length"] = len(content)
+			}
+		} else if content, ok := newMap["content"].(string); ok {
+			// Fallback: flat content
 			if len(content) > maxLen {
 				newMap["content"] = content[:maxLen] + "... [TRUNCATED]"
 				newMap["content_truncated"] = true
@@ -86,9 +99,10 @@ func ApplyContentSummary(messages []interface{}) []interface{} {
 			continue
 		}
 
-		// Extract preview (first 100 chars)
+		// Extract preview (first 100 chars) from nested or flat content
 		preview := ""
-		if content, ok := msgMap["content"].(string); ok {
+		content := extractContentString(msgMap)
+		if content != "" {
 			if len(content) > DefaultPreviewLength {
 				preview = content[:DefaultPreviewLength] + "..."
 			} else {
@@ -105,4 +119,20 @@ func ApplyContentSummary(messages []interface{}) []interface{} {
 	}
 
 	return summary
+}
+
+// extractContentString extracts content string from a message map.
+// Handles both nested (message.content) and flat (content) structures.
+func extractContentString(msgMap map[string]interface{}) string {
+	// Try nested: message.content
+	if msg, ok := msgMap["message"].(map[string]interface{}); ok {
+		if content, ok := msg["content"].(string); ok {
+			return content
+		}
+	}
+	// Fallback: flat content
+	if content, ok := msgMap["content"].(string); ok {
+		return content
+	}
+	return ""
 }

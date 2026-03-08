@@ -233,6 +233,39 @@ func TestApplyContentSummary(t *testing.T) {
 			},
 			expectFields: []string{},
 		},
+		{
+			name: "nested message.content structure",
+			messages: []interface{}{
+				map[string]interface{}{
+					"type":      "user",
+					"timestamp": "2026-03-08T07:57:25Z",
+					"uuid":      "abc-123",
+					"message": map[string]interface{}{
+						"content": strings.Repeat("b", 200),
+						"role":    "user",
+					},
+				},
+			},
+			expectPreview:  strings.Repeat("b", 100) + "...",
+			expectFields:   []string{"timestamp", "content_preview"},
+			unexpectFields: []string{"message", "type", "uuid"},
+		},
+		{
+			name: "nested message.content short",
+			messages: []interface{}{
+				map[string]interface{}{
+					"type":      "user",
+					"timestamp": "2026-03-08T08:00:00Z",
+					"message": map[string]interface{}{
+						"content": "short nested",
+						"role":    "user",
+					},
+				},
+			},
+			expectPreview:  "short nested",
+			expectFields:   []string{"timestamp", "content_preview"},
+			unexpectFields: []string{"message"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -336,6 +369,76 @@ func TestApplyContentSummary_Immutability(t *testing.T) {
 
 	if _, exists := originalMap["extra_field"]; !exists {
 		t.Error("ApplyContentSummary removed fields from original")
+	}
+}
+
+// TestTruncateMessageContent_NestedStructure tests truncation with nested message.content
+func TestTruncateMessageContent_NestedStructure(t *testing.T) {
+	messages := []interface{}{
+		map[string]interface{}{
+			"type":      "user",
+			"timestamp": "2026-03-08T07:57:25Z",
+			"message": map[string]interface{}{
+				"content": strings.Repeat("x", 500),
+				"role":    "user",
+			},
+		},
+	}
+
+	result := TruncateMessageContent(messages, 100)
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result))
+	}
+
+	msgMap := result[0].(map[string]interface{})
+	nested, ok := msgMap["message"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected nested message map to exist")
+	}
+
+	content, ok := nested["content"].(string)
+	if !ok {
+		t.Fatal("expected content to be string")
+	}
+
+	if len(content) > 120 { // 100 + "... [TRUNCATED]"
+		t.Errorf("content not truncated, length=%d", len(content))
+	}
+
+	if truncated, ok := msgMap["content_truncated"].(bool); !ok || !truncated {
+		t.Error("expected content_truncated=true")
+	}
+}
+
+// TestTruncateMessageContent_NestedImmutability tests that nested original messages are not mutated
+func TestTruncateMessageContent_NestedImmutability(t *testing.T) {
+	original := []interface{}{
+		map[string]interface{}{
+			"type": "user",
+			"message": map[string]interface{}{
+				"content": strings.Repeat("z", 1000),
+				"role":    "user",
+			},
+		},
+	}
+
+	// Store original content
+	originalMap := original[0].(map[string]interface{})
+	originalMsg := originalMap["message"].(map[string]interface{})
+	originalContent := originalMsg["content"].(string)
+
+	// Truncate
+	TruncateMessageContent(original, 100)
+
+	// Check original is unchanged
+	afterContent := originalMsg["content"].(string)
+	if afterContent != originalContent {
+		t.Error("TruncateMessageContent mutated the original nested message content")
+	}
+
+	if len(afterContent) != 1000 {
+		t.Errorf("original content length changed from 1000 to %d", len(afterContent))
 	}
 }
 
