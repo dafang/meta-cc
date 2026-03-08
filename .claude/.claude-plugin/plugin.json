@@ -1,0 +1,61 @@
+{
+  "name": "meta-cc",
+  "version": "2.3.6",
+  "description": "Meta-Cognition tool for Claude Code: session history analysis, workflow optimization, and 18 validated BAIME methodology skills.",
+  "author": {
+    "name": "Yale Huang",
+    "email": "yaleh@ieee.org",
+    "url": "https://github.com/yaleh"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/yaleh/meta-cc",
+  "repository": "https://github.com/yaleh/meta-cc",
+  "keywords": [
+    "workflow-analysis",
+    "session-history",
+    "productivity",
+    "metacognition",
+    "analytics",
+    "optimization",
+    "methodologies",
+    "testing-strategy",
+    "ci-cd",
+    "error-recovery",
+    "refactoring",
+    "technical-debt",
+    "skills"
+  ],
+  "commands": [
+    "./commands/meta.md",
+    "./commands/prompt-find.md",
+    "./commands/prompt-list.md",
+    "./commands/prompt-show.md"
+  ],
+  "agents": [
+    "./agents/iteration-executor.md",
+    "./agents/iteration-prompt-designer.md",
+    "./agents/knowledge-extractor.md",
+    "./agents/project-planner.md",
+    "./agents/stage-executor.md"
+  ],
+  "skills": [
+    "./skills/agent-prompt-evolution",
+    "./skills/api-design",
+    "./skills/baseline-quality-assessment",
+    "./skills/build-quality-gates",
+    "./skills/ci-cd-optimization",
+    "./skills/code-refactoring",
+    "./skills/cross-cutting-concerns",
+    "./skills/dependency-health",
+    "./skills/documentation-management",
+    "./skills/error-recovery",
+    "./skills/knowledge-transfer",
+    "./skills/methodology-bootstrapping",
+    "./skills/observability-instrumentation",
+    "./skills/rapid-convergence",
+    "./skills/retrospective-validation",
+    "./skills/subagent-prompt-construction",
+    "./skills/technical-debt-management",
+    "./skills/testing-strategy"
+  ]
+}

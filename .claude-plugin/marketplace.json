@@ -33,9 +33,11 @@
         "refactoring",
         "technical-debt"
       ],
-      "strict": false,
       "commands": [
-        "./commands/meta.md"
+        "./commands/meta.md",
+        "./commands/prompt-find.md",
+        "./commands/prompt-list.md",
+        "./commands/prompt-show.md"
       ],
       "agents": [
         "./agents/iteration-executor.md",
