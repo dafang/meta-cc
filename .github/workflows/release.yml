@@ -81,6 +81,17 @@ jobs:
             cp -r dist/skills/* $PKG_DIR/skills/
             cp -r lib/* $PKG_DIR/lib/
 
+            # Copy plugin.json from plugin source into archive .claude-plugin/
+            cp .claude/.claude-plugin/plugin.json $PKG_DIR/.claude-plugin/
+
+            # Copy .mcp.json to archive root
+            cp .claude/.mcp.json $PKG_DIR/
+
+            # Rewrite archive marketplace.json source from "./.claude" to "." for flat layout
+            jq '.plugins[0].source = "."' $PKG_DIR/.claude-plugin/marketplace.json \
+              > $PKG_DIR/.claude-plugin/marketplace.json.tmp
+            mv $PKG_DIR/.claude-plugin/marketplace.json.tmp $PKG_DIR/.claude-plugin/marketplace.json
+
             # Copy scripts and metadata
             cp scripts/install/install.sh $PKG_DIR/
             cp scripts/install/uninstall.sh $PKG_DIR/

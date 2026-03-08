@@ -363,6 +363,44 @@ for agent in "${EXPECTED_AGENTS[@]}"; do
     fi
 done
 
+# Test 3.10: plugin.json in archive .claude-plugin/
+if [ -f ".claude-plugin/plugin.json" ]; then
+    if jq . .claude-plugin/plugin.json > /dev/null 2>&1; then
+        PLUGIN_VER=$(jq -r '.version' .claude-plugin/plugin.json)
+        MARKET_VER=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json 2>/dev/null || echo "")
+        if [ "$PLUGIN_VER" = "$MARKET_VER" ]; then
+            test_result "plugin.json in archive: valid, version=$PLUGIN_VER matches marketplace" "pass"
+        else
+            test_result "plugin.json in archive: version parity" "fail" "plugin=$PLUGIN_VER marketplace=$MARKET_VER"
+        fi
+    else
+        test_result "plugin.json in archive: valid JSON" "fail" "JSON parse error"
+    fi
+else
+    test_result "plugin.json in archive: exists" "fail" ".claude-plugin/plugin.json not found in archive"
+fi
+
+# Test 3.11: .mcp.json in archive
+if [ -f ".mcp.json" ]; then
+    if jq -e '.mcpServers["meta-cc"] // .["meta-cc"]' .mcp.json > /dev/null 2>&1; then
+        test_result ".mcp.json in archive: valid with meta-cc server" "pass"
+    else
+        test_result ".mcp.json in archive: valid with meta-cc server" "fail" "meta-cc server entry missing"
+    fi
+else
+    test_result ".mcp.json in archive: exists" "fail" ".mcp.json not found in archive"
+fi
+
+# Test 3.12: archive marketplace.json source is "."
+if [ -f ".claude-plugin/marketplace.json" ]; then
+    ARCHIVE_SOURCE=$(jq -r '.plugins[0].source' .claude-plugin/marketplace.json 2>/dev/null || echo "")
+    if [ "$ARCHIVE_SOURCE" = "." ]; then
+        test_result "archive marketplace.json source is '.'" "pass"
+    else
+        test_result "archive marketplace.json source is '.'" "fail" "Expected '.', got '$ARCHIVE_SOURCE'"
+    fi
+fi
+
 echo ""
 
 # ==================================================================
