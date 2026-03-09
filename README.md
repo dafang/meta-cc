@@ -8,50 +8,19 @@
 
 **Meta-cognition tool for Claude Code** - Analyze session history, detect patterns, optimize workflows.
 
+> **Note**: Skills and agents from previous versions have been moved to [yaleh/baime](https://github.com/yaleh/baime). meta-cc 3.0.0 focuses exclusively on session history analysis via MCP tools.
+
 ---
 
 ## What is meta-cc?
 
 meta-cc helps you understand and improve your Claude Code workflows through:
 
-- **Natural language queries** - `/meta "show errors"` - discover capabilities by asking
 - **Autonomous analysis** - Claude automatically queries session data via MCP tools
-- **Interactive coaching** - `@meta-coach` provides personalized workflow optimization
+- **21 MCP tools** - Error analysis, quality scanning, work patterns, timelines, bug detection, and more
+- **Prompt library** - Save, search, and reuse optimized prompts with 3 slash commands
 
 **Zero configuration required** - works out of the box with Claude Code.
-
-## Real-World Use Cases
-
-**From actual user sessions**:
-
-### 📊 Project Analysis
-```bash
-/meta "show errors"              # Analyze error patterns and prevention
-/meta "quality check"            # Quick quality assessment with scorecard
-/meta "find repeated workflows"  # Detect repetitive tasks for automation
-/meta "which files change most"  # File operation statistics and hotspots
-```
-
-### 🎯 Next Steps & Planning
-```bash
-/meta "What to do now?"          # Get intelligent next-step recommendations
-/meta "propose optimizations"    # Workflow improvement suggestions
-/meta "help me prioritize"       # Action prioritization based on context
-```
-
-### 📈 Performance & Debugging
-```bash
-/meta "why are my tests failing"  # Root cause analysis for test failures
-/meta "optimize my workflow"      # Efficiency bottleneck identification
-/meta "show tool usage patterns"  # Most frequently used tools analysis
-```
-
-### 📋 Documentation & Quality
-```bash
-/meta "documentation gaps"       # Find missing or incomplete documentation
-/meta "technical debt overview"  # Track and prioritize technical debt
-/meta "visualize timeline"        # Project evolution timeline
-```
 
 ---
 
@@ -66,20 +35,9 @@ meta-cc helps you understand and improve your Claude Code workflows through:
 
 Restart Claude Code — that's it. The MCP server is automatically configured via `.mcp.json` bundled in the plugin.
 
-The meta-cc plugin includes everything you need:
-- **Unified /meta command** - Natural language interface for session analysis
-- **5 Specialized Agents** - Project planning, iteration management, knowledge extraction
-- **13 Capabilities** - Error analysis, quality scanning, workflow optimization
-- **20 MCP Tools** - Autonomous session data queries (v2.1 two-stage query architecture)
-- **18 Validated Methodology Skills**:
-  - **BAIME** (Bootstrapped AI Methodology Engineering) - Framework for developing methodologies
-  - **Testing Strategy** - TDD, coverage-driven gap closure (3.1x speedup)
-  - **CI/CD Optimization** - Quality gates, release automation (2.5-3.5x speedup)
-  - **Error Recovery** - 13-category taxonomy, diagnostic workflows
-  - **Documentation Management** - Templates, patterns, automation tools
-  - And 13 more validated skills
-
-**Try BAIME**: Just tell Claude _"Use BAIME to build [domain] capability and complete [tasks]"_ - Claude handles everything automatically. See [BAIME Usage Guide](docs/tutorials/baime-usage.md#try-baime-in-3-steps) for examples and the 3-level trial workflow.
+The meta-cc plugin includes:
+- **3 Slash Commands** - `/prompt-find`, `/prompt-list`, `/prompt-show` for prompt library management
+- **21 MCP Tools** - Session data analysis with two-stage query architecture (v2.1)
 
 ### Method 2: Archive Install (Alternative)
 
@@ -96,9 +54,12 @@ The archive installer copies the binary and integration files, and automatically
 
 ### Verify Installation
 
-```bash
-/meta "show stats"         # Should display session statistics
-/meta "show errors"        # Should analyze error patterns
+In Claude Code, ask naturally:
+
+```
+"Show me all Bash errors in this project"
+"Which tools do I use most often?"
+"Find user messages mentioning 'refactor'"
 ```
 
 **Troubleshooting**: See [Installation Guide](docs/tutorials/installation.md#troubleshooting) for common issues.
@@ -107,21 +68,7 @@ The archive installer copies the binary and integration files, and automatically
 
 ## Quick Start
 
-### 1. Natural Language Queries
-
-Ask meta-cc what you need using the `/meta` command:
-
-```bash
-/meta "show errors"              # Analyze error patterns
-/meta "find repeated workflows"   # Detect repetitive tasks
-/meta "which files change most"   # File operation stats
-/meta "quality check"             # Code quality scan
-/meta "visualize timeline"        # Project timeline
-```
-
-**How it works**: meta-cc loads capabilities from GitHub and matches your intent to the best capability.
-
-### 2. Autonomous Analysis (MCP)
+### Autonomous Analysis (MCP)
 
 Just ask Claude naturally - MCP tools are invoked automatically:
 
@@ -129,9 +76,12 @@ Just ask Claude naturally - MCP tools are invoked automatically:
 "Show me all Bash errors in this project"
 "Find user messages mentioning 'refactor'"
 "Which tools do I use most often?"
+"Scan session quality and show me scores"
+"Show my work patterns and peak hours"
+"Find bug fix pairs in my session"
 ```
 
-**NEW (v2.0+)**: Unified query interface with 20 MCP tools and jq filtering:
+**Unified query interface with 21 MCP tools and jq filtering**:
 
 ```javascript
 // Core query tool - unified interface
@@ -150,27 +100,35 @@ query_conversation_flow({scope: "session"})
 query_raw({
   jq_expression: '.[] | group_by(.tool_name) | map({tool: .[0].tool_name, count: length})'
 })
+
+// New analysis tools (3.0.0)
+analyze_errors({})          // Aggregate errors by tool and type
+quality_scan({})             // Compute error/retry/diversity scores
+get_work_patterns({})        // Hourly activity and context switches
+get_timeline({})             // Chronological session events
+analyze_bugs({})             // Error-fix pairs and recurring patterns
+get_tech_debt({})            // TODO/FIXME markers and unresolved errors
 ```
 
 **Key Features**:
 - **Hybrid Output Mode**: Auto-switches between inline (<8KB) and file_ref (≥8KB)
 - **jq Integration**: Native jq filtering for complex queries
 - **No Limits by Default**: Returns all results, relies on hybrid mode
-- **20 Tools**: 2 core + 8 convenience + 7 legacy + 3 utility tools
+- **21 Tools**: 2 core + 8 convenience + 7 legacy + 3 utility + 6 analysis tools
 
 **Resources**:
 - [MCP Query Tools Reference](docs/guides/mcp-query-tools.md) - Complete tool documentation
 - [MCP Query Cookbook](docs/examples/mcp-query-cookbook.md) - 25+ practical examples
 - [MCP v2.0 Migration Guide](docs/guides/mcp-v2-migration.md) - Upgrade from v1.x
 
-### 3. Interactive Coaching
+### Prompt Library (Slash Commands)
 
-Get personalized workflow guidance from the `@meta-coach` subagent:
+Save and reuse your best prompts with 3 built-in commands:
 
 ```bash
-@meta-coach Why do my tests keep failing?
-@meta-coach Help me optimize my workflow
-@meta-coach Analyze my efficiency bottlenecks
+/prompt-find phase execution      # Search by keywords
+/prompt-list sort=usage           # Browse all (sorted by use)
+/prompt-show phase-execution-001  # View full prompt details
 ```
 
 ---
@@ -185,8 +143,8 @@ Get personalized workflow guidance from the `@meta-coach` subagent:
 
 ### Integration
 
-- **[MCP Guide](docs/guides/mcp.md)** - Complete MCP tool reference (20 tools)
-- **[Integration Guide](docs/guides/integration.md)** - MCP, Slash Commands, and Subagents
+- **[MCP Guide](docs/guides/mcp.md)** - Complete MCP tool reference (21 tools)
+- **[Integration Guide](docs/guides/integration.md)** - MCP and Slash Commands
 
 ### Advanced
 
@@ -195,7 +153,6 @@ Get personalized workflow guidance from the `@meta-coach` subagent:
 
 ### Development
 
-- **[Capabilities Guide](docs/guides/capabilities.md)** - Create custom capabilities
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow and guidelines
 - **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community standards
 
@@ -211,44 +168,18 @@ Get personalized workflow guidance from the `@meta-coach` subagent:
 
 ## Key Features
 
-- 🎯 **Natural language interface** - `/meta` command with semantic matching
-- 🔍 **20 MCP query tools** - Autonomous session data analysis with two-stage query architecture
-- 🎓 **Interactive coaching** - `@meta-coach` subagent for workflow optimization
-- 📚 **18 Validated Skills** - Reusable methodologies for testing, CI/CD, error recovery, documentation, and more
-- 🤖 **5 Specialized Agents** - Project planning, stage execution, iteration management
-- 📊 **Advanced analytics** - jq-based filtering, aggregation, time series
-- 📁 **File operation tracking** - Identify hotspots and churn
-- 🔄 **Workflow pattern detection** - Find repeated sequences
-- 🚀 **Zero dependencies** - Single binary MCP server
-- 🔧 **Extensible** - Create custom capabilities with markdown
-- 💡 **Prompt Learning System** - Save, search, and reuse optimized prompts with project-specific intelligence
-
-### Skills (18 Validated Methodologies)
-
-meta-cc includes proven methodologies for systematic software development:
-
-- **Testing Strategy** - TDD, coverage-driven gap closure, CLI testing (3.1x speedup, 89% transferable)
-- **CI/CD Optimization** - Quality gates, release automation, smoke testing (2.5-3.5x speedup)
-- **Error Recovery** - 13-category taxonomy, diagnostic workflows (95.4% error coverage)
-- **Dependency Health** - Security-first, batch remediation (6x speedup)
-- **Knowledge Transfer** - Progressive learning paths, onboarding (3-8x ramp-up reduction)
-- **Technical Debt Management** - SQALE methodology, prioritization (4.5x speedup)
-- **Code Refactoring** - Test-driven refactoring, complexity reduction (28% complexity reduction)
-- **Cross-Cutting Concerns** - Error handling, logging, configuration (60-75% faster diagnosis)
-- **Observability** - Logs, metrics, traces, structured logging (23-46x speedup)
-- **API Design** - 6 validated patterns, parameter categorization (82.5% transferable)
-- **Documentation Management** - 5 templates, 3 patterns, automation tools (93% transferable, 3-5x faster creation)
-- **Methodology Bootstrapping** - BAIME framework (10-50x speedup, 100% success rate)
-- **Agent Prompt Evolution** - Agent specialization tracking (5x performance gap detection)
-- **Baseline Quality Assessment** - Rapid convergence enablement (40-50% iteration reduction)
-- **Rapid Convergence** - 3-4 iteration methodology development (40-60% time reduction)
-- **Retrospective Validation** - Historical data validation (40-60% time reduction, 60-80% cost reduction)
-- **Subagent Prompt Construction** - Compact, expressive Claude Code subagent prompts using lambda contracts
-- **Build Quality Gates** - Quality enforcement gates for build and CI pipelines
-
-**Usage**: Skills are automatically available after installation. Claude Code will suggest relevant skills based on your tasks.
-
-See [Feature Overview](docs/reference/features.md) for detailed documentation.
+- **21 MCP tools** - Autonomous session data analysis with two-stage query architecture
+- **3 Slash Commands** - Prompt library management (`/prompt-find`, `/prompt-list`, `/prompt-show`)
+- **Advanced analytics** - jq-based filtering, aggregation, time series
+- **Error analysis** - Aggregate tool errors by name and type
+- **Quality scanning** - Error/retry/diversity/completion dimensions
+- **Work pattern detection** - Tool frequency, hourly activity, context switches
+- **Timeline visualization** - Chronological session events as JSON
+- **Bug detection** - Error-fix pairs and recurring patterns
+- **Tech debt tracking** - TODO/FIXME markers and unresolved errors
+- **File operation tracking** - Identify hotspots and churn
+- **Zero dependencies** - Single binary MCP server
+- **Prompt Learning System** - Save, search, and reuse optimized prompts with project-specific intelligence
 
 ---
 
@@ -264,7 +195,7 @@ See [Feature Overview](docs/reference/features.md) for detailed documentation.
 ```bash
 git clone https://github.com/yaleh/meta-cc.git
 cd meta-cc
-make build-mcp  # Build MCP server
+make build
 ```
 
 ### Development Workflow (3-Tier)
@@ -291,46 +222,6 @@ make test-coverage  # With coverage report
 ```
 
 **Coverage Requirement**: Maintain ≥80% test coverage for all code changes.
-
-### Create Custom Capabilities
-
-Create a capability file:
-
-```bash
-mkdir -p ~/my-capabilities
-cat > ~/my-capabilities/my-feature.md <<'EOF'
----
-name: my-feature
-description: My custom analysis
-keywords: custom, analysis
-category: analysis
----
-
-# My Custom Feature
-
-Analyze custom patterns in session data using MCP tools.
-
-## Implementation
-
-Ask Claude to query session data using MCP tools:
-- query_tools for tool analysis
-- query_user_messages for message search
-- get_session_stats for statistics
-
-## Usage
-
-Run with `/meta "my feature"`
-EOF
-```
-
-Use immediately:
-
-```bash
-export META_CC_CAPABILITY_SOURCES="~/my-capabilities:commands"
-/meta "my feature"
-```
-
-See [Capabilities Guide](docs/guides/capabilities.md) for complete documentation.
 
 ---
 

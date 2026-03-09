@@ -5,6 +5,25 @@ All notable changes to the meta-cc project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-03-09
+
+### Breaking Changes
+
+- Removed `/meta` command and dynamic capability loading system
+- Removed 18 skills → migrated to [yaleh/baime](https://github.com/yaleh/baime)
+- Removed 7 agents → migrated to [yaleh/baime](https://github.com/yaleh/baime)
+- `list_capabilities` and `get_capability` MCP tools removed
+- Plugin now ships 3 commands (prompt-find, prompt-list, prompt-show) instead of 4
+
+### Added
+
+- `analyze_errors` MCP tool: aggregate tool errors by name and type
+- `quality_scan` MCP tool: compute error/retry/diversity/completion dimensions
+- `get_work_patterns` MCP tool: tool frequency, hourly activity, context switches
+- `get_timeline` MCP tool: chronological session events as JSON
+- `analyze_bugs` MCP tool: detect error-fix pairs and recurring patterns
+- `get_tech_debt` MCP tool: detect TODO/FIXME markers and unresolved errors
+
 ## [2.3.5] - 2025-10-31
 
 

@@ -7,7 +7,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ### New to meta-cc?
 - **Start here**: [README.md](README.md) - Installation and quick start
 - **Understand the design**: [docs/core/principles.md](docs/core/principles.md) - Core constraints
-- **Integration guide**: [docs/guides/integration.md](docs/guides/integration.md) - Choose MCP/Slash/Subagent
+- **Integration guide**: [docs/guides/integration.md](docs/guides/integration.md) - Choose MCP/Slash
 
 ### Development Workflow
 - **Current plan**: [docs/core/plan.md](docs/core/plan.md) - Phase roadmap and status
@@ -15,7 +15,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 - **Plugin development**: [docs/guides/plugin-development.md](docs/guides/plugin-development.md) - Complete workflow
 
 ### MCP Server Usage
-- **MCP guide**: [docs/guides/mcp.md](docs/guides/mcp.md) - Complete MCP reference (16 tools)
+- **MCP guide**: [docs/guides/mcp.md](docs/guides/mcp.md) - Complete MCP reference (21 tools)
 - **Quick test**: Use MCP tool `get_session_stats`
 
 ### Common Tasks
@@ -34,8 +34,8 @@ A: Run `make dev` for quick iteration, then `make commit` to validate. Fix issue
 **Q: How much code can I write in one phase?**
 A: Maximum 500 lines of code modifications per phase, 200 lines per stage. See [docs/core/principles.md](docs/core/principles.md).
 
-**Q: Should I use MCP, Slash Commands, or Subagent?**
-A: Quick rule: Natural questions → MCP | Repeated workflows → Slash | Exploration → Subagent. See [docs/guides/integration.md](docs/guides/integration.md).
+**Q: Should I use MCP or Slash Commands?**
+A: Quick rule: Natural questions → MCP | Repeated workflows → Slash. See [docs/guides/integration.md](docs/guides/integration.md).
 
 **Q: How do I query session data (v2.0)?**
 A: Use the unified `query` tool with jq filtering or convenience tools:
@@ -83,14 +83,8 @@ Test jq locally first: `echo '[{"tool":"Bash"}]' | jq '.[]'`. See [MCP Query Too
 **Q: How do I update plugin version?**
 A: Install git hooks (`./scripts/install/install-hooks.sh`) for automatic bumping, or use `./scripts/release/bump-plugin-version.sh [patch|minor|major]`. See [docs/guides/git-hooks.md](docs/guides/git-hooks.md).
 
-**Q: What are skills and how do they relate to capabilities?**
-A: Skills are reusable methodologies packaged with the plugin (15 skills, ~1.5MB). Capabilities are lightweight content files for the `/meta` command. Skills provide full workflow templates; capabilities provide focused command content.
-
-**Q: How do I use skills?**
-A: Skills are automatically available after plugin installation. Claude Code will suggest relevant skills based on your tasks. See skill descriptions in README.md.
-
 **Q: How does the prompt learning system work?**
-A: After using `/meta Refine prompt: XXX`, you can save the optimized version to `.meta-cc/prompts/library/`. The system automatically recommends these saved prompts when you try similar prompts in the future, making you more efficient over time. Browse your library with `/prompt-list`.
+A: Use `/prompt-find`, `/prompt-list`, and `/prompt-show` to manage a project-local library of optimized prompts stored in `.meta-cc/prompts/library/`. Browse your library with `/prompt-list`.
 
 **Q: Where are saved prompts stored?**
 A: Project-local storage in `.meta-cc/prompts/library/` (not tracked by git by default). You can commit selectively if you want to share with your team. The directory is auto-created on first save.
@@ -100,17 +94,14 @@ A: Three methods (from fastest to most flexible):
 1. **Direct search** (recommended): `/prompt-find <keywords>` - Fast, deterministic search
    - Example: `/prompt-find phase plan execute`
    - Uses keyword matching, no LLM overhead
-2. **Semantic search**: `/meta Find prompt: <description>` - Natural language understanding
-   - Example: `/meta Find prompt: plan and execute phase 28`
-   - Uses LLM to understand intent, slower but more flexible
-3. **Manual search**: `grep`, `rg`, or file browser
+2. **Manual search**: `grep`, `rg`, or file browser
    - Files are plain markdown in `.meta-cc/prompts/library/`
 
 **Q: What if I don't want to save prompts?**
 A: Saving is completely optional. Just press Enter or answer "n" when prompted. The save option won't appear again until you optimize another prompt.
 
 **Q: How do I browse my saved prompts?**
-A: Use the new slash commands (recommended) or shell tools:
+A: Use the slash commands (recommended) or shell tools:
 1. **List all prompts**: `/prompt-list`
    - Filter by category: `/prompt-list category=release`
    - Sort by usage: `/prompt-list sort=usage` (default, most used first)
@@ -154,7 +145,7 @@ cp -r ~/backups/project-prompts-20251027/.meta-cc/prompts .meta-cc/
 ```
 
 **Q: Can I use prompts across multiple projects?**
-A: Currently project-local. Phase 28.5 will add global library in `~/.meta-cc/` for cross-project sharing.
+A: Currently project-local. A future update may add global library in `~/.meta-cc/` for cross-project sharing.
 
 ---
 
@@ -165,8 +156,8 @@ A: Currently project-local. Phase 28.5 will add global library in `~/.meta-cc/` 
 ### Architecture
 
 **MCP-based architecture**:
-- **MCP Server**: Provides 20 tools for session history analysis and query
-- **Claude Integration**: Slash commands, subagents, and capabilities for LLM-powered analysis
+- **MCP Server**: Provides 21 tools for session history analysis and query
+- **Claude Integration**: Slash commands for prompt management
 
 **Key principle**: MCP server handles data extraction and query. Claude performs semantic understanding and recommendations.
 
@@ -175,8 +166,7 @@ A: Currently project-local. Phase 28.5 will add global library in `~/.meta-cc/` 
 See [docs/reference/repository-structure.md](docs/reference/repository-structure.md) for complete directory guide.
 
 **Key directories**:
-- `.claude/` - Plugin entry point (slash commands, subagents, skills)
-- `capabilities/` - Capability source files (content for /meta command)
+- `.claude/` - Plugin entry point (slash commands)
 - `cmd/mcp-server/` - MCP server implementation
 - `internal/` - Core logic (parser, analyzer, query)
 - `docs/` - Technical documentation
@@ -222,15 +212,13 @@ make test-coverage # Coverage report
 **Local development setup**:
 ```bash
 # 1. Edit source files
-vim .claude/commands/meta.md       # Slash command
-vim capabilities/commands/*.md     # Capabilities
+vim .claude/commands/prompt-find.md   # Slash command
+vim .claude/commands/prompt-list.md   # Slash command
+vim .claude/commands/prompt-show.md   # Slash command
 
-# 2. For capability development
-export META_CC_CAPABILITY_SOURCES="capabilities/commands"
+# 2. Test in Claude Code (no build needed)
 
-# 3. Test in Claude Code (no build needed)
-
-# 4. Run tests
+# 3. Run tests
 make commit
 ```
 
@@ -294,7 +282,7 @@ make commit
 
 ### Query Session Data (via MCP)
 
-**NEW: Unified Query API (v2.0+)**:
+**Unified Query API (v2.0+)**:
 ```javascript
 // Single composable tool
 query({
@@ -320,44 +308,13 @@ query_user_messages(pattern="fix.*bug")  # Search user messages
 
 **Edit slash command**:
 ```bash
-vim .claude/commands/meta.md
+vim .claude/commands/prompt-find.md
 # Test in Claude Code immediately (no build needed)
-git commit -m "feat: improve /meta matching"
+git commit -m "feat: improve prompt-find matching"
 # Git hook auto-bumps version
 ```
 
-**Edit capability**:
-```bash
-vim capabilities/commands/meta-errors.md
-export META_CC_CAPABILITY_SOURCES="capabilities/commands"
-# Test in Claude Code
-git commit -m "feat: improve error analysis"
-# No version bump (capability content change)
-```
-
 **See**: [docs/guides/plugin-development.md](docs/guides/plugin-development.md) for complete workflow.
-
-## Unified Meta Command
-
-The `/meta` command provides a unified entry point for 15+ capabilities with natural language intent matching.
-
-**Usage**:
-```
-/meta "show errors"           → Executes meta-errors
-/meta "quality check"         → Executes meta-quality-scan
-/meta "visualize timeline"    → Executes meta-timeline
-```
-
-**Configuration**:
-```bash
-# Local development
-export META_CC_CAPABILITY_SOURCES="capabilities/commands"
-
-# Production (default)
-# META_CC_CAPABILITY_SOURCES="yaleh/meta-cc@main/commands"
-```
-
-**See**: [docs/reference/unified-meta-command.md](docs/reference/unified-meta-command.md) for complete guide.
 
 ## Reference Documentation
 
@@ -370,10 +327,8 @@ export META_CC_CAPABILITY_SOURCES="capabilities/commands"
 - [Git Hooks](docs/guides/git-hooks.md) - Automatic version bumping
 
 **Integration and Usage**:
-- [Integration Guide](docs/guides/integration.md) - Choose MCP/Slash/Subagent
-- [MCP Guide](docs/guides/mcp.md) - Complete MCP server reference
-- [Unified Meta Command](docs/reference/unified-meta-command.md) - /meta command guide
-- [Capabilities Guide](docs/guides/capabilities.md) - Create custom capabilities
+- [Integration Guide](docs/guides/integration.md) - Choose MCP/Slash
+- [MCP Guide](docs/guides/mcp.md) - Complete MCP server reference (21 tools)
 
 **Reference**:
 - [JSONL Reference](docs/reference/jsonl.md) - Output format and jq patterns
@@ -392,6 +347,5 @@ export META_CC_CAPABILITY_SOURCES="capabilities/commands"
 **Official Claude Code Documentation**:
 - [Overview](https://docs.claude.com/en/docs/claude-code/overview)
 - [Slash Commands](https://docs.claude.com/en/docs/claude-code/slash-commands)
-- [Subagents](https://docs.claude.com/en/docs/claude-code/subagents)
 - [MCP Integration](https://docs.claude.com/en/docs/claude-code/mcp)
 - [Hooks System](https://docs.claude.com/en/docs/claude-code/hooks)
