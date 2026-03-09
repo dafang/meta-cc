@@ -1,6 +1,23 @@
 # Installation Guide
 
-## Quick Install (Recommended)
+## Method 1: Plugin Marketplace (Recommended)
+
+Install meta-cc directly from within Claude Code:
+
+```bash
+/plugin marketplace add yaleh/meta-cc
+/plugin install meta-cc
+```
+
+Then restart Claude Code. The plugin system handles everything:
+- Installs slash commands (`/meta`, `/prompt-find`, `/prompt-list`, `/prompt-show`)
+- Installs 5 specialized agents
+- Installs 18 methodology skills
+- Configures the MCP server automatically via `.mcp.json` (no manual `claude mcp add` needed)
+
+## Method 2: Archive Install
+
+Download a platform-specific release archive and run the included installer.
 
 ### Linux (x86_64)
 ```bash
@@ -45,25 +62,21 @@ cd meta-cc-plugin-windows-amd64
 3. Open Git Bash in the extracted directory
 4. Run `./install.sh`
 
+The archive installer:
+- Copies the `meta-cc-mcp` binary to `~/.local/bin/`
+- Copies slash commands and agents to `~/.claude/`
+- Automatically merges MCP server configuration into `~/.claude/mcp.json`
+
 ## Manual Installation
 
 If the automated installer fails, follow these steps:
 
-### 1. Download Binary
+### 1. Download Archive
 
-**Linux (x86_64):**
 ```bash
-wget https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-mcp-linux-amd64
-```
-
-**macOS (Apple Silicon):**
-```bash
-wget https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-mcp-darwin-arm64
-```
-
-**Windows (x86_64):**
-```bash
-wget https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-mcp-windows-amd64.exe
+# Download plugin package for your platform
+curl -L https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-plugin-<platform>.tar.gz | tar xz
+cd meta-cc-plugin-<platform>
 ```
 
 ### 2. Install Binary
@@ -71,40 +84,49 @@ wget https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-mcp-windo
 **Linux/macOS:**
 ```bash
 mkdir -p ~/.local/bin
-mv meta-cc-mcp-<platform> ~/.local/bin/meta-cc-mcp
+cp bin/meta-cc-mcp ~/.local/bin/meta-cc-mcp
 chmod +x ~/.local/bin/meta-cc-mcp
 ```
 
 **Windows:**
 ```bash
 mkdir -p ~/.local/bin
-mv meta-cc-mcp-windows-amd64.exe ~/.local/bin/meta-cc-mcp.exe
+cp bin/meta-cc-mcp.exe ~/.local/bin/meta-cc-mcp.exe
 ```
 
 ### 3. Install Claude Code Files
 
-```bash
-# Download plugin package for your platform
-curl -L https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-plugin-<platform>.tar.gz | tar xz
-cd meta-cc-plugin-<platform>
+The archive uses a flat layout with `commands/`, `agents/`, and `skills/` at the top level:
 
-# Copy integration files
-mkdir -p ~/.claude/commands ~/.claude/agents
-cp .claude/commands/* ~/.claude/commands/
-cp .claude/agents/* ~/.claude/agents/
+```bash
+mkdir -p ~/.claude/commands ~/.claude/agents ~/.claude/skills
+
+# Copy slash commands
+cp commands/* ~/.claude/commands/
+
+# Copy agents
+cp agents/* ~/.claude/agents/
+
+# Copy skills
+cp -r skills/* ~/.claude/skills/
 ```
 
 ### 4. Configure MCP
 
-Edit `~/.claude/mcp.json` and add the meta-cc server:
+The archive includes a `.mcp.json` file. If you have `jq` installed, merge it automatically:
+
+```bash
+jq -s '.[0] * .[1]' ~/.claude/mcp.json .mcp.json > /tmp/mcp-merged.json && mv /tmp/mcp-merged.json ~/.claude/mcp.json
+```
+
+Otherwise, manually add to `~/.claude/mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "meta-cc": {
       "command": "meta-cc-mcp",
-      "args": [],
-      "disabled": false
+      "args": []
     }
   }
 }
@@ -117,14 +139,11 @@ If you already have other MCP servers configured, add the `"meta-cc"` entry to t
 After installation, verify the setup:
 
 ```bash
-# Check binary version
-meta-cc-mcp --version
-
 # Check binary location
 which meta-cc-mcp
 
-# Test MCP server binary
-meta-cc-mcp --version
+# Verify binary is executable
+ls -l ~/.local/bin/meta-cc-mcp
 ```
 
 **In Claude Code:**
@@ -193,28 +212,28 @@ source ~/.bash_profile
 1. **Restart Claude Code** after installation
 2. **Verify command files exist**:
    ```bash
-   ls -l ~/.claude/commands/meta-*
+   ls ~/.claude/commands/meta.md ~/.claude/commands/prompt-*.md
    ```
 3. **Check command permissions**:
    ```bash
-   chmod +r ~/.claude/commands/meta-*.md
+   chmod +r ~/.claude/commands/meta.md
    ```
 4. **Check Claude Code settings** to ensure slash commands are enabled
 
 ### Subagents not working
 
-**Issue**: Subagent `@meta-coach` not recognized
+**Issue**: Subagents not recognized
 
 **Solutions**:
 
 1. **Restart Claude Code** after installation
 2. **Verify agent files exist**:
    ```bash
-   ls -l ~/.claude/agents/meta-*
+   ls ~/.claude/agents/
    ```
-3. **Check agent JSON syntax**:
+3. **Check agent file syntax** (agents are `.md` files, not JSON):
    ```bash
-   jq empty ~/.claude/agents/meta-coach.json
+   head ~/.claude/agents/stage-executor.md
    ```
 
 ### Installation fails on macOS
@@ -275,23 +294,32 @@ cd meta-cc-plugin-<platform>
 ./uninstall.sh
 ```
 
+The uninstall script removes the binary, all slash commands, agents, skills, and automatically removes the `meta-cc` entry from `~/.claude/mcp.json`.
+
 ### Manual uninstallation
 
 ```bash
 # Remove binary
 rm ~/.local/bin/meta-cc-mcp
 
-# Remove legacy CLI binary if present (optional)
-rm ~/.local/bin/meta-cc
-
 # Remove Claude Code files
-rm -rf ~/.claude/commands/meta-*
-rm -rf ~/.claude/agents/meta-*
+rm ~/.claude/commands/meta.md
+rm ~/.claude/commands/prompt-find.md
+rm ~/.claude/commands/prompt-list.md
+rm ~/.claude/commands/prompt-show.md
+rm ~/.claude/agents/iteration-executor.md
+rm ~/.claude/agents/iteration-prompt-designer.md
+rm ~/.claude/agents/knowledge-extractor.md
+rm ~/.claude/agents/project-planner.md
+rm ~/.claude/agents/stage-executor.md
+rm -rf ~/.claude/skills/agent-prompt-evolution ~/.claude/skills/api-design \
+       ~/.claude/skills/baseline-quality-assessment ~/.claude/skills/build-quality-gates \
+       ~/.claude/skills/ci-cd-optimization ~/.claude/skills/code-refactoring \
+       # ... (see skills list in plugin.json)
 
-# Manually edit ~/.claude/mcp.json to remove meta-cc server
+# Remove meta-cc from MCP configuration
+jq 'del(.mcpServers["meta-cc"])' ~/.claude/mcp.json > /tmp/mcp.json && mv /tmp/mcp.json ~/.claude/mcp.json
 ```
-
-**Note**: Uninstallation preserves `~/.claude/mcp.json` to avoid breaking other MCP servers. You must manually remove the `"meta-cc"` entry from the `"mcpServers"` object.
 
 ## Upgrading
 
@@ -340,6 +368,6 @@ If you encounter issues not covered in this guide:
 After successful installation:
 
 1. **Read the documentation**: [Getting Started](../../README.md)
-2. **Try slash commands**: `/meta-stats`, `/meta-errors`, `/meta-timeline`
-3. **Explore subagents**: `@meta-coach` for workflow analysis
+2. **Try slash commands**: `/meta "show stats"`, `/meta "show errors"`, `/meta "quality check"`
+3. **Browse prompts**: `/prompt-list` to see saved prompts, `/prompt-find <keywords>` to search
 4. **Learn MCP tools**: See [MCP Guide](../guides/mcp.md)

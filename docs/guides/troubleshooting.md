@@ -4,36 +4,35 @@ This document provides solutions to common issues.
 
 ## Installation Issues
 
-### meta-cc not found
+### MCP binary not found
 
 **Symptoms**:
 ```
-command not found: meta-cc
+command not found: meta-cc-mcp
 ```
 
 **Solution**:
 ```bash
-# Confirm meta-cc is installed
-which meta-cc
+# Check if binary is installed
+which meta-cc-mcp
+ls -l ~/.local/bin/meta-cc-mcp
 
-# If not installed, build and install
-cd /path/to/meta-cc
-make build
-sudo cp meta-cc /usr/local/bin/meta-cc
-sudo chmod +x /usr/local/bin/meta-cc
+# Add ~/.local/bin to PATH if missing
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 ### Permission denied
 
 **Symptoms**:
 ```
-permission denied: /usr/local/bin/meta-cc
+permission denied: ~/.local/bin/meta-cc-mcp
 ```
 
 **Solution**:
 ```bash
 # Add executable permission
-sudo chmod +x /usr/local/bin/meta-cc
+chmod +x ~/.local/bin/meta-cc-mcp
 ```
 
 ## Session File Location Issues
@@ -42,56 +41,20 @@ sudo chmod +x /usr/local/bin/meta-cc
 
 **Symptoms**:
 ```
-Error: failed to locate session file: no session file found
+MCP error: failed to locate session file: no session file found
 ```
 
 **Possible causes**:
-1. Environment variables `CC_SESSION_ID` and `CC_PROJECT_HASH` not set (when using `--session-only`)
-2. Current directory is not the Claude Code project root
-3. Session file does not exist
+1. Current directory is not the Claude Code project root
+2. Session file does not exist
 
 **Solution**:
 ```bash
-# Option 1: Manually specify session ID
-meta-cc parse stats --session <session-id>
-
-# Option 2: Manually specify project path
-meta-cc parse stats --project /path/to/project
-
-# Option 3: Use --session-only with environment variables
-export CC_SESSION_ID=<session-id>
-export CC_PROJECT_HASH=<project-hash>
-meta-cc parse stats --session-only
-
-# Option 4: Check if session file exists
+# Check if session files exist for current project
 ls ~/.claude/projects/
 ```
 
-### Environment variables not working
-
-**Symptoms**:
-```
-Error: session location failed: failed to locate session file: tried session ID, project path, and env vars
-```
-
-**Root Cause**: Environment variables `CC_SESSION_ID` and `CC_PROJECT_HASH` are only checked when using `--session-only` flag (by design).
-
-**Solution**:
-```bash
-# CORRECT: Use --session-only flag with environment variables
-export CC_SESSION_ID=<session-id>
-export CC_PROJECT_HASH=<project-hash>
-meta-cc parse stats --session-only
-
-# INCORRECT: Environment variables without --session-only (will use project-level default)
-export CC_SESSION_ID=<session-id>
-meta-cc parse stats  # This uses project-level analysis, ignores env vars
-```
-
-**Why this design?**
-- **Default behavior** (no flags): Project-level analysis using current directory
-- **`--session-only` flag**: Session-level analysis using environment variables
-- This prevents unintended session-only mode when environment variables are set globally
+Make sure you run Claude Code from the project directory so the MCP server can locate session files.
 
 ## MCP Server Issues
 
@@ -104,59 +67,24 @@ MCP error -32603: failed to get capability: unknown source type: package
 
 **Root Cause**: Fixed in v0.26.6. Update to the latest version.
 
-**Solution**:
-```bash
-# Update meta-cc to v0.26.6 or later
-cd /path/to/meta-cc
-git pull
-make build
-sudo cp meta-cc /usr/local/bin/meta-cc
-sudo cp meta-cc-mcp /usr/local/bin/meta-cc-mcp
-
-# Or download from GitHub releases
-curl -L https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-linux-amd64 -o meta-cc
-sudo mv meta-cc /usr/local/bin/meta-cc
-sudo chmod +x /usr/local/bin/meta-cc
-```
-
-### MCP `scope: "session"` not working
-
-**Symptoms**:
-```
-MCP error -32603: meta-cc error: command failed with exit code (stderr empty)
-Command: /path/to/meta-cc --session-only parse stats --output jsonl
-```
-
-**Root Cause**: Fixed in v0.26.6. The `--session-only` flag now correctly uses environment variables.
-
-**Verification**:
-```bash
-# Test session-only mode manually
-export CC_SESSION_ID=<session-id>
-export CC_PROJECT_HASH=<project-hash>
-meta-cc --session-only parse stats --output jsonl
-
-# Should output session statistics
-```
-
-**Update to v0.26.6+**: This fix ensures MCP tools with `scope: "session"` parameter work correctly.
+**Solution**: Reinstall via plugin marketplace or download the latest release archive.
 
 ## Slash Commands Issues
 
 ### Slash Commands not visible
 
 **Possible causes**:
-1. File location incorrect (should be in `.claude/commands/`)
-2. frontmatter format error
+1. File location incorrect (should be in `~/.claude/commands/`)
+2. Frontmatter format error
 3. Claude Code not reloaded
 
 **Solution**:
 ```bash
 # Check file location
-ls .claude/commands/
+ls ~/.claude/commands/meta.md ~/.claude/commands/prompt-*.md
 
 # Check frontmatter format
-head -n 10 .claude/commands/meta-stats.md
+head -n 10 ~/.claude/commands/meta.md
 
 # Restart Claude Code
 # Close and reopen Claude Code
@@ -169,14 +97,7 @@ head -n 10 .claude/commands/meta-stats.md
 Error executing command: ...
 ```
 
-**Solution**:
-```bash
-# Manually run command to test
-bash -c "$(sed -n '/```bash/,/```/p' .claude/commands/meta-stats.md | grep -v '```')"
-
-# Check meta-cc version
-meta-cc --version
-```
+**Solution**: Restart Claude Code after installation, then check the MCP server is running (Settings → MCP).
 
 ## Output Issues
 
@@ -184,65 +105,39 @@ meta-cc --version
 
 **Possible causes**:
 1. Session file empty or malformed
-2. meta-cc version too old
-3. Incorrect command parameters
+2. MCP server not running
 
 **Solution**:
 ```bash
 # Check session file content
 head ~/.claude/projects/<hash>/<session-id>.jsonl
 
-# Update meta-cc
-cd /path/to/meta-cc
-git pull
-make build
-sudo cp meta-cc /usr/local/bin/meta-cc
-
-# Test command
-meta-cc parse stats --output md
+# Verify MCP server status in Claude Code (Settings → MCP)
 ```
 
 ## Performance Issues
 
-### Slow command execution
+### Slow MCP queries
 
 **Possible causes**:
 1. Session file too large (Turn count > 1000)
-2. Window parameter too large
+2. Large result sets without limit
 
 **Solution**:
 ```bash
-# Use window parameter to limit analysis scope
-meta-cc analyze errors --window 50
-
 # Check session file size
 wc -l ~/.claude/projects/<hash>/<session-id>.jsonl
 ```
 
+Use the `limit` parameter in MCP queries to restrict result size when needed.
+
 ## Debugging Tips
-
-### Enable verbose logging
-
-```bash
-# Run command with verbose output
-meta-cc parse stats --output md -v
-```
-
-### Check intermediate data
-
-```bash
-# Extract raw data
-meta-cc parse extract --type turns --output json
-
-# Check tool calls
-meta-cc parse extract --type tools --output json
-```
 
 ### Validate JSONL format
 
 ```bash
 # Check JSONL file format
-cat ~/.claude/projects/<hash>/<session-id>.jsonl | jq . | head -n 50
+jq . ~/.claude/projects/<hash>/<session-id>.jsonl | head -n 50
 ```
 
 ## Getting Help
@@ -254,7 +149,7 @@ If the above solutions don't work, please:
 3. **Check Claude Code documentation**: [Official Documentation](https://docs.claude.com/en/docs/claude-code)
 
 When submitting an Issue, please include:
-- meta-cc version (`meta-cc --version`)
+- meta-cc version (from plugin info or release archive name)
 - Complete error message
 - Session file size (`wc -l <session-file>`)
 - Operating system and version

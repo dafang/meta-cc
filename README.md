@@ -57,29 +57,31 @@ meta-cc helps you understand and improve your Claude Code workflows through:
 
 ## Quick Install
 
-### 1. Install Plugin
+### Method 1: Plugin Marketplace (Recommended)
 
 ```bash
 /plugin marketplace add yaleh/meta-cc
 /plugin install meta-cc
 ```
 
+Restart Claude Code — that's it. The MCP server is automatically configured via `.mcp.json` bundled in the plugin.
+
 The meta-cc plugin includes everything you need:
 - **Unified /meta command** - Natural language interface for session analysis
 - **5 Specialized Agents** - Project planning, iteration management, knowledge extraction
 - **13 Capabilities** - Error analysis, quality scanning, workflow optimization
-- **16 MCP Tools** - Autonomous session data queries (v2.1 two-stage query architecture)
-- **16 Validated Methodology Skills**:
+- **20 MCP Tools** - Autonomous session data queries (v2.1 two-stage query architecture)
+- **18 Validated Methodology Skills**:
   - **BAIME** (Bootstrapped AI Methodology Engineering) - Framework for developing methodologies
   - **Testing Strategy** - TDD, coverage-driven gap closure (3.1x speedup)
   - **CI/CD Optimization** - Quality gates, release automation (2.5-3.5x speedup)
   - **Error Recovery** - 13-category taxonomy, diagnostic workflows
   - **Documentation Management** - Templates, patterns, automation tools
-  - And 11 more validated skills
+  - And 13 more validated skills
 
 **Try BAIME**: Just tell Claude _"Use BAIME to build [domain] capability and complete [tasks]"_ - Claude handles everything automatically. See [BAIME Usage Guide](docs/tutorials/baime-usage.md#try-baime-in-3-steps) for examples and the 3-level trial workflow.
 
-### 2. Install MCP Server Binary
+### Method 2: Archive Install (Alternative)
 
 ```bash
 # Linux/macOS (one-liner)
@@ -88,13 +90,9 @@ cd meta-cc-plugin-linux-amd64
 ./install.sh
 ```
 
+The archive installer copies the binary and integration files, and automatically merges the MCP server configuration into `~/.claude/mcp.json`.
+
 **Other platforms**: See [Installation Guide](docs/tutorials/installation.md) for macOS (Apple Silicon), Windows, and manual installation.
-
-### 3. Configure MCP Server
-
-```bash
-claude mcp add meta-cc meta-cc-mcp
-```
 
 ### Verify Installation
 
@@ -214,9 +212,9 @@ Get personalized workflow guidance from the `@meta-coach` subagent:
 ## Key Features
 
 - 🎯 **Natural language interface** - `/meta` command with semantic matching
-- 🔍 **16 MCP query tools** - Autonomous session data analysis with two-stage query architecture
+- 🔍 **20 MCP query tools** - Autonomous session data analysis with two-stage query architecture
 - 🎓 **Interactive coaching** - `@meta-coach` subagent for workflow optimization
-- 📚 **16 Validated Skills** - Reusable methodologies for testing, CI/CD, error recovery, documentation, and more
+- 📚 **18 Validated Skills** - Reusable methodologies for testing, CI/CD, error recovery, documentation, and more
 - 🤖 **5 Specialized Agents** - Project planning, stage execution, iteration management
 - 📊 **Advanced analytics** - jq-based filtering, aggregation, time series
 - 📁 **File operation tracking** - Identify hotspots and churn
@@ -225,7 +223,7 @@ Get personalized workflow guidance from the `@meta-coach` subagent:
 - 🔧 **Extensible** - Create custom capabilities with markdown
 - 💡 **Prompt Learning System** - Save, search, and reuse optimized prompts with project-specific intelligence
 
-### Skills (16 Validated Methodologies)
+### Skills (18 Validated Methodologies)
 
 meta-cc includes proven methodologies for systematic software development:
 
@@ -245,6 +243,8 @@ meta-cc includes proven methodologies for systematic software development:
 - **Baseline Quality Assessment** - Rapid convergence enablement (40-50% iteration reduction)
 - **Rapid Convergence** - 3-4 iteration methodology development (40-60% time reduction)
 - **Retrospective Validation** - Historical data validation (40-60% time reduction, 60-80% cost reduction)
+- **Subagent Prompt Construction** - Compact, expressive Claude Code subagent prompts using lambda contracts
+- **Build Quality Gates** - Quality enforcement gates for build and CI pipelines
 
 **Usage**: Skills are automatically available after installation. Claude Code will suggest relevant skills based on your tasks.
 
