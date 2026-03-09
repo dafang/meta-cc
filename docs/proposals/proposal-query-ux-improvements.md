@@ -1,181 +1,316 @@
-# Query UX Improvements Proposal
+# Proposal: Query UX Improvements — group_by_session, preview_length, context_turns, session-level stats
 
 **Status**: Draft
+**Phase**: 52–55
+**Priority**: P1
 **Date**: 2026-03-09
-**Author**: Claude Code Analysis
-
-## Background
-
-During retrospective analysis of 48-hour session history using `query_user_messages`, three friction points were observed that required significant manual effort to work around:
-
-1. **Time filtering via jq is unreliable**: The recommended workaround is to add a jq expression like `.[] | select(.timestamp >= "2026-03-07T00:00:00Z")`. This is unreliable because jq string comparison is lexicographic and depends on consistent UTC formatting. Callers receive un-filtered results with no warning when the format doesn't match.
-
-2. **`session_id` not surfaced in summary mode**: Each raw JSONL entry already contains `sessionId` (from the CC session format). However, when `content_summary: true` is used, only `turn_sequence`, `timestamp`, and `content_preview` are returned — `sessionId` is silently dropped. Callers who want to group by session must either use full output (large) or infer session boundaries heuristically.
-
-3. **`stats_first` is tool-centric and meaningless for user messages**: The current `GenerateStats()` function (`internal/query/jq.go`) groups records by their `tool` or `ToolName` field. User message records have neither field, so every record is bucketed as `"unknown"`. Calling `stats_first: true` on `query_user_messages` returns useless stats.
 
 ---
 
-## Architecture Context
+## Background
 
-Understanding the actual call path is essential to placing fixes correctly.
+After the Phase 50–51 noise-reduction work, `query_user_messages` reliably returns genuine user
+intent messages. The next friction layer is output structure: large multi-session result sets
+arrive as flat interleaved JSONL, Chinese content previews are truncated to English-tuned
+defaults, and there is no way to see the turns surrounding a match without a second query.
 
-### Actual `query_user_messages` call chain
+Four concrete pain points drove this proposal:
 
-```
-MCP client
-  → server.go: handleToolsCall("query_user_messages", args)
-  → executor.go: ExecuteTool → handleQueryUserMessages(cfg, scope, args)
-  → handlers_convenience.go: executeQuery(scope, jqFilter, limit, workingDir)
-  → handlers_query.go: executor.streamFiles(ctx, files, compiledJQ, limit)
-```
+| # | Pain point | Current workaround |
+|---|------------|--------------------|
+| 1 | Multi-session results interleaved, hard to correlate | Manual jq `group_by(.sessionId)` or Read loop |
+| 2 | `content_summary` preview truncates at 100 chars — ~30 Chinese chars lose intent | Use full content (large output) |
+| 3 | Matched turn has no surrounding context; second query required | Run `query_conversation_flow` and join manually |
+| 4 | `stats_only` outputs hourly turn buckets; no per-session match count or duration | Manual jq aggregation |
 
-The function `RunUserMessagesQuery` in `internal/query/messages.go` is **not on this path**. It exists as a standalone function but is not called by any MCP handler. Fixes must target `handlers_convenience.go` and `handlers_query.go`, not `internal/query/messages.go`.
+---
 
-### `stats_first` / `stats_only` architecture
+## Root Cause Analysis
 
-`GenerateStats()` in `internal/query/jq.go` is a shared generic function called by `buildStatsFirstResponse()` in `executor.go` for **all** tools without awareness of which tool is being served. It groups by `tool`/`ToolName` field. For user messages (no such field), this produces only `{"key": "unknown", "count": N}`.
+### C1 — Flat JSONL for multi-session output
 
-### `sessionId` in raw data
+`buildStandardResponse` → `adaptResponse` serialises `parsedData []interface{}` as flat JSONL.
+No grouping step exists in the pipeline. Session boundaries are implicit in the `sessionId`
+field only.
 
-`SessionEntry.SessionID` (`json:"sessionId"`) is populated from the CC JSONL format. When `executeQuery()` streams raw entries through jq, `sessionId` is present on every record and **already accessible** via `.sessionId` in user-supplied jq filters. The field is not missing — it is dropped only in the `content_summary` output path.
+### C2 — Hardcoded 100-char preview
+
+`ApplyContentSummary` in `filters.go` calls `content[:DefaultPreviewLength]` where
+`DefaultPreviewLength = 100` (package-level const). The constant is not exposed as a parameter.
+Go's `len()` is byte-counted; a 100-byte limit yields ~33 Chinese characters, typically
+truncating mid-thought.
+
+### C3 — No context window
+
+`handleQueryUserMessages` applies a jq `select(...)` filter and returns only matching turns.
+There is no mechanism to load adjacent turns from the same session. The session file path
+is available via workingDir/scope resolution but is not re-queried after the initial filter pass.
+
+### C4 — No session-level stats
+
+`GenerateTimestampStats` (Phase 49) counts turns per hour and computes `session_count`.
+It does not aggregate per session: match count per session, first/last match timestamp,
+or session duration. `stats_only=true` callers get a useful overview but cannot compare
+activity across sessions without reading all detail records.
 
 ---
 
 ## Proposed Changes
 
-### Change 1: Native `since` / `until` Parameters (Go-level time filter)
+### Change 1 — `group_by_session` parameter
 
-**Affected tools**: `query_user_messages`, `query_timestamps`, `query_conversation_flow` (all tools that operate on time-ordered records)
+**New parameter**: `group_by_session bool` (default `false`), `query_user_messages` only.
 
-**Problem**: jq string comparison on timestamps is unreliable. A Go-level `time.Parse` filter is correct by definition and returns an actionable error on malformed input.
+When `true`, the flat `parsedData []interface{}` slice is transformed before serialisation:
+entries are grouped by their `sessionId` (or `session_id` if `content_summary` was applied),
+producing one object per session:
 
-**New parameters** (added to `handleQueryUserMessages` and shared via common args extraction):
-
-| Parameter | Type   | Example |
-|-----------|--------|---------|
-| `since`   | string | `"2026-03-07T00:00:00Z"` |
-| `until`   | string | `"2026-03-09T00:00:00Z"` |
-
-**Behavior**:
-- Both are optional and independent.
-- Malformed value → explicit error: `invalid since value: cannot parse "2026-03-07" as RFC3339`.
-- Filtering happens **before** jq in Go, on raw parsed entries.
-- Existing `jq_filter` continues to work; `since`/`until` are a pre-filter.
-
-**Implementation location**:
-
-`handlers_query.go`: Extend `executeQuery()` to accept a `TimeRange` struct (or add `since`/`until time.Time` parameters). Filter entries in `streamFiles()` by `entry.timestamp` before feeding to jq.
-
-Alternatively, introduce `executeQueryWithOptions(opts queryOptions)` where `queryOptions` embeds the existing parameters plus time bounds, keeping the existing `executeQuery()` signature as a backward-compatible wrapper.
-
-`handlers_convenience.go`: In `handleQueryUserMessages()`, extract and parse `since`/`until` from `args`, pass to the extended `executeQuery`.
-
-**Error handling**: `time.Parse(time.RFC3339, value)` — return error immediately on parse failure. Do not fall through to jq.
-
-**Complexity: Low.** The filter logic is a simple time comparison loop in `streamFiles()`. No new packages required.
-
----
-
-### Change 2: Surface `session_id` in `content_summary` Mode
-
-**Affected**: `query_user_messages` (and any tool using `content_summary: true`)
-
-**Problem**: `sessionId` is present in every raw JSONL record and is already accessible via `.sessionId` in jq. However, the `content_summary` output mode silently omits it, which forces callers who want session grouping to either:
-- Fetch full output (expensive for large result sets), or
-- Accept that summary results cannot be grouped by session.
-
-**Fix**: Add `session_id` to the `content_summary` output record. The value is taken directly from `.sessionId` of the raw entry.
-
-**Before** (`content_summary: true` output — 4 fields):
 ```json
-{"turn_sequence": 12, "uuid": "04305e6d-...", "timestamp": "2026-03-09T11:16:30Z", "content_preview": "修改上面的方案..."}
-```
-
-**After** (5 fields):
-```json
-{"session_id": "d3ea683a-a5f6-430a-8fe3-cd3a55cd247f", "turn_sequence": 12, "uuid": "04305e6d-...", "timestamp": "2026-03-09T11:16:30Z", "content_preview": "修改上面的方案..."}
-```
-
-**Implementation location**: `cmd/mcp-server/filters.go`, function `ApplyContentSummary()` (lines ~91–123). This function builds the 4-field summary map `{turn_sequence, uuid, timestamp, content_preview}` for each entry. Add `session_id` sourced from the entry's `sessionId` key.
-
-**Documentation**: The tool description for `query_user_messages` should explicitly list `.sessionId` as an available field for use in `jq_filter` expressions, since callers cannot discover it without reading the source or raw output.
-
-**Non-change**: No new pipeline infrastructure needed. No changes to `SessionEntry`, `parser`, or `session.go`. `sessionId` is already in the data.
-
-**Complexity: Low.** Adding one field to an existing transform.
-
----
-
-### Change 3: Tool-Aware Stats for `stats_first` / `stats_only`
-
-**Affected**: `query_user_messages` (and more broadly: all non-tool-call tools)
-
-**Problem**: `GenerateStats()` in `jq.go` is hardcoded to group by `tool`/`ToolName`. For user messages, it produces only `{"key": "unknown", "count": 200}` — useless.
-
-**Root cause**: `buildStatsFirstResponse()` in `executor.go` calls `GenerateStats()` without knowing the tool type. The stats function has no fallback for records that don't have a `tool` field.
-
-**Fix**: Make `GenerateStats()` fall back to time-based bucketing when no `tool`/`ToolName` field is present. Specifically:
-
-- If all (or most) records lack a `tool` field, group by **hour** using the `timestamp` field.
-- Return additional summary fields alongside the existing `{key, count}` format.
-
-**Proposed enhanced output for user messages** (`stats_only: true`):
-
-```
-{"total": 200, "session_count": 12, "time_range": {"from": "2026-03-08T06:01Z", "to": "2026-03-09T13:49Z"}}
-{"hour": "2026-03-08T06", "count": 8}
-{"hour": "2026-03-08T09", "count": 6}
-{"hour": "2026-03-09T03", "count": 9}
-...
-```
-
-**Detection logic** (no LLM): In `GenerateStats()`, after parsing records, check if any record has a `tool` or `ToolName` key. If fewer than 10% do, switch to time-based bucketing. This is a deterministic heuristic.
-
-**Implementation location**: `internal/query/jq.go` — `GenerateStats()`. Add a second pass that checks for the presence of `tool`/`ToolName` and conditionally switches to timestamp-based grouping.
-
-Alternatively, add a separate `GenerateTimestampStats()` function and call it from `buildStatsFirstResponse()` based on tool name — which is available in `executor.go` at call time.
-
-**The cleaner approach** (preferred): In `executor.go`, `buildStatsFirstResponse()` already receives `toolName`. Add a conditional:
-```go
-if toolName == "query_user_messages" || toolName == "query_conversation_flow" {
-    stats, _ = querypkg.GenerateTimestampStats(jsonlData)
-} else {
-    stats, _ = querypkg.GenerateStats(jsonlData)
+{
+  "session_id": "d3ea683a-...",
+  "match_count": 7,
+  "first_match": "2026-03-08T09:14:00Z",
+  "last_match":  "2026-03-09T11:30:00Z",
+  "turns": [ /* matched turn objects */ ]
 }
 ```
 
-This avoids heuristics entirely, keeps `GenerateStats()` unchanged, and is explicit about which tools need what kind of stats.
+**Implementation location**: new function `GroupBySession(entries []interface{}) []interface{}`
+in `internal/query/jq.go`. The function:
+1. Iterates entries in order. Extracts session key by checking `session_id` (snake_case, post-summary)
+   first, then falling back to `sessionId` (camelCase, raw). This handles both content_summary and
+   non-summary pipelines.
+2. Builds an ordered slice of session structs, preserving first-seen order.
+3. For each session, records `min(timestamp)`, `max(timestamp)`, `len(turns)`, and the turns slice.
+4. Returns `[]interface{}` of session objects, using `session_id` (snake_case) as the key name
+   in output consistently.
 
-**Complexity: Low-Medium.** Adding `GenerateTimestampStats()` and one conditional in `executor.go`.
+Called from `buildResponse` in `executor.go`, after `applyMessageFiltersToData`, when
+`pipeline.groupBySession == true`.
+
+**Mutual exclusion check**: at the top of `buildResponse`, before any stats or grouping logic:
+```go
+if pipeline.groupBySession && pipeline.statsOnly {
+    return "", fmt.Errorf("group_by_session and stats_only are mutually exclusive")
+}
+```
+
+**Compatibility**:
+- Default `false` — no change to existing output.
+- Compatible with `content_summary` (uses `session_id` field from summary output).
+- Compatible with `exclude_system_messages`.
+- Incompatible with `stats_only` — when both are set, return error:
+  `"group_by_session and stats_only are mutually exclusive"`.
+- Compatible with `stats_first`: stats computed from rawData (before grouping), grouped
+  detail appended after `---`.
+
+**toolPipelineConfig change**: add `groupBySession bool` field.
+
+---
+
+### Change 2 — `preview_length` parameter
+
+**New parameter**: `preview_length int` (default `100`), applies only when `content_summary=true`.
+
+**Implementation location**: `cmd/mcp-server/filters.go`.
+
+Current signature:
+```go
+func ApplyContentSummary(messages []interface{}) []interface{}
+```
+
+New signature:
+```go
+func ApplyContentSummary(messages []interface{}, previewLength int) []interface{}
+```
+
+Internal change: replace byte-indexed truncation with rune-safe truncation:
+```go
+// Current (UNSAFE for CJK):
+preview = content[:DefaultPreviewLength]
+
+// New (rune-safe):
+runes := []rune(content)
+if len(runes) > previewLength {
+    preview = string(runes[:previewLength]) + "..."
+}
+```
+Add guard: if `previewLength <= 0`, use `DefaultPreviewLength` (100) as fallback.
+
+`applyMessageFiltersToData` in `executor.go` currently calls `ApplyContentSummary(messages)`.
+Change to `ApplyContentSummary(messages, pipeline.previewLength)`.
+
+**toolPipelineConfig change**: add `previewLength int` field, populated from
+`getIntParam(args, "preview_length", DefaultPreviewLength)`.
+
+**Schema note**: Chinese/Japanese/Korean characters occupy 3 bytes each in UTF-8, so callers
+should set `preview_length=90` for ~30 readable CJK characters.
+
+**Compatibility**: default `100` matches existing behaviour. `preview_length` without
+`content_summary=true` is silently ignored.
+
+---
+
+### Change 3 — `context_turns` parameter
+
+**New parameter**: `context_turns int` (default `0` = disabled), `query_user_messages` only,
+string `content_type` only.
+
+When `N > 0`, for each matched turn the response includes up to N turns before and N turns
+after from the same session file. Context turns are marked `"context": true`; matched turns
+`"context": false`.
+
+**Implementation** (new method in `executor.go`):
+
+```
+expandContextTurns(rawData []interface{}, N int, baseDir string) ([]interface{}, error)
+```
+
+`baseDir` is extracted from `args["working_dir"]` (or resolved via `getQueryBaseDir`) in
+`buildResponse` before calling this method — same resolution used in `Execute()`.
+
+Steps:
+1. Collect distinct session IDs from `rawData` (matched turns), building a `matchedUUIDs` set.
+2. For each session ID, scan files in `baseDir` matching `*.jsonl`, reading each file to find
+   turns with matching `sessionId`. This is necessary because no sessionId→filename helper
+   currently exists; a new helper `loadTurnsForSession(baseDir, sessionID string)
+   ([]interface{}, error)` will be added to `handlers_query.go`.
+3. For each matched turn (identified by `uuid`), find its index in the full session turn list.
+4. Collect indices `[max(0, idx-N) .. min(len-1, idx+N)]`.
+5. Mark each turn: `"context": false` if its uuid is in `matchedUUIDs`, else `"context": true`.
+6. Deduplicate: if two matched turns' windows overlap, shared turns appear once; a turn that
+   is itself a match keeps `"context": false`.
+7. Maintain chronological order within each session.
+
+**New helper** `loadTurnsForSession(baseDir, sessionID string) ([]interface{}, error)` in
+`handlers_query.go`: reads all JSONL files in `baseDir`, returns turns where
+`obj["sessionId"] == sessionID`. Stops after first file that yields results (sessions are
+typically in a single file).
+
+**Only applies to string `content_type`**. When `content_type="array"`, `context_turns` is
+silently ignored.
+
+**Interaction with `group_by_session`**: when both are set, context turns are included in the
+session's `turns` array marked with `"context": true`. The session-level `match_count` counts
+only `"context": false` turns.
+
+**toolPipelineConfig change**: add `contextTurns int` field.
+
+---
+
+### Change 4 — Session-level stats aggregation
+
+**New parameter**: `stats_level string` (values: `"turn"` default, `"session"`).
+Applies to `stats_only` and `stats_first` modes of `query_user_messages`.
+
+When `stats_level="session"`, replace per-hour bucket output with per-session lines:
+
+```jsonl
+{"total_sessions": 4, "total_matches": 38, "time_range": {"from": "...", "to": "..."}}
+{"session_id": "d3ea683a-...", "match_count": 12, "first_match": "2026-03-08T09:14Z", "last_match": "2026-03-09T11:30Z", "duration_minutes": 1576}
+{"session_id": "a1b2c3d4-...", "match_count": 8, "first_match": "2026-03-08T14:02Z", "last_match": "2026-03-08T18:44Z", "duration_minutes": 282}
+```
+
+**Implementation**: new function in `internal/query/jq.go`:
+
+```go
+func GenerateSessionStats(jsonlData string) (string, error)
+```
+
+Logic mirrors `GenerateTimestampStats` but groups by `sessionId` instead of hour. For each
+session: collect all timestamps, compute `min` (first_match), `max` (last_match), count
+(match_count), and `duration_minutes = int(max.Sub(min).Minutes())`. Summary line:
+`total_sessions`, `total_matches`, overall `time_range`.
+
+**Critical**: `GenerateSessionStats` must always receive raw JSONL with camelCase `sessionId`
+(i.e., from `rawData`, not `parsedData`). This mirrors the existing pattern in
+`buildStatsFirstResponse` (phase 51 fix) where stats always operate on `rawData`.
+Field lookup: `obj["sessionId"]` — same as `GenerateTimestampStats`.
+
+Called from `buildStatsOnlyResponse` and `buildStatsFirstResponse` when
+`pipeline.statsLevel == "session"` (and `toolName == "query_user_messages"`).
+
+**toolPipelineConfig change**: add `statsLevel string` populated from
+`getStringParam(args, "stats_level", "turn")`.
+
+**Validation**: if `stats_level` is neither `"turn"` nor `"session"`, return error
+`"invalid stats_level: must be 'turn' or 'session'"`.
+
+**Backward compatibility**: default `"turn"` produces identical output to current behaviour.
+
+---
+
+## Files Affected
+
+| File | Changes |
+|------|---------|
+| `cmd/mcp-server/filters.go` | `ApplyContentSummary` signature: add `previewLength int`; replace hardcoded constant |
+| `cmd/mcp-server/tools.go` | Add 4 schema properties to `query_user_messages` |
+| `internal/query/jq.go` | Add `GroupBySession()`, `GenerateSessionStats()` |
+| `cmd/mcp-server/executor.go` | `toolPipelineConfig`: 4 new fields; `buildResponse`: grouping + context expansion; stats dispatch for `stats_level` |
+
+---
+
+## Estimated Impact
+
+| Change | Key files | Est. LoC |
+|--------|-----------|----------|
+| Phase 52: preview_length | filters.go, executor.go, tools.go | ~25 |
+| Phase 53: group_by_session | jq.go, executor.go, tools.go | ~80 |
+| Phase 54: session-level stats | jq.go, executor.go, tools.go | ~70 |
+| Phase 55: context_turns | executor.go, handlers_query.go, tools.go | ~200 |
+| Tests | *_test.go | ~200 |
+| **Total** | 6 files | **~495** |
+
+---
+
+## Backward Compatibility
+
+All parameters are optional with defaults reproducing current behaviour:
+
+| Parameter | Default | Current behaviour reproduced |
+|-----------|---------|------------------------------|
+| `group_by_session` | `false` | Yes — flat JSONL unchanged |
+| `preview_length` | `100` | Yes — `DefaultPreviewLength` const unchanged |
+| `context_turns` | `0` | Yes — no context expansion |
+| `stats_level` | `"turn"` | Yes — `GenerateTimestampStats` called as before |
+
+No existing tests should break.
 
 ---
 
 ## Non-Goals
 
-- **`query_sequence` / workflow detection**: Out of scope for this proposal.
-- **LLM-based semantic classification**: meta-cc does not use LLM. All computation is deterministic.
-- **Modifying the JSONL format or `SessionEntry`**: `sessionId` is already present. No parser changes needed.
-- **`by_hour` as configurable granularity**: Fixed hour bucketing is sufficient for 1–48h windows. A `stats_interval` parameter is deferred.
+- **Sequence detection** (ordered multi-pattern matching across turns) — deferred.
+- **Applying `group_by_session` to tools other than `query_user_messages`** — deferred.
+- **Configurable stats granularity** (`stats_interval=15m`) — deferred.
+- **LLM-assisted context summarisation** — meta-cc is LLM-free; context is raw turns only.
 
 ---
 
-## Impact Assessment
+## Acceptance Criteria
 
-| Change | Files Changed | Estimated LoC | Breaking Change |
-|--------|---------------|---------------|-----------------|
-| `since`/`until` params | `handlers_query.go`, `query_executor.go`, `handlers_convenience.go`, `tools.go` | ~120 | No (additive) |
-| `session_id` in summary | `filters.go`, `filters_test.go`, `tools.go` | ~20 | No (additive field) |
-| Tool-aware stats | `jq.go` (new fn), `jq_test.go`, `executor.go` | ~80 | No (existing `GenerateStats` unchanged) |
+### preview_length
+- `content_summary=true, preview_length=30` → `content_preview` ≤ 30 bytes.
+- Omitting `preview_length` with `content_summary=true` → `content_preview` ≤ 100 bytes (unchanged).
+- `preview_length` without `content_summary=true` → no effect, no error.
 
-All three changes are additive. Existing callers are unaffected.
+### group_by_session
+- `group_by_session=true` → one object per distinct `sessionId`, each with `session_id`,
+  `match_count`, `first_match`, `last_match`, `turns`.
+- `match_count == len(turns)` for each session.
+- `group_by_session=true` + `stats_only=true` → explicit error.
+- `group_by_session=true` + `content_summary=true` → each turn object in `turns` is a summary object.
 
----
+### context_turns
+- `context_turns=2` → matched turns plus up to 2 preceding and 2 following turns per match,
+  each annotated `"context": true/false`.
+- Overlapping windows produce no duplicate turns.
+- `context_turns` + `content_type="array"` → silently ignored, no error.
 
-## Success Criteria
-
-1. `query_user_messages(since: "2026-03-07T00:00:00Z")` returns only records with `timestamp >= 2026-03-07T00:00:00Z`, verified by test with a fixture containing records both inside and outside the window.
-2. A malformed `since` value (e.g., `"2026-03-07"`, no time component) returns an explicit error message, not empty results.
-3. `query_user_messages(content_summary: true)` output includes `session_id` in each record.
-4. `query_user_messages(stats_only: true)` returns time-bucketed stats (by hour), not `{"key": "unknown", "count": N}`.
-5. `query_tool_errors(stats_only: true)` continues to return tool-name-grouped stats (existing behavior unchanged).
+### stats_level="session"
+- `stats_only=true, stats_level="session"` → summary line with `total_sessions`/`total_matches`,
+  then one line per session with `session_id`, `match_count`, `first_match`, `last_match`,
+  `duration_minutes`.
+- `stats_level="turn"` (or omitted) → identical to current `stats_only=true` output.
+- `stats_level="invalid"` → error.
