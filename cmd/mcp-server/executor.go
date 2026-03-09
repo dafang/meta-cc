@@ -215,6 +215,16 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		recordToolSuccess(toolName, scope, start)
 		return output, true, nil
 
+	case "get_tech_debt":
+		output, err := executeGetTechDebtTool(cfg, args)
+		if err != nil {
+			errorType := classifyError(err)
+			recordToolFailure(toolName, scope, start, errorType)
+			return "", true, err
+		}
+		recordToolSuccess(toolName, scope, start)
+		return output, true, nil
+
 	default:
 		return "", false, nil
 	}
