@@ -300,6 +300,10 @@ func getToolDefinitions() []Tool {
 				Type:        "string",
 				Description: `Include only records with timestamp < this value (RFC3339)`,
 			},
+			"exclude_system_messages": {
+				Type:        "boolean",
+				Description: `If true, exclude Claude Code system-injected messages whose content starts with <local-command-caveat>, <command-name>, <local-command-stdout>, or <task-notification>. Only applies to string content type. Default: false.`,
+			},
 			// Override jq_filter with schema
 			"jq_filter": jqFilterWithSchema(map[string]string{
 				"sessionId": "string - Session identifier",

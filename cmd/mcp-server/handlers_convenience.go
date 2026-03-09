@@ -22,6 +22,7 @@ func (e *ToolExecutor) handleQueryUserMessages(cfg *config.Config, scope string,
 	workingDir := getStringParam(args, "working_dir", "")
 	sinceStr := getStringParam(args, "since", "")
 	untilStr := getStringParam(args, "until", "")
+	excludeSystem := getBoolParam(args, "exclude_system_messages", false)
 
 	// Parse time range before any session lookup (fail fast on bad input)
 	tr, err := parseTimeRange(sinceStr, untilStr)
@@ -54,6 +55,11 @@ func (e *ToolExecutor) handleQueryUserMessages(cfg *config.Config, scope string,
 	}
 	if maxContentLength > 0 {
 		jqFilter = fmt.Sprintf(`%s | select(.message.content | length <= %d)`, jqFilter, maxContentLength)
+	}
+
+	// Exclude Claude Code system-injected messages (only applies to string content type)
+	if excludeSystem && (contentType == "string" || contentType == "") {
+		jqFilter += ` | select(.message.content | (startswith("<local-command-caveat>") or startswith("<command-name>") or startswith("<local-command-stdout>") or startswith("<task-notification>")) | not)`
 	}
 
 	return e.executeQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)

@@ -612,3 +612,111 @@ func TestGetJSONLFilesOrderByModTime(t *testing.T) {
 		t.Logf("  %d. %s (modtime: %v)", i+1, filepath.Base(file), stat.ModTime())
 	}
 }
+
+// setupExcludeSystemFixture creates a fixture with 6 string-content user messages,
+// 2 of which are real user messages and 4 are Claude Code system-injected messages.
+func setupExcludeSystemFixture(t *testing.T) (string, *ToolExecutor, func()) {
+	t.Helper()
+
+	projectDir := t.TempDir()
+	absPath := projectDir
+	hash := strings.ReplaceAll(absPath, "/", "-")
+
+	projectsRoot := t.TempDir()
+	sessionDir := filepath.Join(projectsRoot, hash)
+	require.NoError(t, os.MkdirAll(sessionDir, 0755))
+
+	entries := []string{
+		`{"type":"user","timestamp":"2026-03-09T06:00:00Z","uuid":"u1","sessionId":"sess-A","message":{"role":"user","content":"hello"}}`,
+		`{"type":"user","timestamp":"2026-03-09T06:01:00Z","uuid":"u2","sessionId":"sess-A","message":{"role":"user","content":"fix the bug"}}`,
+		`{"type":"user","timestamp":"2026-03-09T06:02:00Z","uuid":"u3","sessionId":"sess-A","message":{"role":"user","content":"<local-command-caveat>Caveat: system message"}}`,
+		`{"type":"user","timestamp":"2026-03-09T06:03:00Z","uuid":"u4","sessionId":"sess-A","message":{"role":"user","content":"<command-name>/plugin</command-name>"}}`,
+		`{"type":"user","timestamp":"2026-03-09T06:04:00Z","uuid":"u5","sessionId":"sess-A","message":{"role":"user","content":"<local-command-stdout>some output</local-command-stdout>"}}`,
+		`{"type":"user","timestamp":"2026-03-09T06:05:00Z","uuid":"u6","sessionId":"sess-A","message":{"role":"user","content":"<task-notification>task done</task-notification>"}}`,
+	}
+
+	file := filepath.Join(sessionDir, "session.jsonl")
+	f, err := os.Create(file)
+	require.NoError(t, err)
+	for _, line := range entries {
+		_, err := f.WriteString(line + "\n")
+		require.NoError(t, err)
+	}
+	f.Close()
+
+	origRoot := os.Getenv("META_CC_PROJECTS_ROOT")
+	os.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+
+	cleanup := func() {
+		os.Setenv("META_CC_PROJECTS_ROOT", origRoot)
+	}
+
+	return projectDir, NewToolExecutor(), cleanup
+}
+
+// TestExcludeSystemMessages verifies that exclude_system_messages filters out
+// Claude Code system-injected messages when set to true.
+func TestExcludeSystemMessages(t *testing.T) {
+	projectDir, executor, cleanup := setupExcludeSystemFixture(t)
+	defer cleanup()
+
+	// Without exclusion: all 6 string-content user messages should be returned
+	args := map[string]interface{}{
+		"pattern":                 ".",
+		"exclude_system_messages": false,
+		"working_dir":             projectDir,
+	}
+	result, err := executor.handleQueryUserMessages(nil, "project", args)
+	require.NoError(t, err)
+	assert.Len(t, result.Entries, 6, "without exclusion, all 6 user messages should be returned")
+
+	// With exclusion: only 2 real user messages should be returned
+	args2 := map[string]interface{}{
+		"pattern":                 ".",
+		"exclude_system_messages": true,
+		"working_dir":             projectDir,
+	}
+	result2, err := executor.handleQueryUserMessages(nil, "project", args2)
+	require.NoError(t, err)
+	assert.Len(t, result2.Entries, 2, "with exclusion, only 2 real user messages should be returned")
+}
+
+// TestExcludeSystemMessages_NoErrorOnArrayType verifies that exclude_system_messages
+// is silently ignored when content_type is "array".
+func TestExcludeSystemMessages_NoErrorOnArrayType(t *testing.T) {
+	projectDir := t.TempDir()
+	absPath := projectDir
+	hash := strings.ReplaceAll(absPath, "/", "-")
+
+	projectsRoot := t.TempDir()
+	sessionDir := filepath.Join(projectsRoot, hash)
+	require.NoError(t, os.MkdirAll(sessionDir, 0755))
+
+	entries := []string{
+		`{"type":"user","timestamp":"2026-03-09T06:00:00Z","uuid":"u1","sessionId":"sess-A","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}`,
+		`{"type":"user","timestamp":"2026-03-09T06:01:00Z","uuid":"u2","sessionId":"sess-A","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"done"}]}}`,
+	}
+
+	file := filepath.Join(sessionDir, "session.jsonl")
+	f, err := os.Create(file)
+	require.NoError(t, err)
+	for _, line := range entries {
+		_, err := f.WriteString(line + "\n")
+		require.NoError(t, err)
+	}
+	f.Close()
+
+	origRoot := os.Getenv("META_CC_PROJECTS_ROOT")
+	os.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+	defer os.Setenv("META_CC_PROJECTS_ROOT", origRoot)
+
+	executor := NewToolExecutor()
+	args := map[string]interface{}{
+		"content_type":            "array",
+		"exclude_system_messages": true,
+		"working_dir":             projectDir,
+	}
+	result, err := executor.handleQueryUserMessages(nil, "project", args)
+	require.NoError(t, err)
+	assert.Len(t, result.Entries, 2, "array-type content should not be filtered by exclude_system_messages")
+}
