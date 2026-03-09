@@ -168,6 +168,16 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		recordToolSuccess(toolName, scope, start)
 		return output, true, nil
 
+	case "get_work_patterns":
+		output, err := executeGetWorkPatternsTool(cfg, args)
+		if err != nil {
+			errorType := classifyError(err)
+			recordToolFailure(toolName, scope, start, errorType)
+			return "", true, err
+		}
+		recordToolSuccess(toolName, scope, start)
+		return output, true, nil
+
 	case "get_session_metadata":
 		result, err := handleGetSessionMetadata(context.Background(), args)
 		if err != nil {

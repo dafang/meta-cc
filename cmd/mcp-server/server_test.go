@@ -106,9 +106,10 @@ func TestHandleToolsList(t *testing.T) {
 	// Phase 27 Stage 27.5: Added get_session_metadata (16 -> 17)
 	// Phase 42.2: Added analyze_errors (17 -> 18)
 	// Phase 42.3: Added quality_scan (18 -> 19)
-	// Final: 19 tools (10 convenience + 3 utility + 4 two-stage + 2 analysis)
-	if len(toolsSlice) != 19 {
-		t.Errorf("expected 19 tools after Phase 42.3, got %d", len(toolsSlice))
+	// Phase 43.2: Added get_work_patterns (19 -> 20)
+	// Final: 20 tools (10 convenience + 3 utility + 4 two-stage + 3 analysis)
+	if len(toolsSlice) != 20 {
+		t.Errorf("expected 20 tools after Phase 43.2, got %d", len(toolsSlice))
 	}
 }
 

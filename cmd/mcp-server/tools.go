@@ -389,6 +389,12 @@ func getToolDefinitions() []Tool {
 				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
 			},
 		}),
+		buildTool("get_work_patterns", "Get tool frequency, hourly activity, and context switches. Default scope: project.", map[string]Property{
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
+		}),
 		buildTool("get_session_metadata", "Get session metadata including JSONL schema, file info, and query templates. Default scope: project.", map[string]Property{
 			"scope": {
 				Type:        "string",
