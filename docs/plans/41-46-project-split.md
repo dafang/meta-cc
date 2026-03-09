@@ -9,7 +9,7 @@ All six phases completed in a single session. Phases 41, 42.1, 43.1, and 44.1 ra
 
 | Phase | Commit(s) | Actual outcome |
 |-------|-----------|----------------|
-| 41 | `yaleh/baime` repo | Published at github.com/yaleh/baime — 6 agents, 19 skills |
+| 41 | `yaleh/baime` repo | Published at github.com/yaleh/baime — 6 agents, 19 skills. **Risk**: `marketplace.json` must include `owner.name` and a `plugins[]` array per Claude Code marketplace schema; subagent frontmatter requires both `name` and `description` fields — verify with `scripts/validate-plugin.sh` |
 | 42 | `aff373b`, `7f8e047` | `analyze_errors` + `quality_scan` live; `loadEntriesAndToolCalls` established |
 | 43 | `c53342e`, after merge | `get_work_patterns` + `get_timeline` live |
 | 44 | `3197918` | `analyze_bugs` + `get_tech_debt` live; total 21 MCP tools |

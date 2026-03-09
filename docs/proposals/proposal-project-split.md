@@ -107,6 +107,8 @@ These three concerns have different users, different update cadences, and differ
 
 `feature-developer` and `phase-planner-executor` are dev-only agents used in meta-cc's own development workflow. They were **removed** (not migrated).
 
+**Note on `marketplace.json` schema**: The Claude Code plugin marketplace schema requires `name`, `owner.name`, and a `plugins[]` array (each entry containing `name` and `source`). Subagent frontmatter requires both `name` and `description` fields. Both should be validated by `scripts/validate-plugin.sh` in Stage 41.4 to ensure marketplace conformance.
+
 ---
 
 ## 3. Capability Refactoring
@@ -224,6 +226,8 @@ Remove 2 capability-loading tools. Add 6 analysis tools. Net: **17 − 2 + 6 = 2
 
 **On MCP tool count limits**: The MCP specification (2025-11-25) defines no hard limit on tool count. Client-side limits vary: Cursor enforces 40, VS Code 128. Claude Code activates automatic Tool Search (deferred loading) when tool definitions exceed 10% of the context window, so 21 tools is well within safe operating range.
 
+**On `outputSchema`**: MCP 2025-11-25 introduces an optional `outputSchema` field per tool definition, allowing servers to declare the JSON schema of structured results. The 6 analysis tools return well-defined structs and are good candidates for adding `outputSchema` declarations in a future minor release, enabling client-side validation and richer IDE integration without breaking existing consumers.
+
 ---
 
 ## 5. Content Boundary Summary
@@ -237,7 +241,7 @@ Remove 2 capability-loading tools. Add 6 analysis tools. Net: **17 − 2 + 6 = 2
 | `/meta` command | **Removed** | No longer needed without capability routing |
 | `list_capabilities`, `get_capability` tools | **Removed** | No longer needed |
 | Dynamic loading system (~3,296 lines) | **Removed** | Replaced by static Go tools |
-| 12 deleted capabilities | **Deleted** | See Section 3.4 |
+| 11 deleted capabilities | **Deleted** | See Section 3.4 |
 | 2 reasoning capabilities | **→ baime** (as `workflow-coach` agent + `next-step-generation` skill) | See Section 3.3 |
 | 18 skills | **→ baime** | No meta-cc dependency |
 | 5 published agents | **→ baime** | No meta-cc dependency |
@@ -344,7 +348,7 @@ Phases 2 and 3 can proceed in parallel.
 | dev-only agents (`feature-developer`, `phase-planner-executor`) | **Removed** — not migrated |
 | meta-cc version after split | **3.0.0** (breaking change) |
 | Capability architecture | **Path B** — Go analysis tools returning structured JSON; Claude handles semantic interpretation |
-| 12 non-core capabilities | **Deleted** directly |
+| 11 non-core capabilities | **Deleted** directly |
 | 2 reasoning capabilities | **Migrated to `yaleh/baime`** |
 | `meta-prompt` capability | **Absorbed** into `methodology-bootstrapping` skill in baime |
 | `/meta` command | **Removed** — no routing needed without dynamic capabilities |
@@ -366,3 +370,4 @@ The architectural invariant held throughout: **Go code owns data; Claude owns in
 | `get_tech_debt`: regex over file-history-snapshot entries | Regex over tool call outputs (Read/Edit/Write/Bash `.Output` field) | `parser.ParseEntries()` filters out snapshot entries; tool output scanning yields equivalent marker coverage |
 | 12 capabilities deleted | 11 capabilities deleted (correct count — the "12" claim in the original design was an off-by-one) | n/a |
 | ~2,000–2,500 lines of new Go | ~1,360 lines of new Go | Consolidating handlers into one file and reusing existing `internal/analyzer/` types reduced duplication |
+| Semver best practice: deprecate in minor release before major removal | v3.0.0 removed skills/agents directly without a prior deprecation minor (e.g., v2.x with deprecation warnings) | Accepted deviation — the projects were split in a single sprint; users should consult `CHANGELOG.md` or the GitHub release notes for migration guidance to `yaleh/baime` |
