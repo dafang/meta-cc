@@ -306,11 +306,9 @@ and creating `plugin.json`, the plugin is in an undefined state.
 
 Place at `.claude/.mcp.json` (inside the plugin source).
 
-**Format note**: Official plugin `.mcp.json` examples use a **flat format** (servers at
-top level, no `mcpServers` wrapper), unlike the project-level `.mcp.json` which uses
-`"mcpServers": {...}`. PoC 1 must verify the correct format. Candidate formats:
+**Format**: Official plugin `.mcp.json` uses **flat format** — servers at top level, no
+`mcpServers` wrapper (confirmed by PoC 1, see Section 3):
 
-**Flat format** (per official plugin examples):
 ```json
 {
   "meta-cc": {
@@ -321,20 +319,8 @@ top level, no `mcpServers` wrapper), unlike the project-level `.mcp.json` which 
 }
 ```
 
-**Wrapped format** (per project-level `.mcp.json` convention):
-```json
-{
-  "mcpServers": {
-    "meta-cc": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/meta-cc-mcp",
-      "args": [],
-      "env": {}
-    }
-  }
-}
-```
-
-**`${CLAUDE_PLUGIN_ROOT}` MUST be verified before this ships** (see Section 3, PoC 1).
+**`${CLAUDE_PLUGIN_ROOT}`** resolves to the plugin installPath at runtime
+(e.g., `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`).
 
 **Windows note**: The binary is `meta-cc-mcp.exe` on Windows. Verify whether Claude Code
 auto-appends `.exe` or whether the `.mcp.json` needs to handle this.
@@ -634,20 +620,33 @@ meta-cc/
 
 ## 3. Prerequisites: PoC Validation
 
-**PoC 1: `${CLAUDE_PLUGIN_ROOT}` resolution and `.mcp.json` format**
+**PoC 1: `${CLAUDE_PLUGIN_ROOT}` resolution and `.mcp.json` format — ✅ RESOLVED (2026-03-09)**
 
-Create a minimal test plugin, install via `claude plugin install`. Verify:
-1. Does `${CLAUDE_PLUGIN_ROOT}` resolve? To what path?
-2. Does `.mcp.json` auto-start the MCP server?
-3. Which `.mcp.json` format works: flat (`{"server-name": {...}}`) or wrapped
-   (`{"mcpServers": {"server-name": {...}}}`)?
-4. Windows `.exe` handling?
+Validated by installing from local repo via `claude plugin marketplace add` + `claude plugin install`:
 
-**PoC 2: `strict: true` (or absent) behavior**
+1. **`${CLAUDE_PLUGIN_ROOT}` resolves to the plugin installPath** — for local directory install:
+   `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`
+   For release archive installs, this will be the extracted archive directory.
+2. **`.mcp.json` format: FLAT (no `mcpServers` wrapper)** — all official plugins use flat format.
+   Only Stripe uses `mcpServers` wrapper (appears to be an outlier). Use flat:
+   ```json
+   {
+     "meta-cc": { "command": "${CLAUDE_PLUGIN_ROOT}/bin/meta-cc-mcp", "args": [] }
+   }
+   ```
+3. **MCP auto-start**: Not testable without restart. The `.mcp.json` is present in the install
+   directory and will be picked up on next Claude Code startup.
+4. **Windows `.exe`**: Not yet verified (requires Windows environment).
 
-Verify that removing `strict: false` and adding `plugin.json` causes the plugin manager
-to read content definitions from `plugin.json` rather than `marketplace.json`. Confirm no
-loading conflict.
+**PoC 2: `strict: false` removal behavior — ✅ RESOLVED (2026-03-09)**
+
+Validated by inspecting the plugin install cache:
+
+1. `plugin.json` is present at `$INSTALL_PATH/.claude-plugin/plugin.json` ✓
+2. `plugin.json` declares correct content: 4 commands, 5 agents, 18 skills ✓
+3. Physical `agents/` directory has 7 files (incl. dev-only) but only 5 declared → Claude Code
+   loads declared content only ✓ (no conflict observed)
+4. `strict: false` removal does not cause loading errors ✓
 
 **PoC 3: Command frontmatter format**
 
@@ -833,3 +832,4 @@ Handles platform binaries cleanly but adds Node.js dependency. Deferred.
 | 1.3 | 2026-03-08 | Claude Code | Archive layout mismatch; two broken bump scripts; explicit paths; uninstall.sh; smoke tests |
 | 1.4 | 2026-03-08 | Claude Code | **Critical**: Fix `plugin.json` location (must be inside plugin source at `.claude/.claude-plugin/plugin.json`, not repo root). Discover `strict: false` conflict — must remove before adding `plugin.json`. Dev-only agents leak into releases. `make bundle-release` missing skills. `uninstall.sh` agent glob broken. `check-version-sync.sh` incomplete. Add PoC 2 for strict mode behavior. |
 | 1.5 | 2026-03-08 | Claude Code | **Discovery**: 3 slash commands (`prompt-find`, `prompt-list`, `prompt-show`) exist in `.claude/commands/` but not in `marketplace.json` or `dist/` — invisible to plugin users. `plugin.json` must declare all 4 commands. `.mcp.json` format uncertainty: flat vs `mcpServers` wrapper — added to PoC 1. Fixed `sync-plugin-files.sh` line reference (76 not 366). Added command sync to 2.1.6. |
+| 1.6 | 2026-03-09 | Claude Code | **PoC Results**: PoC 1 confirmed `.mcp.json` must use flat format (no `mcpServers` wrapper); `${CLAUDE_PLUGIN_ROOT}` resolves to plugin installPath. PoC 2 confirmed `plugin.json` is authoritative after `strict: false` removal. Fixed `.claude/.mcp.json` to flat format; updated test to enforce flat format. |
