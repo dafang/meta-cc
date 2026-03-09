@@ -56,35 +56,35 @@ fi
 # 4. plugin.json declares expected content counts
 if [ -f "$PLUGIN_JSON" ]; then
     CMD_COUNT=$(jq '.commands | length' "$PLUGIN_JSON" 2>/dev/null || echo 0)
-    AGENT_COUNT=$(jq '.agents | length' "$PLUGIN_JSON" 2>/dev/null || echo 0)
-    SKILL_COUNT=$(jq '.skills | length' "$PLUGIN_JSON" 2>/dev/null || echo 0)
+    AGENT_COUNT=$(jq 'if .agents then .agents | length else 0 end' "$PLUGIN_JSON" 2>/dev/null || echo 0)
+    SKILL_COUNT=$(jq 'if .skills then .skills | length else 0 end' "$PLUGIN_JSON" 2>/dev/null || echo 0)
 
-    if [ "$CMD_COUNT" -eq 4 ]; then
-        check "plugin.json declares 4 commands (got $CMD_COUNT)" "pass"
+    if [ "$CMD_COUNT" -eq 3 ]; then
+        check "plugin.json declares 3 commands (got $CMD_COUNT)" "pass"
     else
-        check "plugin.json declares 4 commands (got $CMD_COUNT)" "fail"
+        check "plugin.json declares 3 commands (got $CMD_COUNT)" "fail"
     fi
 
-    if [ "$AGENT_COUNT" -eq 5 ]; then
-        check "plugin.json declares 5 agents (got $AGENT_COUNT)" "pass"
+    if [ "$AGENT_COUNT" -eq 0 ]; then
+        check "plugin.json declares 0 agents (got $AGENT_COUNT)" "pass"
     else
-        check "plugin.json declares 5 agents (got $AGENT_COUNT)" "fail"
+        check "plugin.json declares 0 agents (got $AGENT_COUNT)" "fail"
     fi
 
-    if [ "$SKILL_COUNT" -eq 18 ]; then
-        check "plugin.json declares 18 skills (got $SKILL_COUNT)" "pass"
+    if [ "$SKILL_COUNT" -eq 0 ]; then
+        check "plugin.json declares 0 skills (got $SKILL_COUNT)" "pass"
     else
-        check "plugin.json declares 18 skills (got $SKILL_COUNT)" "fail"
+        check "plugin.json declares 0 skills (got $SKILL_COUNT)" "fail"
     fi
 fi
 
 # 5. marketplace.json commands array matches plugin.json
 if [ -f "$PLUGIN_JSON" ]; then
     MKT_CMD_COUNT=$(jq '.plugins[0].commands | length' "$MARKETPLACE_JSON" 2>/dev/null || echo 0)
-    if [ "$MKT_CMD_COUNT" -eq 4 ]; then
-        check "marketplace.json declares 4 commands (got $MKT_CMD_COUNT)" "pass"
+    if [ "$MKT_CMD_COUNT" -eq 3 ]; then
+        check "marketplace.json declares 3 commands (got $MKT_CMD_COUNT)" "pass"
     else
-        check "marketplace.json declares 4 commands (got $MKT_CMD_COUNT)" "fail"
+        check "marketplace.json declares 3 commands (got $MKT_CMD_COUNT)" "fail"
     fi
 fi
 

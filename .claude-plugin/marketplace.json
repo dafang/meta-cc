@@ -10,7 +10,7 @@
     {
       "name": "meta-cc",
       "source": "./.claude",
-      "description": "Meta-Cognition tool for Claude Code with unified /meta command, 5 specialized agents, 13 capabilities, 15 MCP tools, and 18 validated methodology skills (testing, CI/CD, error recovery, documentation, refactoring, and more). Based on BAIME with proven 10-50x speedup.",
+      "description": "Meta-Cognition tool for Claude Code with 21 MCP tools for session history analysis, error tracking, quality scanning, work patterns, timelines, and bug detection. Focused, fast, and data-driven.",
       "version": "2.3.7",
       "author": {
         "name": "Yale Huang",
@@ -34,37 +34,9 @@
         "technical-debt"
       ],
       "commands": [
-        "./commands/meta.md",
         "./commands/prompt-find.md",
         "./commands/prompt-list.md",
         "./commands/prompt-show.md"
-      ],
-      "agents": [
-        "./agents/iteration-executor.md",
-        "./agents/iteration-prompt-designer.md",
-        "./agents/knowledge-extractor.md",
-        "./agents/project-planner.md",
-        "./agents/stage-executor.md"
-      ],
-      "skills": [
-        "./skills/agent-prompt-evolution",
-        "./skills/api-design",
-        "./skills/baseline-quality-assessment",
-        "./skills/build-quality-gates",
-        "./skills/ci-cd-optimization",
-        "./skills/code-refactoring",
-        "./skills/cross-cutting-concerns",
-        "./skills/dependency-health",
-        "./skills/documentation-management",
-        "./skills/error-recovery",
-        "./skills/knowledge-transfer",
-        "./skills/methodology-bootstrapping",
-        "./skills/observability-instrumentation",
-        "./skills/rapid-convergence",
-        "./skills/retrospective-validation",
-        "./skills/subagent-prompt-construction",
-        "./skills/technical-debt-management",
-        "./skills/testing-strategy"
       ]
     }
   ]

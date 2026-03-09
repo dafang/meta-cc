@@ -23,8 +23,8 @@ fi
 if [ "$VERIFY_MODE" = true ]; then
     # VERIFY MODE: Check that sync was done correctly
     echo "[1/3] Verifying dist/ structure..."
-    if [ ! -d "$DIST_DIR/commands" ] || [ ! -d "$DIST_DIR/agents" ]; then
-        echo "❌ ERROR: Plugin file sync failed - dist/ directory not created"
+    if [ ! -d "$DIST_DIR/commands" ]; then
+        echo "❌ ERROR: Plugin file sync failed - dist/commands/ directory not created"
         exit 1
     fi
     echo "✓ dist/ structure verified"
@@ -54,9 +54,8 @@ if [ "$VERIFY_MODE" = true ]; then
     echo "✅ Plugin file sync verification passed"
 else
     # SYNC MODE: Perform the sync
-    # Create dist directories (clean agents and commands to remove stale files)
-    mkdir -p "$DIST_DIR/commands" "$DIST_DIR/agents" "$DIST_DIR/skills"
-    rm -f "$DIST_DIR/agents/"*.md 2>/dev/null || true
+    # Create dist directories (clean commands to remove stale files)
+    mkdir -p "$DIST_DIR/commands"
     rm -f "$DIST_DIR/commands/"*.md 2>/dev/null || true
 
     # Copy published commands
@@ -70,31 +69,9 @@ else
         fi
     done
 
-    # Copy only published agents (not dev-only ones like feature-developer, phase-planner-executor)
-    echo "  Copying published agents from .claude/agents/..."
-    PUBLISHED_AGENTS="iteration-executor iteration-prompt-designer knowledge-extractor project-planner stage-executor"
-    for agent in $PUBLISHED_AGENTS; do
-        if [ -f "$PROJECT_ROOT/.claude/agents/${agent}.md" ]; then
-            cp "$PROJECT_ROOT/.claude/agents/${agent}.md" "$DIST_DIR/agents/"
-        else
-            echo "  WARNING: Expected agent not found: .claude/agents/${agent}.md"
-        fi
-    done
-
-    # Copy skills directory with all supporting files
-    echo "  Copying skills from .claude/skills/..."
-    if [ -d "$PROJECT_ROOT/.claude/skills" ]; then
-        cp -r "$PROJECT_ROOT/.claude/skills/"* "$DIST_DIR/skills/"
-        SKILL_COUNT=$(find "$DIST_DIR/skills" -name "SKILL.md" 2>/dev/null | wc -l)
-        SKILL_FILES=$(find "$DIST_DIR/skills" -type f 2>/dev/null | wc -l)
-        echo "    ✓ Copied $SKILL_COUNT skills ($SKILL_FILES total files)"
-    fi
-
     # Count files
     CMD_COUNT=$(find "$DIST_DIR/commands" -name "*.md" 2>/dev/null | wc -l)
-    AGENT_COUNT=$(find "$DIST_DIR/agents" -name "*.md" 2>/dev/null | wc -l)
-    SKILL_COUNT=$(find "$DIST_DIR/skills" -name "SKILL.md" 2>/dev/null | wc -l)
 
     echo "✓ Plugin files synced to $DIST_DIR/"
-    echo "✓ Total: $CMD_COUNT command, $AGENT_COUNT agents, $SKILL_COUNT skills"
+    echo "✓ Total: $CMD_COUNT command(s)"
 fi
