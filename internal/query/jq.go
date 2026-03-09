@@ -231,6 +231,125 @@ func GroupBySession(entries []interface{}) []interface{} {
 	return result
 }
 
+// splitJSONLLines splits a JSONL string into non-empty lines.
+func splitJSONLLines(jsonlData string) []string {
+	trimmed := strings.TrimSpace(jsonlData)
+	if trimmed == "" {
+		return nil
+	}
+	var lines []string
+	for _, line := range strings.Split(trimmed, "\n") {
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+// GenerateSessionStats generates per-session statistics from JSONL data (rawData, camelCase).
+// Output: summary line first, then one line per session ordered by first_match ascending.
+func GenerateSessionStats(jsonlData string) (string, error) {
+	type sessionAgg struct {
+		SessionID string
+		Count     int
+		First     time.Time
+		Last      time.Time
+	}
+
+	var order []string
+	sessions := make(map[string]*sessionAgg)
+	var overallFirst, overallLast time.Time
+	firstOverall := true
+
+	for _, line := range splitJSONLLines(jsonlData) {
+		var obj map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			continue
+		}
+
+		sessionID, _ := obj["sessionId"].(string) // rawData always camelCase
+		tsStr, _ := obj["timestamp"].(string)
+
+		ts, err := time.Parse(time.RFC3339, tsStr)
+		if err != nil {
+			// Try with milliseconds
+			ts, err = time.Parse("2006-01-02T15:04:05.000Z", tsStr)
+		}
+		if err != nil {
+			continue
+		}
+
+		if _, exists := sessions[sessionID]; !exists {
+			order = append(order, sessionID)
+			sessions[sessionID] = &sessionAgg{SessionID: sessionID, First: ts, Last: ts}
+		}
+		s := sessions[sessionID]
+		s.Count++
+		if ts.Before(s.First) {
+			s.First = ts
+		}
+		if ts.After(s.Last) {
+			s.Last = ts
+		}
+
+		if firstOverall || ts.Before(overallFirst) {
+			overallFirst = ts
+			firstOverall = false
+		}
+		if overallLast.IsZero() || ts.After(overallLast) {
+			overallLast = ts
+		}
+	}
+
+	if len(sessions) == 0 {
+		return "", nil
+	}
+
+	// Sort order by first_match ascending
+	sort.Slice(order, func(i, j int) bool {
+		return sessions[order[i]].First.Before(sessions[order[j]].First)
+	})
+
+	// Count total matches
+	totalMatches := 0
+	for _, s := range sessions {
+		totalMatches += s.Count
+	}
+
+	var output strings.Builder
+
+	// Summary line
+	summary := map[string]interface{}{
+		"total_sessions": len(sessions),
+		"total_matches":  totalMatches,
+		"time_range": map[string]interface{}{
+			"from": overallFirst.UTC().Format(time.RFC3339),
+			"to":   overallLast.UTC().Format(time.RFC3339),
+		},
+	}
+	summaryBytes, _ := json.Marshal(summary)
+	output.Write(summaryBytes)
+	output.WriteString("\n")
+
+	// Per-session lines
+	for _, id := range order {
+		s := sessions[id]
+		durationMin := int(s.Last.Sub(s.First).Minutes())
+		sess := map[string]interface{}{
+			"session_id":       s.SessionID,
+			"match_count":      s.Count,
+			"first_match":      s.First.UTC().Format(time.RFC3339),
+			"last_match":       s.Last.UTC().Format(time.RFC3339),
+			"duration_minutes": durationMin,
+		}
+		sessBytes, _ := json.Marshal(sess)
+		output.Write(sessBytes)
+		output.WriteString("\n")
+	}
+
+	return output.String(), nil
+}
+
 func defaultJQExpression(expr string) string {
 	if expr == "" {
 		return ".[]"

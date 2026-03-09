@@ -427,6 +427,128 @@ func TestGroupBySession(t *testing.T) {
 	})
 }
 
+// TestGenerateSessionStats tests the GenerateSessionStats function
+func TestGenerateSessionStats(t *testing.T) {
+	t.Run("Basic", func(t *testing.T) {
+		// sess-A: 3 turns spanning 10 minutes; sess-B: 2 turns spanning 5 minutes
+		jsonlData := `{"timestamp":"2026-03-09T06:00:00Z","sessionId":"sess-A","type":"user"}
+{"timestamp":"2026-03-09T06:05:00Z","sessionId":"sess-A","type":"user"}
+{"timestamp":"2026-03-09T06:10:00Z","sessionId":"sess-A","type":"user"}
+{"timestamp":"2026-03-09T07:00:00Z","sessionId":"sess-B","type":"user"}
+{"timestamp":"2026-03-09T07:05:00Z","sessionId":"sess-B","type":"user"}`
+
+		result, err := GenerateSessionStats(jsonlData)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		lines := strings.Split(strings.TrimSpace(result), "\n")
+		if len(lines) != 3 {
+			t.Fatalf("expected 3 lines (summary + 2 sessions), got %d: %s", len(lines), result)
+		}
+
+		// Line 1: summary
+		var summary map[string]interface{}
+		if err := json.Unmarshal([]byte(lines[0]), &summary); err != nil {
+			t.Fatalf("failed to parse summary line: %v", err)
+		}
+		if int(summary["total_sessions"].(float64)) != 2 {
+			t.Errorf("total_sessions = %v, want 2", summary["total_sessions"])
+		}
+		if int(summary["total_matches"].(float64)) != 5 {
+			t.Errorf("total_matches = %v, want 5", summary["total_matches"])
+		}
+		if summary["time_range"] == nil {
+			t.Error("time_range missing from summary")
+		}
+
+		// Line 2: sess-A
+		var sessA map[string]interface{}
+		if err := json.Unmarshal([]byte(lines[1]), &sessA); err != nil {
+			t.Fatalf("failed to parse sess-A line: %v", err)
+		}
+		if sessA["session_id"] != "sess-A" {
+			t.Errorf("expected session_id=sess-A, got %v", sessA["session_id"])
+		}
+		if int(sessA["match_count"].(float64)) != 3 {
+			t.Errorf("sess-A match_count = %v, want 3", sessA["match_count"])
+		}
+		if int(sessA["duration_minutes"].(float64)) != 10 {
+			t.Errorf("sess-A duration_minutes = %v, want 10", sessA["duration_minutes"])
+		}
+
+		// Line 3: sess-B
+		var sessB map[string]interface{}
+		if err := json.Unmarshal([]byte(lines[2]), &sessB); err != nil {
+			t.Fatalf("failed to parse sess-B line: %v", err)
+		}
+		if sessB["session_id"] != "sess-B" {
+			t.Errorf("expected session_id=sess-B, got %v", sessB["session_id"])
+		}
+		if int(sessB["match_count"].(float64)) != 2 {
+			t.Errorf("sess-B match_count = %v, want 2", sessB["match_count"])
+		}
+		if int(sessB["duration_minutes"].(float64)) != 5 {
+			t.Errorf("sess-B duration_minutes = %v, want 5", sessB["duration_minutes"])
+		}
+	})
+
+	t.Run("SingleTurnSession", func(t *testing.T) {
+		jsonlData := `{"timestamp":"2026-03-09T06:00:00Z","sessionId":"solo","type":"user"}`
+
+		result, err := GenerateSessionStats(jsonlData)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		lines := strings.Split(strings.TrimSpace(result), "\n")
+		if len(lines) != 2 {
+			t.Fatalf("expected 2 lines (summary + 1 session), got %d: %s", len(lines), result)
+		}
+
+		var sess map[string]interface{}
+		if err := json.Unmarshal([]byte(lines[1]), &sess); err != nil {
+			t.Fatalf("failed to parse session line: %v", err)
+		}
+		if int(sess["duration_minutes"].(float64)) != 0 {
+			t.Errorf("single-turn session duration_minutes = %v, want 0", sess["duration_minutes"])
+		}
+	})
+
+	t.Run("OrderByFirstMatch", func(t *testing.T) {
+		// sess-B starts before sess-A, so it should come first
+		jsonlData := `{"timestamp":"2026-03-09T07:00:00Z","sessionId":"sess-A","type":"user"}
+{"timestamp":"2026-03-09T06:00:00Z","sessionId":"sess-B","type":"user"}
+{"timestamp":"2026-03-09T07:30:00Z","sessionId":"sess-A","type":"user"}`
+
+		result, err := GenerateSessionStats(jsonlData)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		lines := strings.Split(strings.TrimSpace(result), "\n")
+		if len(lines) != 3 {
+			t.Fatalf("expected 3 lines (summary + 2 sessions), got %d: %s", len(lines), result)
+		}
+
+		var first map[string]interface{}
+		if err := json.Unmarshal([]byte(lines[1]), &first); err != nil {
+			t.Fatalf("failed to parse first session line: %v", err)
+		}
+		if first["session_id"] != "sess-B" {
+			t.Errorf("expected sess-B first (earlier first_match), got %v", first["session_id"])
+		}
+
+		var second map[string]interface{}
+		if err := json.Unmarshal([]byte(lines[2]), &second); err != nil {
+			t.Fatalf("failed to parse second session line: %v", err)
+		}
+		if second["session_id"] != "sess-A" {
+			t.Errorf("expected sess-A second, got %v", second["session_id"])
+		}
+	})
+}
+
 // TestApplyJQFilter_GenuineSyntaxStillReportsOriginalError verifies that genuine syntax errors still get appropriate error messages
 func TestApplyJQFilter_GenuineSyntaxStillReportsOriginalError(t *testing.T) {
 	jsonlData := `{"tool":"Bash","status":"success"}`

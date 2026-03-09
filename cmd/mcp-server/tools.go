@@ -312,6 +312,10 @@ func getToolDefinitions() []Tool {
 				Type:        "boolean",
 				Description: "Group results by session. Returns one object per session with session_id, match_count, first_match, last_match, and turns array. Mutually exclusive with stats_only.",
 			},
+			"stats_level": {
+				Type:        "string",
+				Description: "Aggregation level for stats_only/stats_first: 'turn' (default, hourly buckets) or 'session' (per-session match_count and duration).",
+			},
 			// Override jq_filter with schema
 			"jq_filter": jqFilterWithSchema(map[string]string{
 				"sessionId": "string - Session identifier",

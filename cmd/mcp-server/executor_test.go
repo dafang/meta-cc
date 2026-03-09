@@ -828,7 +828,7 @@ func TestStatsDispatch(t *testing.T) {
 	// User-message tools should use timestamp stats (output should have "hour" key)
 	for _, toolName := range []string{"query_user_messages", "query_conversation_flow", "query_timestamps", "query_summaries"} {
 		t.Run(toolName+"_uses_timestamp_stats", func(t *testing.T) {
-			output, err := executor.buildStatsOnlyResponse(userRecords, toolName)
+			output, err := executor.buildStatsOnlyResponse(userRecords, toolName, "turn")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -844,7 +844,7 @@ func TestStatsDispatch(t *testing.T) {
 	// Tool-record tools should use tool-name stats (output should have "key" field, not "hour")
 	for _, toolName := range []string{"query_tools", "query_tool_errors"} {
 		t.Run(toolName+"_uses_tool_stats", func(t *testing.T) {
-			output, err := executor.buildStatsOnlyResponse(toolRecords, toolName)
+			output, err := executor.buildStatsOnlyResponse(toolRecords, toolName, "turn")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -1330,5 +1330,173 @@ func TestGroupBySession_WithStatsFirst(t *testing.T) {
 	detailSection := parts[1]
 	if !strings.Contains(detailSection, "session_id") {
 		t.Errorf("expected session_id in grouped detail section, got: %s", detailSection)
+	}
+}
+
+// setupSessionStatsFixture creates a fixture with 2 sessions for stats_level=session tests.
+// sess-A: 3 turns 10 min apart; sess-B: 2 turns 5 min apart.
+func setupSessionStatsFixture(t *testing.T) func() {
+	t.Helper()
+	projectDir := t.TempDir()
+	projectsRoot := t.TempDir()
+	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+
+	fixture := "{\"type\":\"user\",\"timestamp\":\"2026-03-09T06:00:00Z\",\"uuid\":\"s1\",\"sessionId\":\"stats-sess-A\",\"message\":{\"role\":\"user\",\"content\":\"turn 1 A\"}}\n" +
+		"{\"type\":\"user\",\"timestamp\":\"2026-03-09T06:05:00Z\",\"uuid\":\"s2\",\"sessionId\":\"stats-sess-A\",\"message\":{\"role\":\"user\",\"content\":\"turn 2 A\"}}\n" +
+		"{\"type\":\"user\",\"timestamp\":\"2026-03-09T06:10:00Z\",\"uuid\":\"s3\",\"sessionId\":\"stats-sess-A\",\"message\":{\"role\":\"user\",\"content\":\"turn 3 A\"}}\n" +
+		"{\"type\":\"user\",\"timestamp\":\"2026-03-09T07:00:00Z\",\"uuid\":\"s4\",\"sessionId\":\"stats-sess-B\",\"message\":{\"role\":\"user\",\"content\":\"turn 1 B\"}}\n" +
+		"{\"type\":\"user\",\"timestamp\":\"2026-03-09T07:05:00Z\",\"uuid\":\"s5\",\"sessionId\":\"stats-sess-B\",\"message\":{\"role\":\"user\",\"content\":\"turn 2 B\"}}\n"
+
+	writeSessionFixture(t, projectDir, "session-stats", fixture)
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	return func() { _ = os.Chdir(oldWd) }
+}
+
+// TestStatsLevelSession_StatsOnly tests stats_level="session" with stats_only=true
+func TestStatsLevelSession_StatsOnly(t *testing.T) {
+	cleanup := setupSessionStatsFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":     ".",
+		"stats_only":  true,
+		"stats_level": "session",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 lines (summary + sessions), got %d: %s", len(lines), output)
+	}
+
+	// First line: summary with total_sessions (not hour buckets)
+	var summary map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[0]), &summary); err != nil {
+		t.Fatalf("failed to parse summary line: %v", err)
+	}
+	if _, has := summary["total_sessions"]; !has {
+		t.Errorf("expected total_sessions key in summary, got: %v", summary)
+	}
+	if _, has := summary["hour"]; has {
+		t.Errorf("should NOT have 'hour' key in session-level stats, got: %v", summary)
+	}
+
+	// Per-session lines should have session_id, match_count, duration_minutes
+	var sessLine map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[1]), &sessLine); err != nil {
+		t.Fatalf("failed to parse session line: %v", err)
+	}
+	if _, has := sessLine["session_id"]; !has {
+		t.Errorf("expected session_id in per-session line, got: %v", sessLine)
+	}
+	if _, has := sessLine["match_count"]; !has {
+		t.Errorf("expected match_count in per-session line, got: %v", sessLine)
+	}
+	if _, has := sessLine["duration_minutes"]; !has {
+		t.Errorf("expected duration_minutes in per-session line, got: %v", sessLine)
+	}
+}
+
+// TestStatsLevelSession_StatsFirst tests stats_level="session" with stats_first=true
+func TestStatsLevelSession_StatsFirst(t *testing.T) {
+	cleanup := setupSessionStatsFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":     ".",
+		"stats_first": true,
+		"stats_level": "session",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// stats_first output: "<stats lines>\n---\n<detail>"
+	if !strings.Contains(output, "---") {
+		t.Fatalf("expected stats separator '---' in stats_first output, got: %s", output)
+	}
+
+	parts := strings.SplitN(output, "\n---\n", 2)
+	if len(parts) < 2 {
+		t.Fatalf("expected 2 parts separated by '---', got: %s", output)
+	}
+
+	// Stats header should contain total_sessions (session-level aggregation)
+	firstStatLine := strings.SplitN(strings.TrimSpace(parts[0]), "\n", 2)[0]
+	var stats map[string]interface{}
+	if err := json.Unmarshal([]byte(firstStatLine), &stats); err != nil {
+		t.Fatalf("failed to parse stats header: %v", err)
+	}
+	if _, has := stats["total_sessions"]; !has {
+		t.Errorf("expected total_sessions in stats header (session-level), got: %v", stats)
+	}
+	if _, has := stats["hour"]; has {
+		t.Errorf("should NOT have 'hour' key in session-level stats header, got: %v", stats)
+	}
+
+	// Detail records should follow after "---"
+	if parts[1] == "" {
+		t.Error("expected detail records after '---' separator")
+	}
+}
+
+// TestStatsLevelTurn_Regression tests that omitting stats_level still produces hour-bucket output
+func TestStatsLevelTurn_Regression(t *testing.T) {
+	cleanup := setupSessionStatsFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":    ".",
+		"stats_only": true,
+		// no stats_level — should default to "turn" (hourly buckets)
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have hour buckets (original behavior)
+	if !strings.Contains(output, `"hour"`) {
+		t.Errorf("expected 'hour' key in default stats_only output (turn-level), got: %s", output)
+	}
+	if strings.Contains(output, `"total_sessions"`) {
+		t.Errorf("should NOT have 'total_sessions' when stats_level is default (turn), got: %s", output)
+	}
+}
+
+// TestStatsLevelInvalid tests that an invalid stats_level value returns an error
+func TestStatsLevelInvalid(t *testing.T) {
+	cleanup := setupSessionStatsFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	_, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":     ".",
+		"stats_level": "invalid",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid stats_level, got nil")
+	}
+	if !strings.Contains(err.Error(), "must be 'turn' or 'session'") {
+		t.Errorf("expected error to contain \"must be 'turn' or 'session'\", got: %v", err)
 	}
 }

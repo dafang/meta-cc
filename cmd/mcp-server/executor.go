@@ -36,6 +36,7 @@ type toolPipelineConfig struct {
 	contentSummary   bool
 	previewLength    int
 	groupBySession   bool
+	statsLevel       string // "turn" (default) or "session"
 }
 
 func newToolPipelineConfig(args map[string]interface{}) toolPipelineConfig {
@@ -48,6 +49,7 @@ func newToolPipelineConfig(args map[string]interface{}) toolPipelineConfig {
 		contentSummary:   getBoolParam(args, "content_summary", false),
 		previewLength:    getIntParam(args, "preview_length", DefaultPreviewLength),
 		groupBySession:   getBoolParam(args, "group_by_session", false),
+		statsLevel:       getStringParam(args, "stats_level", "turn"),
 	}
 }
 
@@ -322,13 +324,17 @@ func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, arg
 	var output string
 	var err error
 
+	if pipeline.statsLevel != "" && pipeline.statsLevel != "turn" && pipeline.statsLevel != "session" {
+		return "", fmt.Errorf("invalid stats_level: must be 'turn' or 'session'")
+	}
+
 	if pipeline.groupBySession && pipeline.statsOnly {
 		return "", fmt.Errorf("group_by_session and stats_only are mutually exclusive")
 	}
 
 	if pipeline.statsOnly {
 		// stats_only: compute stats from raw data (camelCase sessionId preserved)
-		output, err = e.buildStatsOnlyResponse(rawData, toolName)
+		output, err = e.buildStatsOnlyResponse(rawData, toolName, pipeline.statsLevel)
 		if err != nil {
 			return "", err
 		}
@@ -348,7 +354,7 @@ func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, arg
 	}
 
 	if pipeline.statsFirst {
-		output, err = e.buildStatsFirstResponse(cfg, rawData, parsedData, args, toolName)
+		output, err = e.buildStatsFirstResponse(cfg, rawData, parsedData, args, toolName, pipeline.statsLevel)
 	} else {
 		output, err = e.buildStandardResponse(cfg, parsedData, args, toolName)
 	}
@@ -384,7 +390,7 @@ func injectWarnings(output string, warnings []string) (string, error) {
 	return string(result), nil
 }
 
-func (e *ToolExecutor) buildStatsOnlyResponse(parsedData []interface{}, toolName string) (string, error) {
+func (e *ToolExecutor) buildStatsOnlyResponse(parsedData []interface{}, toolName string, statsLevel string) (string, error) {
 	jsonlData, err := e.dataToJSONL(parsedData)
 	if err != nil {
 		slog.Error("dataToJSONL conversion failed (stats_only)",
@@ -396,7 +402,9 @@ func (e *ToolExecutor) buildStatsOnlyResponse(parsedData []interface{}, toolName
 	}
 
 	var output string
-	if timestampStatsTools[toolName] {
+	if statsLevel == "session" && toolName == "query_user_messages" {
+		output, err = querypkg.GenerateSessionStats(jsonlData)
+	} else if timestampStatsTools[toolName] {
 		output, err = querypkg.GenerateTimestampStats(jsonlData)
 	} else {
 		output, err = querypkg.GenerateStats(jsonlData)
@@ -413,7 +421,7 @@ func (e *ToolExecutor) buildStatsOnlyResponse(parsedData []interface{}, toolName
 	return output, nil
 }
 
-func (e *ToolExecutor) buildStatsFirstResponse(cfg *config.Config, rawData []interface{}, parsedData []interface{}, args map[string]interface{}, toolName string) (string, error) {
+func (e *ToolExecutor) buildStatsFirstResponse(cfg *config.Config, rawData []interface{}, parsedData []interface{}, args map[string]interface{}, toolName string, statsLevel string) (string, error) {
 	// Use rawData for stats (sessionId field preserved, not renamed by content_summary)
 	jsonlData, err := e.dataToJSONL(rawData)
 	if err != nil {
@@ -426,7 +434,9 @@ func (e *ToolExecutor) buildStatsFirstResponse(cfg *config.Config, rawData []int
 	}
 
 	var stats string
-	if timestampStatsTools[toolName] {
+	if statsLevel == "session" && toolName == "query_user_messages" {
+		stats, _ = querypkg.GenerateSessionStats(jsonlData)
+	} else if timestampStatsTools[toolName] {
 		stats, _ = querypkg.GenerateTimestampStats(jsonlData)
 	} else {
 		stats, _ = querypkg.GenerateStats(jsonlData)
