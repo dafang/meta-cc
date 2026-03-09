@@ -99,11 +99,17 @@ else
     else
         check ".mcp.json is valid JSON" "fail"
     fi
-    # Check meta-cc server entry exists (flat or wrapped format)
-    if jq -e '.mcpServers["meta-cc"] // .["meta-cc"]' "$MCP_JSON" > /dev/null 2>&1; then
-        check ".mcp.json contains meta-cc server entry" "pass"
+    # Check meta-cc server entry exists (flat format per official plugin spec)
+    if jq -e '.["meta-cc"]' "$MCP_JSON" > /dev/null 2>&1; then
+        check ".mcp.json contains meta-cc server entry (flat format)" "pass"
     else
-        check ".mcp.json contains meta-cc server entry" "fail"
+        check ".mcp.json contains meta-cc server entry (flat format)" "fail"
+    fi
+    # Warn if wrapped mcpServers format is used (wrong for plugins)
+    if jq -e '.mcpServers' "$MCP_JSON" > /dev/null 2>&1; then
+        check ".mcp.json does NOT use mcpServers wrapper (wrong for plugins)" "fail"
+    else
+        check ".mcp.json does NOT use mcpServers wrapper (correct flat format)" "pass"
     fi
     # Check uses CLAUDE_PLUGIN_ROOT
     if grep -q 'CLAUDE_PLUGIN_ROOT' "$MCP_JSON"; then
