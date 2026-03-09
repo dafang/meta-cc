@@ -52,12 +52,6 @@ jobs:
           GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o build/meta-cc-mcp-darwin-arm64 ./cmd/mcp-server
           GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/meta-cc-mcp-windows-amd64.exe ./cmd/mcp-server
 
-      - name: Package Capabilities
-        run: |
-          make bundle-capabilities
-          echo "Capability package created: build/capabilities-latest.tar.gz"
-          ls -lh build/capabilities-latest.tar.gz
-
       - name: Create plugin packages
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
@@ -167,7 +161,6 @@ jobs:
         with:
           files: |
             build/packages/*
-            build/capabilities-latest.tar.gz
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
@@ -217,7 +210,6 @@ jobs:
           echo ""
           echo "Artifact Summary:"
           echo "  - Plugin packages: 5"
-          echo "  - Capabilities package: 1"
           echo "  - Checksums: 1"
           echo "  - Total package size: $(du -sh build/packages | cut -f1)"
           echo ""
@@ -242,7 +234,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
           echo "- **Plugin packages**: 5 platform-specific packages" >> $GITHUB_STEP_SUMMARY
-          echo "- **Capabilities**: 1 package (capabilities-latest.tar.gz)" >> $GITHUB_STEP_SUMMARY
           echo "- **Total size**: $(du -sh build/packages | cut -f1)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Quality Gates" >> $GITHUB_STEP_SUMMARY

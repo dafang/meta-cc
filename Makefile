@@ -13,15 +13,13 @@ GOCLEAN := $(GOCMD) clean
 GOMOD := $(GOCMD) mod
 BUILD_DIR := build
 DIST_DIR := dist
-CAPABILITIES_DIR := capabilities
-CAPABILITIES_ARCHIVE := capabilities-latest.tar.gz
 MCP_BINARY_NAME := meta-cc-mcp
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 
 # Default target when running 'make' without arguments
 .DEFAULT_GOAL := all
 
-.PHONY: all build test test-all test-coverage clean clean-capabilities install cross-compile bundle-release bundle-capabilities test-capability-package lint lint-errors fmt vet help sync-plugin-files dev check-workspace check-temp-files check-fixtures check-deps check-imports check-scripts check-debug check-go-quality pre-commit ci metrics-mcp check-test-quality check-formatting fix-formatting check-plugin-sync check-mod-tidy test-bats check-release-ready test-all-local pre-commit-full check-essential check-code-quality check-build-quality check-comprehensive check-commit-ready check-push-ready
+.PHONY: all build test test-all test-coverage clean install cross-compile bundle-release lint lint-errors fmt vet help sync-plugin-files dev check-workspace check-temp-files check-fixtures check-deps check-imports check-scripts check-debug check-go-quality pre-commit ci metrics-mcp check-test-quality check-formatting fix-formatting check-plugin-sync check-mod-tidy test-bats check-release-ready test-all-local pre-commit-full check-essential check-code-quality check-build-quality check-comprehensive check-commit-ready check-push-ready
 
 # ==============================================================================
 # Build Quality Gates (BAIME Experiment - Iteration 1)
@@ -313,27 +311,7 @@ metrics-mcp:
 	@./scripts/ci/capture-mcp-metrics.sh
 	@echo "✅ MCP metrics snapshot complete"
 
-bundle-capabilities:
-	@echo "Creating capability package: $(CAPABILITIES_ARCHIVE)..."
-	@if [ ! -d "$(CAPABILITIES_DIR)/commands" ]; then \
-		echo "ERROR: $(CAPABILITIES_DIR)/commands/ directory not found"; \
-		exit 1; \
-	fi
-	@mkdir -p $(BUILD_DIR)
-	@tar -czf $(BUILD_DIR)/$(CAPABILITIES_ARCHIVE) -C $(CAPABILITIES_DIR) commands agents 2>/dev/null || \
-		tar -czf $(BUILD_DIR)/$(CAPABILITIES_ARCHIVE) -C $(CAPABILITIES_DIR) commands
-	@echo "✓ Package created: $(BUILD_DIR)/$(CAPABILITIES_ARCHIVE)"
-	@echo "  Size: $$(du -h $(BUILD_DIR)/$(CAPABILITIES_ARCHIVE) | cut -f1)"
-	@echo "  Files: $$(tar -tzf $(BUILD_DIR)/$(CAPABILITIES_ARCHIVE) | wc -l)"
-
-clean-capabilities:
-	@echo "Cleaning capability packages..."
-	@rm -f $(BUILD_DIR)/$(CAPABILITIES_ARCHIVE)
-
-test-capability-package:
-	@bash tests/integration/test-capability-package.sh
-
-clean: clean-capabilities
+clean:
 	@echo "Cleaning..."
 	$(GOCLEAN)
 	rm -f $(MCP_BINARY_NAME)
@@ -360,8 +338,10 @@ cross-compile:
 sync-plugin-files:
 	@echo "Preparing plugin files for release packaging..."
 	@mkdir -p $(DIST_DIR)/commands $(DIST_DIR)/agents $(DIST_DIR)/skills
-	@echo "  Copying entry point from .claude/commands/..."
-	@cp .claude/commands/meta.md $(DIST_DIR)/commands/
+	@echo "  Copying commands from .claude/commands/..."
+	@cp .claude/commands/prompt-find.md $(DIST_DIR)/commands/ 2>/dev/null || true
+	@cp .claude/commands/prompt-list.md $(DIST_DIR)/commands/ 2>/dev/null || true
+	@cp .claude/commands/prompt-show.md $(DIST_DIR)/commands/ 2>/dev/null || true
 	@echo "  Copying agents from .claude/agents/..."
 	@cp .claude/agents/*.md $(DIST_DIR)/agents/ 2>/dev/null || true
 	@echo "  Copying skills from .claude/skills/..."
@@ -553,7 +533,6 @@ help:
 	@echo "Build & Package:"
 	@echo "  make cross-compile           - Build MCP server for all platforms"
 	@echo "  make sync-plugin-files       - Prepare plugin files in $(DIST_DIR)/ for packaging"
-	@echo "  make bundle-capabilities     - Create capability package (.tar.gz)"
 	@echo "  make bundle-release          - Create release bundles (auto-syncs first, requires VERSION=vX.Y.Z)"
 	@echo ""
 	@echo "Utilities:"

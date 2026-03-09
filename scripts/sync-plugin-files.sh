@@ -9,7 +9,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DIST_DIR="$PROJECT_ROOT/dist"
-CAPABILITIES_DIR="$PROJECT_ROOT/capabilities"
 
 # Parse arguments
 VERIFY_MODE=false
@@ -33,7 +32,7 @@ if [ "$VERIFY_MODE" = true ]; then
 
     echo "[2/3] Checking file count..."
     DIST_CMD_COUNT=$(find "$DIST_DIR/commands" -name "*.md" 2>/dev/null | wc -l)
-    EXPECTED_COUNT=4
+    EXPECTED_COUNT=3
 
     if [ "$DIST_CMD_COUNT" -ne "$EXPECTED_COUNT" ]; then
         echo "❌ ERROR: Command file count mismatch: expected $EXPECTED_COUNT, got $DIST_CMD_COUNT"
@@ -43,24 +42,18 @@ if [ "$VERIFY_MODE" = true ]; then
     echo ""
 
     echo "[3/3] Verifying file content..."
-    for cmd in meta prompt-find prompt-list prompt-show; do
+    for cmd in prompt-find prompt-list prompt-show; do
         if [ ! -f "$DIST_DIR/commands/${cmd}.md" ]; then
             echo "❌ ERROR: ${cmd}.md not found in dist/commands/"
             exit 1
         fi
     done
-    echo "✓ All 4 commands verified"
+    echo "✓ All 3 commands verified"
     echo ""
 
     echo "✅ Plugin file sync verification passed"
 else
     # SYNC MODE: Perform the sync
-    # Verify source directories exist
-    if [ ! -f "$PROJECT_ROOT/.claude/commands/meta.md" ]; then
-        echo "ERROR: .claude/commands/meta.md not found"
-        exit 1
-    fi
-
     # Create dist directories (clean agents and commands to remove stale files)
     mkdir -p "$DIST_DIR/commands" "$DIST_DIR/agents" "$DIST_DIR/skills"
     rm -f "$DIST_DIR/agents/"*.md 2>/dev/null || true
@@ -68,7 +61,7 @@ else
 
     # Copy published commands
     echo "  Copying published commands from .claude/commands/..."
-    PUBLISHED_COMMANDS="meta prompt-find prompt-list prompt-show"
+    PUBLISHED_COMMANDS="prompt-find prompt-list prompt-show"
     for cmd in $PUBLISHED_COMMANDS; do
         if [ -f "$PROJECT_ROOT/.claude/commands/${cmd}.md" ]; then
             cp "$PROJECT_ROOT/.claude/commands/${cmd}.md" "$DIST_DIR/commands/"
@@ -104,5 +97,4 @@ else
 
     echo "✓ Plugin files synced to $DIST_DIR/"
     echo "✓ Total: $CMD_COUNT command, $AGENT_COUNT agents, $SKILL_COUNT skills"
-    echo "  Note: 13 capability files distributed separately in capabilities-latest.tar.gz"
 fi
