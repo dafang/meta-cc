@@ -67,6 +67,23 @@ func loadEntriesAndToolCalls(cfg *config.Config, args map[string]interface{}) ([
 	return allEntries, toolCalls, nil
 }
 
+// executeQualityScanTool implements the quality_scan MCP tool.
+func executeQualityScanTool(cfg *config.Config, args map[string]interface{}) (string, error) {
+	entries, toolCalls, err := loadEntriesAndToolCalls(cfg, args)
+	if err != nil {
+		return "", fmt.Errorf("failed to load session data: %w", err)
+	}
+	result, err := analyzer.QualityScan(entries, toolCalls)
+	if err != nil {
+		return "", fmt.Errorf("quality scan failed: %w", err)
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
 // executeAnalyzeErrorsTool implements the analyze_errors MCP tool.
 // It aggregates tool errors by tool name and error type.
 func executeAnalyzeErrorsTool(cfg *config.Config, args map[string]interface{}) (string, error) {
