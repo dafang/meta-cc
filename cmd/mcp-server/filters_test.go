@@ -500,6 +500,49 @@ func TestTruncateMessageContent_NestedImmutability(t *testing.T) {
 	}
 }
 
+// TestContentSummaryIncludesSessionID verifies session_id is included in content summary output
+func TestContentSummaryIncludesSessionID(t *testing.T) {
+	messages := []interface{}{
+		map[string]interface{}{
+			"sessionId": "abc-session-123",
+			"type":      "user",
+			"timestamp": "2026-03-09T10:00:00Z",
+			"uuid":      "uuid-001",
+			"message": map[string]interface{}{
+				"role":    "user",
+				"content": "hello world",
+			},
+		},
+		map[string]interface{}{
+			"sessionId": "abc-session-123",
+			"type":      "user",
+			"timestamp": "2026-03-09T10:01:00Z",
+			"uuid":      "uuid-002",
+			"message": map[string]interface{}{
+				"role":    "user",
+				"content": "second message",
+			},
+		},
+	}
+	result := ApplyContentSummary(messages)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(result))
+	}
+	for i, r := range result {
+		m, ok := r.(map[string]interface{})
+		if !ok {
+			t.Fatalf("result[%d] is not a map", i)
+		}
+		sessionID, ok := m["session_id"]
+		if !ok {
+			t.Errorf("result[%d] missing session_id field", i)
+		}
+		if sessionID != "abc-session-123" {
+			t.Errorf("result[%d] session_id = %q, want %q", i, sessionID, "abc-session-123")
+		}
+	}
+}
+
 // TestTruncateJSONL tests truncation with JSONL input/output
 func TestTruncateJSONL(t *testing.T) {
 	jsonlInput := `{"turn_sequence":1,"timestamp":"2025-10-06T12:00:00Z","content":"` + strings.Repeat("a", 1000) + `"}

@@ -147,6 +147,14 @@ func getToolDefinitions() []Tool {
 				Type:        "string",
 				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
 			},
+			"since": {
+				Type:        "string",
+				Description: `Include only records with timestamp >= this value (RFC3339, e.g. "2026-03-07T00:00:00Z")`,
+			},
+			"until": {
+				Type:        "string",
+				Description: `Include only records with timestamp < this value (RFC3339)`,
+			},
 		}),
 		buildTool("query_system_errors", "Query system API errors. Default scope: project.", map[string]Property{
 			"limit": {
@@ -176,6 +184,14 @@ func getToolDefinitions() []Tool {
 			"working_dir": {
 				Type:        "string",
 				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
+			"since": {
+				Type:        "string",
+				Description: `Include only records with timestamp >= this value (RFC3339, e.g. "2026-03-07T00:00:00Z")`,
+			},
+			"until": {
+				Type:        "string",
+				Description: `Include only records with timestamp < this value (RFC3339)`,
 			},
 		}),
 		buildTool("query_summaries", "Query session summaries. Default scope: project.", map[string]Property{
@@ -273,10 +289,20 @@ func getToolDefinitions() []Tool {
 			},
 			"content_summary": {
 				Type:        "boolean",
-				Description: "Return only turn/timestamp/preview (100 chars), skip full content. Use hybrid mode instead for better information preservation.",
+				Description: "Return only session_id/turn/timestamp/preview (100 chars), skip full content. Use hybrid mode instead for better information preservation.",
+			},
+			// Tier 3: Time range filtering
+			"since": {
+				Type:        "string",
+				Description: `Include only records with timestamp >= this value (RFC3339, e.g. "2026-03-07T00:00:00Z")`,
+			},
+			"until": {
+				Type:        "string",
+				Description: `Include only records with timestamp < this value (RFC3339)`,
 			},
 			// Override jq_filter with schema
 			"jq_filter": jqFilterWithSchema(map[string]string{
+				"sessionId": "string - Session identifier",
 				"turn":      "number - Turn sequence number",
 				"timestamp": "string - ISO8601 timestamp",
 				"content":   "string - User message content",
