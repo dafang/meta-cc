@@ -1,7 +1,8 @@
 # Proposal: Split meta-cc into Two Focused Projects
 
-**Status**: Approved
+**Status**: Implemented
 **Date**: 2026-03-09
+**Implemented**: 2026-03-09 (Phases 41–46)
 **Author**: Yale Huang
 
 ---
@@ -10,7 +11,7 @@
 
 meta-cc currently bundles three distinct concerns into a single plugin:
 
-1. **Session history retrieval** — A Go MCP server that parses Claude Code JSONL session files and exposes 17 tools (15 session query/metadata tools + 2 capability-loading tools).
+1. **Session history retrieval** — A Go MCP server that parses Claude Code JSONL session files and exposes 17 tools (10 convenience query + 4 metadata + 1 utility + 2 capability-loading tools, for a pre-split total of 17).
 
 2. **Analytical capability workflows** — 21 `meta-*` Markdown workflow templates, dynamically loaded from GitHub/tar.gz at runtime, routed by a `/meta` natural-language dispatcher. These call MCP query tools and rely on Claude's reasoning to produce results.
 
@@ -67,9 +68,8 @@ These three concerns have different users, different update cadences, and differ
 
 | Category | Contents |
 |----------|----------|
-| Skills | All 18 validated methodology skills |
-| Agents | 5 published development workflow agents |
-| Migrated capabilities | 2 reasoning-heavy `meta-*` capabilities (see Section 3.3) |
+| Skills | 18 validated methodology skills + `next-step-generation` (migrated from `meta-next`) = **19 skills** |
+| Agents | 5 published development workflow agents + `workflow-coach` (migrated from `meta-coach`) = **6 agents** |
 
 #### Skills inventory
 
@@ -103,8 +103,9 @@ These three concerns have different users, different update cadences, and differ
 | `iteration-executor` | Executes BAIME experiment iterations |
 | `iteration-prompt-designer` | Designs ITERATION-PROMPTS.md files |
 | `knowledge-extractor` | Extracts BAIME experiments into skills |
+| `workflow-coach` | Standalone coaching agent; optionally enriches with meta-cc data when available |
 
-`feature-developer` and `phase-planner-executor` are dev-only agents used in meta-cc's own development workflow. They will be **removed** (not migrated).
+`feature-developer` and `phase-planner-executor` are dev-only agents used in meta-cc's own development workflow. They were **removed** (not migrated).
 
 ---
 
@@ -128,20 +129,21 @@ This means tools like `analyze_errors` do NOT classify errors semantically — t
 
 ### 3.2 → New MCP analysis tools in meta-cc (Go implementation)
 
-| New MCP Tool | Replaces | Go implementation scope | Returns |
+| New MCP Tool | Replaces | Go implementation scope | Returns (actual JSON fields) |
 |---|---|---|---|
-| `analyze_errors` | `meta-errors` | Group tool errors by type/file/phase; count patterns; surface examples | `{categories, counts, examples, time_range}` |
-| `quality_scan` | `meta-quality-scan` | Multi-dimension session metrics (error rate, completion rate, retry rate, tool diversity) | `{dimensions: [{name, score, raw_data}]}` |
-| `get_work_patterns` | `meta-habits` + `meta-focus-analyzer` | Tool usage frequency histogram; hourly/daily activity distribution; context-switch detection | `{tool_freq, time_dist, context_switches}` |
-| `get_timeline` | `meta-timeline` | Chronological event sequence with timestamps and durations | `{events: [{time, type, summary, duration}]}` — Claude renders visualization |
-| `analyze_bugs` | `meta-bugs` | Error→fix turn-pair extraction; recurrence detection | `{patterns: [{error_signature, fix_count, recurrence}]}` |
-| `get_tech_debt` | `meta-tech-debt` | TODO/FIXME/HACK marker counts by file; long-running open issues from session | `{markers, open_issues, hotspot_files}` |
+| `analyze_errors` | `meta-errors` | Group tool errors by tool name and error signature; count patterns; surface examples | `{time_range, total_errors, by_tool: [{tool_name, count, examples}], by_type: [{signature, count, examples}]}` |
+| `quality_scan` | `meta-quality-scan` | Multi-dimension session metrics (error rate, completion rate, retry rate, tool diversity) | `{dimensions: [{name, score, raw_value}]}` |
+| `get_work_patterns` | `meta-habits` + `meta-focus-analyzer` | Tool usage frequency histogram; hourly activity array (24 elements); context-switch detection | `{tool_frequency: [{tool_name, count}], hourly_activity: [24]int, context_switches, peak_hour}` |
+| `get_timeline` | `meta-timeline` | Chronological event sequence with timestamps and durations | `{events: [{timestamp, type, summary, duration_ms}], total_span}` — Claude renders visualization |
+| `analyze_bugs` | `meta-bugs` | Error→fix turn-pair extraction; recurrence detection | `{patterns: [{error_signature, fix_count, recurrences, examples}], total_pairs}` |
+| `get_tech_debt` | `meta-tech-debt` | TODO/FIXME/HACK/XXX marker counts per file; unresolved errors as open-issue proxy | `{markers: [{label, count}], hotspot_files: [{file, marker_count}], open_issues}` |
 
 **Implementation notes**:
 
 - `get_timeline` returns JSON only. ASCII art rendering is delegated to Claude, eliminating ~800 lines of Go string-manipulation code.
-- `get_tech_debt` uses marker-based detection (regex over file snapshots). Semantic debt classification is delegated to Claude.
+- `get_tech_debt` uses regex marker detection over **tool call outputs** (Read/Edit/Write/Bash result text), not raw file-history-snapshot entries. File snapshot parsing was skipped because `parser.ParseEntries()` filters those entries out; scanning tool outputs yields equivalent marker coverage. Semantic debt classification is delegated to Claude.
 - `analyze_errors` uses tool call metadata (status, error messages) from JSONL — not semantic analysis of user message text. This is a scope reduction from `meta-errors` which attempted full semantic classification; the reduction is intentional.
+- Data-layer functions live in `internal/analyzer/` (one file per tool: `errors_analysis.go`, `quality_analysis.go`, `work_patterns.go`, `timeline.go`, `bugs_analysis.go`, `tech_debt.go`). MCP handlers and the shared `loadEntriesAndToolCalls` helper are consolidated in `cmd/mcp-server/handlers_analysis.go`.
 
 **Estimated implementation**: ~2,000–2,500 lines of new Go (implementation + tests across 6 files). Existing `internal/analyzer/` and `internal/stats/` packages provide data models and can be extended.
 
@@ -156,7 +158,7 @@ These capabilities are LLM reasoning workflows that require no session data to f
 
 `meta-prompt` is absorbed into the existing `methodology-bootstrapping` skill (prompt refinement is a core BAIME practice already covered there).
 
-### 3.4 → Deleted (12 capabilities)
+### 3.4 → Deleted (11 capabilities)
 
 | Capability | Reason |
 |---|---|
@@ -188,29 +190,37 @@ The seven `meta-doc-*` capabilities are only useful for projects structured like
 | `capabilities/commands/*.md` (21 files) | ~6,500 |
 | **Total removed** | **~10,019 lines** |
 
-**Migration note**: `CleanupSessionCache()` is defined in `capabilities.go` and called from `main.go`. Before `capabilities.go` can be deleted, this function must be relocated to `temp_file_manager.go` or `server.go`.
+**Migration note** (completed): `CleanupSessionCache()` was defined in `capabilities.go` and called from `main.go`. It was relocated to `temp_file_manager.go` in Phase 45.1 (atomically with the removal of capability tool cases from `executor.go`) before `capabilities.go` was deleted in Phase 45.2.
 
 The `capabilities-latest.tar.gz` release artifact is also eliminated.
 
-**Net code change**: remove ~9,966 lines (capability files + loading system), add ~2,000–2,500 lines (new Go analysis tools). Net reduction of ~7,500 lines.
+**Net code change**: removed ~10,019 lines (capability files + loading system), added ~1,360 lines (6 analysis tools + tests + handlers). Net reduction of ~8,659 lines.
 
 ---
 
 ## 4. MCP Tool Count
 
-### Current tools (17 total)
+### Before refactoring (17 total)
 
 | Group | Tools | Count |
 |---|---|---|
 | Convenience query | `query_user_messages`, `query_tools`, `query_tool_errors`, `query_token_usage`, `query_conversation_flow`, `query_system_errors`, `query_file_snapshots`, `query_timestamps`, `query_summaries`, `query_tool_blocks` | 10 |
 | Metadata / config | `get_session_directory`, `inspect_session_files`, `get_session_metadata`, `execute_stage2_query` | 4 |
 | Utility | `cleanup_temp_files` | 1 |
-| Capability loading (to be removed) | `list_capabilities`, `get_capability` | 2 |
+| Capability loading (removed) | `list_capabilities`, `get_capability` | 2 |
 | **Total** | | **17** |
 
-### After refactoring (21 total)
+### After refactoring (21 total — as implemented)
 
 Remove 2 capability-loading tools. Add 6 analysis tools. Net: **17 − 2 + 6 = 21 tools**.
+
+| Group | Tools | Count |
+|---|---|---|
+| Convenience query | (same 10 as above) | 10 |
+| Metadata / config | (same 4 as above) | 4 |
+| Utility | `cleanup_temp_files` | 1 |
+| Analysis (new) | `analyze_errors`, `quality_scan`, `get_work_patterns`, `get_timeline`, `analyze_bugs`, `get_tech_debt` | 6 |
+| **Total** | | **21** |
 
 **On MCP tool count limits**: The MCP specification (2025-11-25) defines no hard limit on tool count. Client-side limits vary: Cursor enforces 40, VS Code 128. Claude Code activates automatic Tool Search (deferred loading) when tool definitions exceed 10% of the context window, so 21 tools is well within safe operating range.
 
@@ -228,7 +238,7 @@ Remove 2 capability-loading tools. Add 6 analysis tools. Net: **17 − 2 + 6 = 2
 | `list_capabilities`, `get_capability` tools | **Removed** | No longer needed |
 | Dynamic loading system (~3,296 lines) | **Removed** | Replaced by static Go tools |
 | 12 deleted capabilities | **Deleted** | See Section 3.4 |
-| 2 reasoning capabilities | **→ baime** | See Section 3.3 |
+| 2 reasoning capabilities | **→ baime** (as `workflow-coach` agent + `next-step-generation` skill) | See Section 3.3 |
 | 18 skills | **→ baime** | No meta-cc dependency |
 | 5 published agents | **→ baime** | No meta-cc dependency |
 | 2 dev-only agents | **Removed** | Not migrated |
@@ -267,10 +277,10 @@ BAIME (Bootstrapped AI Methodology Engineering) is the unifying framework from w
 
 ### Phase 2: Implement new Go analysis tools in meta-cc
 
-1. Implement 6 new Go analysis tools in `cmd/mcp-server/` (new files: `analysis_errors.go`, `analysis_quality.go`, `analysis_patterns.go`, `analysis_timeline.go`, `analysis_bugs.go`, `analysis_debt.go`).
-2. Write tests for each tool (target: ≥80% coverage).
-3. Register new tools in `tools.go` and `executor.go`.
-4. Remove `capabilities.go` and all associated test files (~3,296 lines).
+1. Data-layer functions implemented in `internal/analyzer/`: `errors_analysis.go`, `quality_analysis.go`, `work_patterns.go`, `timeline.go`, `bugs_analysis.go`, `tech_debt.go`.
+2. Shared session loader `loadEntriesAndToolCalls` and all MCP handlers consolidated in `cmd/mcp-server/handlers_analysis.go`.
+3. Tools registered in `tools.go` and `executor.go`; test files per tool in `cmd/mcp-server/analysis_*_test.go`.
+4. Remove `capabilities.go` and all associated test files (~3,349 lines).
 5. Remove `list_capabilities` and `get_capability` from `tools.go` and `executor.go`.
 6. Remove `capabilities-latest.tar.gz` from release artifacts and CI.
 
@@ -304,9 +314,9 @@ Phases 2 and 3 can proceed in parallel.
 | Metric | Before | After |
 |--------|--------|-------|
 | Total MCP tools | 17 | 21 |
-| Lines removed | — | ~9,966 (capability files + loading system) |
-| Lines added | — | ~2,000–2,500 (6 analysis tools + tests) |
-| Net lines | — | −~7,500 |
+| Lines removed | — | ~10,019 (capability files + loading system) |
+| Lines added | — | ~1,360 (6 analysis tools + tests + handlers) |
+| Net lines | — | −~8,659 |
 | Plugin size | ~1.8MB (binary + skills + capabilities) | ~0.2MB (binary only) |
 | `plugin.json` skills | 18 | 0 |
 | `plugin.json` agents | 5 (published) | 0 |
@@ -318,7 +328,7 @@ Phases 2 and 3 can proceed in parallel.
 
 | Metric | Value |
 |--------|-------|
-| Plugin size | ~1.5MB (18 skills + 5 agents + 2 migrated capabilities) |
+| Plugin size | ~1.5MB (19 skills + 6 agents) |
 | Binary required | None |
 | MCP server required | None (meta-cc optional for enriched coaching) |
 | Works without meta-cc | ✓ |
@@ -342,8 +352,17 @@ Phases 2 and 3 can proceed in parallel.
 
 ---
 
-## 11. Recommendation
+## 11. As Implemented
 
-Execute in four phases. Phase 1 (baime creation) and Phase 2 (Go tool implementation) can begin in parallel. Phase 3 (plugin pruning to 3.0.0) should follow Phase 2 completion to avoid a version with broken capability references.
+Executed in six phases (Phases 41–46). Phase 41 (baime creation) ran in parallel with Phases 42–44 (Go tool implementation). Phase 45 (capability loading removal) ran after all analysis tools were verified live and `yaleh/baime` was confirmed publicly reachable. Phase 46 (plugin pruning → 3.0.0) followed Phase 45 completion.
 
-The key architectural invariant to maintain throughout: **Go code owns data; Claude owns interpretation.**
+The architectural invariant held throughout: **Go code owns data; Claude owns interpretation.**
+
+### Key deviations from original design
+
+| Design intent | As implemented | Reason |
+|---|---|---|
+| 6 new Go files in `cmd/mcp-server/` | Data layer in `internal/analyzer/`; single `handlers_analysis.go` in `cmd/mcp-server/` | Cleaner separation: analyzer package owns logic, MCP layer owns HTTP/JSON dispatch |
+| `get_tech_debt`: regex over file-history-snapshot entries | Regex over tool call outputs (Read/Edit/Write/Bash `.Output` field) | `parser.ParseEntries()` filters out snapshot entries; tool output scanning yields equivalent marker coverage |
+| 12 capabilities deleted | 11 capabilities deleted (correct count — the "12" claim in the original design was an off-by-one) | n/a |
+| ~2,000–2,500 lines of new Go | ~1,360 lines of new Go | Consolidating handlers into one file and reusing existing `internal/analyzer/` types reduced duplication |
