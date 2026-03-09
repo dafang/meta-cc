@@ -280,6 +280,153 @@ func TestApplyJQFilter_QuotedExpressionError(t *testing.T) {
 	}
 }
 
+// TestGroupBySession tests the GroupBySession function
+func TestGroupBySession(t *testing.T) {
+	t.Run("Basic", func(t *testing.T) {
+		entries := []interface{}{
+			map[string]interface{}{"sessionId": "sess-A", "timestamp": "2026-03-09T06:00:00Z", "content": "msg1"},
+			map[string]interface{}{"sessionId": "sess-A", "timestamp": "2026-03-09T06:01:00Z", "content": "msg2"},
+			map[string]interface{}{"sessionId": "sess-B", "timestamp": "2026-03-09T07:00:00Z", "content": "msg3"},
+			map[string]interface{}{"sessionId": "sess-B", "timestamp": "2026-03-09T07:01:00Z", "content": "msg4"},
+		}
+
+		result := GroupBySession(entries)
+
+		if len(result) != 2 {
+			t.Fatalf("expected 2 session objects, got %d", len(result))
+		}
+
+		for _, item := range result {
+			obj, ok := item.(map[string]interface{})
+			if !ok {
+				t.Fatal("expected map[string]interface{}")
+			}
+			if _, has := obj["session_id"]; !has {
+				t.Error("expected session_id field")
+			}
+			if _, has := obj["match_count"]; !has {
+				t.Error("expected match_count field")
+			}
+			if _, has := obj["first_match"]; !has {
+				t.Error("expected first_match field")
+			}
+			if _, has := obj["last_match"]; !has {
+				t.Error("expected last_match field")
+			}
+			if _, has := obj["turns"]; !has {
+				t.Error("expected turns field")
+			}
+		}
+
+		sessA := result[0].(map[string]interface{})
+		if sessA["session_id"] != "sess-A" {
+			t.Errorf("expected sess-A first, got %v", sessA["session_id"])
+		}
+		if int(sessA["match_count"].(int)) != 2 {
+			t.Errorf("sess-A match_count = %v, want 2", sessA["match_count"])
+		}
+		sessB := result[1].(map[string]interface{})
+		if sessB["session_id"] != "sess-B" {
+			t.Errorf("expected sess-B second, got %v", sessB["session_id"])
+		}
+		if int(sessB["match_count"].(int)) != 2 {
+			t.Errorf("sess-B match_count = %v, want 2", sessB["match_count"])
+		}
+	})
+
+	t.Run("OrderPreserved", func(t *testing.T) {
+		entries := []interface{}{
+			map[string]interface{}{"sessionId": "sess-A", "timestamp": "2026-03-09T06:00:00Z"},
+			map[string]interface{}{"sessionId": "sess-B", "timestamp": "2026-03-09T07:00:00Z"},
+			map[string]interface{}{"sessionId": "sess-A", "timestamp": "2026-03-09T06:01:00Z"},
+			map[string]interface{}{"sessionId": "sess-B", "timestamp": "2026-03-09T07:01:00Z"},
+		}
+
+		result := GroupBySession(entries)
+
+		if len(result) != 2 {
+			t.Fatalf("expected 2 session objects, got %d", len(result))
+		}
+
+		first := result[0].(map[string]interface{})
+		if first["session_id"] != "sess-A" {
+			t.Errorf("expected sess-A first (first-seen order), got %v", first["session_id"])
+		}
+
+		second := result[1].(map[string]interface{})
+		if second["session_id"] != "sess-B" {
+			t.Errorf("expected sess-B second, got %v", second["session_id"])
+		}
+	})
+
+	t.Run("SnakeCaseSessionId", func(t *testing.T) {
+		entries := []interface{}{
+			map[string]interface{}{"session_id": "sess-X", "timestamp": "2026-03-09T06:00:00Z", "content_preview": "hello"},
+			map[string]interface{}{"session_id": "sess-X", "timestamp": "2026-03-09T06:01:00Z", "content_preview": "world"},
+			map[string]interface{}{"session_id": "sess-Y", "timestamp": "2026-03-09T07:00:00Z", "content_preview": "foo"},
+		}
+
+		result := GroupBySession(entries)
+
+		if len(result) != 2 {
+			t.Fatalf("expected 2 session objects, got %d", len(result))
+		}
+
+		sessX := result[0].(map[string]interface{})
+		if sessX["session_id"] != "sess-X" {
+			t.Errorf("expected sess-X, got %v", sessX["session_id"])
+		}
+		if int(sessX["match_count"].(int)) != 2 {
+			t.Errorf("sess-X match_count = %v, want 2", sessX["match_count"])
+		}
+	})
+
+	t.Run("CamelCaseSessionId", func(t *testing.T) {
+		entries := []interface{}{
+			map[string]interface{}{"sessionId": "sess-camel-1", "timestamp": "2026-03-09T06:00:00Z"},
+			map[string]interface{}{"sessionId": "sess-camel-2", "timestamp": "2026-03-09T07:00:00Z"},
+			map[string]interface{}{"sessionId": "sess-camel-1", "timestamp": "2026-03-09T06:02:00Z"},
+		}
+
+		result := GroupBySession(entries)
+
+		if len(result) != 2 {
+			t.Fatalf("expected 2 session objects, got %d", len(result))
+		}
+
+		// Output should use snake_case session_id
+		obj := result[0].(map[string]interface{})
+		if _, has := obj["session_id"]; !has {
+			t.Error("output should use snake_case session_id field")
+		}
+		if _, has := obj["sessionId"]; has {
+			t.Error("output should NOT have camelCase sessionId field")
+		}
+		if obj["session_id"] != "sess-camel-1" {
+			t.Errorf("expected sess-camel-1 first, got %v", obj["session_id"])
+		}
+	})
+
+	t.Run("SingleSession", func(t *testing.T) {
+		entries := []interface{}{
+			map[string]interface{}{"sessionId": "only-session", "timestamp": "2026-03-09T06:00:00Z"},
+			map[string]interface{}{"sessionId": "only-session", "timestamp": "2026-03-09T06:01:00Z"},
+			map[string]interface{}{"sessionId": "only-session", "timestamp": "2026-03-09T06:02:00Z"},
+		}
+
+		result := GroupBySession(entries)
+
+		if len(result) != 1 {
+			t.Fatalf("expected 1 session object, got %d", len(result))
+		}
+
+		obj := result[0].(map[string]interface{})
+		if int(obj["match_count"].(int)) != len(entries) {
+			t.Errorf("match_count = %v, want %d", obj["match_count"], len(entries))
+		}
+	})
+}
+
 // TestApplyJQFilter_GenuineSyntaxStillReportsOriginalError verifies that genuine syntax errors still get appropriate error messages
 func TestApplyJQFilter_GenuineSyntaxStillReportsOriginalError(t *testing.T) {
 	jsonlData := `{"tool":"Bash","status":"success"}`

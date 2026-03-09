@@ -35,6 +35,7 @@ type toolPipelineConfig struct {
 	maxMessageLength int
 	contentSummary   bool
 	previewLength    int
+	groupBySession   bool
 }
 
 func newToolPipelineConfig(args map[string]interface{}) toolPipelineConfig {
@@ -46,6 +47,7 @@ func newToolPipelineConfig(args map[string]interface{}) toolPipelineConfig {
 		maxMessageLength: getIntParam(args, "max_message_length", 0),
 		contentSummary:   getBoolParam(args, "content_summary", false),
 		previewLength:    getIntParam(args, "preview_length", DefaultPreviewLength),
+		groupBySession:   getBoolParam(args, "group_by_session", false),
 	}
 }
 
@@ -320,6 +322,10 @@ func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, arg
 	var output string
 	var err error
 
+	if pipeline.groupBySession && pipeline.statsOnly {
+		return "", fmt.Errorf("group_by_session and stats_only are mutually exclusive")
+	}
+
 	if pipeline.statsOnly {
 		// stats_only: compute stats from raw data (camelCase sessionId preserved)
 		output, err = e.buildStatsOnlyResponse(rawData, toolName)
@@ -334,6 +340,11 @@ func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, arg
 	parsedData := rawData
 	if toolName == "query_user_messages" && pipeline.requiresMessageFilters() {
 		parsedData = e.applyMessageFiltersToData(rawData, pipeline.maxMessageLength, pipeline.contentSummary, pipeline.previewLength)
+	}
+
+	// Group by session after message filters (so content_summary is applied to turns first)
+	if pipeline.groupBySession && toolName == "query_user_messages" {
+		parsedData = querypkg.GroupBySession(parsedData)
 	}
 
 	if pipeline.statsFirst {

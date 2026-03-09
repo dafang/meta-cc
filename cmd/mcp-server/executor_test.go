@@ -1110,3 +1110,225 @@ func TestShortcutQueryToolsRegistered(t *testing.T) {
 		})
 	}
 }
+
+// setupGroupBySessionFixture creates two sessions with 2 turns each
+func setupGroupBySessionFixture(t *testing.T) func() {
+	t.Helper()
+	projectDir := t.TempDir()
+	projectsRoot := t.TempDir()
+	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+
+	fixture := "{\"type\":\"user\",\"timestamp\":\"2026-03-09T06:00:00Z\",\"uuid\":\"u1\",\"sessionId\":\"grp-sess-A\",\"message\":{\"role\":\"user\",\"content\":\"hello from A\"}}\n" +
+		"{\"type\":\"user\",\"timestamp\":\"2026-03-09T06:01:00Z\",\"uuid\":\"u2\",\"sessionId\":\"grp-sess-A\",\"message\":{\"role\":\"user\",\"content\":\"second from A\"}}\n" +
+		"{\"type\":\"user\",\"timestamp\":\"2026-03-09T07:00:00Z\",\"uuid\":\"u3\",\"sessionId\":\"grp-sess-B\",\"message\":{\"role\":\"user\",\"content\":\"hello from B\"}}\n" +
+		"{\"type\":\"user\",\"timestamp\":\"2026-03-09T07:01:00Z\",\"uuid\":\"u4\",\"sessionId\":\"grp-sess-B\",\"message\":{\"role\":\"user\",\"content\":\"second from B\"}}\n"
+
+	writeSessionFixture(t, projectDir, "group-sessions", fixture)
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	return func() { _ = os.Chdir(oldWd) }
+}
+
+// extractGroupedResults extracts the slice of session objects from an ExecuteTool output.
+// Handles both "inline" mode (data key) and "file_ref" mode (reads temp file).
+func extractGroupedResults(t *testing.T, output string) []interface{} {
+	t.Helper()
+
+	var responseObj map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &responseObj); err != nil {
+		t.Fatalf("failed to parse response JSON: %v\noutput: %s", err, output)
+	}
+
+	mode, _ := responseObj["mode"].(string)
+	if mode == "inline" {
+		results, ok := responseObj["data"].([]interface{})
+		if !ok {
+			t.Fatalf("inline mode: expected data array, got %T in: %s", responseObj["data"], output)
+		}
+		return results
+	}
+
+	// file_ref mode: read the temp file
+	fileRefObj, ok := responseObj["file_ref"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected file_ref object or inline data, got mode=%q in: %s", mode, output)
+	}
+	path, _ := fileRefObj["path"].(string)
+	if path == "" {
+		t.Fatalf("file_ref missing path in: %s", output)
+	}
+	defer os.Remove(path)
+
+	rawBytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read file_ref temp file %s: %v", path, err)
+	}
+
+	var results []interface{}
+	for _, line := range strings.Split(strings.TrimSpace(string(rawBytes)), "\n") {
+		if line == "" {
+			continue
+		}
+		var obj interface{}
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			t.Fatalf("failed to parse JSONL line: %v", err)
+		}
+		results = append(results, obj)
+	}
+	return results
+}
+
+// TestGroupBySession_Integration tests group_by_session via ExecuteTool
+func TestGroupBySession_Integration(t *testing.T) {
+	cleanup := setupGroupBySessionFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":          ".",
+		"group_by_session": true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	results := extractGroupedResults(t, output)
+
+	if len(results) == 0 {
+		t.Fatal("expected at least one session object in results")
+	}
+
+	firstResult, ok := results[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected map result, got %T", results[0])
+	}
+
+	if _, has := firstResult["session_id"]; !has {
+		t.Errorf("expected session_id key in grouped result, got: %v", firstResult)
+	}
+}
+
+// TestGroupBySession_MutualExclusionWithStatsOnly tests that group_by_session and stats_only are mutually exclusive
+func TestGroupBySession_MutualExclusionWithStatsOnly(t *testing.T) {
+	cleanup := setupGroupBySessionFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	_, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":          ".",
+		"group_by_session": true,
+		"stats_only":       true,
+	})
+
+	if err == nil {
+		t.Fatal("expected error for mutually exclusive params, got nil")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected error to contain 'mutually exclusive', got: %v", err)
+	}
+}
+
+// TestGroupBySession_WithContentSummary tests group_by_session combined with content_summary
+func TestGroupBySession_WithContentSummary(t *testing.T) {
+	cleanup := setupGroupBySessionFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":          ".",
+		"group_by_session": true,
+		"content_summary":  true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	results := extractGroupedResults(t, output)
+
+	if len(results) == 0 {
+		t.Fatal("expected session objects in results")
+	}
+
+	// Each session object should have a turns array
+	sessionObj, ok := results[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected map for session object")
+	}
+
+	turns, ok := sessionObj["turns"].([]interface{})
+	if !ok {
+		t.Fatalf("expected turns array in session object, got %T", sessionObj["turns"])
+	}
+	if len(turns) == 0 {
+		t.Fatal("expected turns to be non-empty")
+	}
+
+	// Turns should contain content_preview (content_summary applied before grouping)
+	firstTurn, ok := turns[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected map for turn, got %T", turns[0])
+	}
+	if _, has := firstTurn["content_preview"]; !has {
+		t.Errorf("expected content_preview in turn after content_summary, got keys: %v", firstTurn)
+	}
+}
+
+// TestGroupBySession_WithStatsFirst tests group_by_session combined with stats_first
+func TestGroupBySession_WithStatsFirst(t *testing.T) {
+	cleanup := setupGroupBySessionFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":          ".",
+		"group_by_session": true,
+		"stats_first":      true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// stats_first output format: "<stats lines>\n---\n<detail>"
+	if !strings.Contains(output, "---") {
+		t.Fatalf("expected stats separator '---' in stats_first output, got: %s", output)
+	}
+
+	parts := strings.SplitN(output, "\n---\n", 2)
+	if len(parts) < 2 {
+		t.Fatalf("expected 2 parts separated by '---', got: %s", output)
+	}
+
+	// Stats header should contain session_count and total
+	statsSection := parts[0]
+	firstStatLine := strings.SplitN(strings.TrimSpace(statsSection), "\n", 2)[0]
+	var stats map[string]interface{}
+	if err := json.Unmarshal([]byte(firstStatLine), &stats); err != nil {
+		t.Fatalf("failed to parse stats header: %v", err)
+	}
+	if _, has := stats["session_count"]; !has {
+		t.Errorf("expected session_count in stats header, got: %v", stats)
+	}
+	if _, has := stats["total"]; !has {
+		t.Errorf("expected total in stats header, got: %v", stats)
+	}
+
+	// Detail section should contain session_id (grouped detail)
+	detailSection := parts[1]
+	if !strings.Contains(detailSection, "session_id") {
+		t.Errorf("expected session_id in grouped detail section, got: %s", detailSection)
+	}
+}

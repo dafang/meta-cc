@@ -163,6 +163,74 @@ func GenerateTimestampStats(jsonlData string) (string, error) {
 	return output.String(), nil
 }
 
+// sessionGroup holds accumulated data for one session during GroupBySession.
+type sessionGroup struct {
+	SessionID  string
+	MatchCount int
+	FirstMatch string
+	LastMatch  string
+	Turns      []interface{}
+}
+
+// GroupBySession groups a slice of parsed user-message entries by session.
+// It supports both camelCase "sessionId" (raw data) and snake_case "session_id"
+// (post-content_summary) field names. Output objects use snake_case "session_id".
+// First-seen order of sessions is preserved.
+func GroupBySession(entries []interface{}) []interface{} {
+	var order []string
+	groups := make(map[string]*sessionGroup)
+
+	for _, entry := range entries {
+		obj, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Support both camelCase (raw) and snake_case (post-summary)
+		sessionID, _ := obj["session_id"].(string)
+		if sessionID == "" {
+			sessionID, _ = obj["sessionId"].(string)
+		}
+		if sessionID == "" {
+			sessionID = "unknown"
+		}
+
+		ts, _ := obj["timestamp"].(string)
+
+		if _, exists := groups[sessionID]; !exists {
+			order = append(order, sessionID)
+			groups[sessionID] = &sessionGroup{
+				SessionID:  sessionID,
+				FirstMatch: ts,
+				LastMatch:  ts,
+			}
+		}
+
+		g := groups[sessionID]
+		g.MatchCount++
+		g.Turns = append(g.Turns, entry)
+		if ts != "" && (g.FirstMatch == "" || ts < g.FirstMatch) {
+			g.FirstMatch = ts
+		}
+		if ts != "" && ts > g.LastMatch {
+			g.LastMatch = ts
+		}
+	}
+
+	result := make([]interface{}, 0, len(order))
+	for _, id := range order {
+		g := groups[id]
+		result = append(result, map[string]interface{}{
+			"session_id":  g.SessionID,
+			"match_count": g.MatchCount,
+			"first_match": g.FirstMatch,
+			"last_match":  g.LastMatch,
+			"turns":       g.Turns,
+		})
+	}
+	return result
+}
+
 func defaultJQExpression(expr string) string {
 	if expr == "" {
 		return ".[]"

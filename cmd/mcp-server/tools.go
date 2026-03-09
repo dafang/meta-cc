@@ -308,6 +308,10 @@ func getToolDefinitions() []Tool {
 				Type:        "boolean",
 				Description: `If true, exclude Claude Code system-injected messages whose content starts with <local-command-caveat>, <command-name>, <local-command-stdout>, or <task-notification>. Only applies to string content type. Default: false.`,
 			},
+			"group_by_session": {
+				Type:        "boolean",
+				Description: "Group results by session. Returns one object per session with session_id, match_count, first_match, last_match, and turns array. Mutually exclusive with stats_only.",
+			},
 			// Override jq_filter with schema
 			"jq_filter": jqFilterWithSchema(map[string]string{
 				"sessionId": "string - Session identifier",
