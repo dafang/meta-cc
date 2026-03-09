@@ -1,6 +1,6 @@
 {
   "name": "meta-cc",
-  "version": "2.3.6",
+  "version": "2.3.7",
   "description": "Meta-Cognition tool for Claude Code: session history analysis, workflow optimization, and 18 validated BAIME methodology skills.",
   "author": {
     "name": "Yale Huang",
