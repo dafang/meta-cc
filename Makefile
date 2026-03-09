@@ -337,24 +337,14 @@ cross-compile:
 
 sync-plugin-files:
 	@echo "Preparing plugin files for release packaging..."
-	@mkdir -p $(DIST_DIR)/commands $(DIST_DIR)/agents $(DIST_DIR)/skills
+	@mkdir -p $(DIST_DIR)/commands
 	@echo "  Copying commands from .claude/commands/..."
 	@cp .claude/commands/prompt-find.md $(DIST_DIR)/commands/ 2>/dev/null || true
 	@cp .claude/commands/prompt-list.md $(DIST_DIR)/commands/ 2>/dev/null || true
 	@cp .claude/commands/prompt-show.md $(DIST_DIR)/commands/ 2>/dev/null || true
-	@echo "  Copying agents from .claude/agents/..."
-	@cp .claude/agents/*.md $(DIST_DIR)/agents/ 2>/dev/null || true
-	@echo "  Copying skills from .claude/skills/..."
-	@if [ -d ".claude/skills" ]; then \
-		cp -r .claude/skills/* $(DIST_DIR)/skills/; \
-		SKILL_COUNT=$$(find $(DIST_DIR)/skills -name "SKILL.md" 2>/dev/null | wc -l); \
-		echo "    ✓ Copied $$SKILL_COUNT skills"; \
-	fi
 	@echo "✓ Plugin files synced to $(DIST_DIR)/"
 	@CMD_COUNT=$$(find $(DIST_DIR)/commands -name "*.md" 2>/dev/null | wc -l); \
-	AGENT_COUNT=$$(find $(DIST_DIR)/agents -name "*.md" 2>/dev/null | wc -l); \
-	SKILL_COUNT=$$(find $(DIST_DIR)/skills -name "SKILL.md" 2>/dev/null | wc -l); \
-	echo "✓ Total: $$CMD_COUNT commands, $$AGENT_COUNT agents, $$SKILL_COUNT skills"
+	echo "✓ Total: $$CMD_COUNT command(s)"
 
 # dev target is now defined in Build Quality Gates section above (line ~64)
 
@@ -368,15 +358,13 @@ bundle-release: sync-plugin-files
 	@for platform in $(PLATFORMS); do \
 		PLATFORM_NAME=$${platform%/*}-$${platform#*/}; \
 		BUNDLE_DIR=$(BUILD_DIR)/bundles/meta-cc-$(VERSION)-$$PLATFORM_NAME; \
-		mkdir -p $$BUNDLE_DIR/bin $$BUNDLE_DIR/commands $$BUNDLE_DIR/agents $$BUNDLE_DIR/skills $$BUNDLE_DIR/.claude-plugin $$BUNDLE_DIR/lib; \
+		mkdir -p $$BUNDLE_DIR/bin $$BUNDLE_DIR/commands $$BUNDLE_DIR/.claude-plugin $$BUNDLE_DIR/lib; \
 		if [ "$${platform%/*}" = "windows" ]; then \
 			cp $(BUILD_DIR)/$(MCP_BINARY_NAME)-$$PLATFORM_NAME.exe $$BUNDLE_DIR/bin/ 2>/dev/null || true; \
 		else \
 			cp $(BUILD_DIR)/$(MCP_BINARY_NAME)-$$PLATFORM_NAME $$BUNDLE_DIR/bin/ 2>/dev/null || true; \
 		fi; \
 		cp -r $(DIST_DIR)/commands/* $$BUNDLE_DIR/commands/; \
-		cp -r $(DIST_DIR)/agents/* $$BUNDLE_DIR/agents/; \
-		cp -r $(DIST_DIR)/skills/* $$BUNDLE_DIR/skills/ 2>/dev/null || true; \
 		cp -r lib/* $$BUNDLE_DIR/lib/; \
 		cp -r .claude-plugin/* $$BUNDLE_DIR/.claude-plugin/; \
 		cp .claude/.claude-plugin/plugin.json $$BUNDLE_DIR/.claude-plugin/ 2>/dev/null || true; \

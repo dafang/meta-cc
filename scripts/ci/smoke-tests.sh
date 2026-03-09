@@ -243,7 +243,7 @@ echo ""
 echo "Test Category 3: Plugin Structure"
 echo "----------------------------------"
 
-# Test 3.1: Required directories present
+# Test 3.1: Required directories present (no agents/ or skills/ in 3.0.0)
 REQUIRED_DIRS=("bin" ".claude-plugin" "commands" "lib")
 for dir in "${REQUIRED_DIRS[@]}"; do
     if [ -d "$dir" ]; then
@@ -310,73 +310,23 @@ if [ -f ".claude-plugin/marketplace.json" ]; then
     fi
 fi
 
-# Test 3.4: Skills structure verification
-if [ -d "skills" ]; then
-    SKILL_COUNT=$(find skills -name "SKILL.md" 2>/dev/null | wc -l)
-    if [ "$SKILL_COUNT" -eq 18 ]; then
-        test_result "Skills structure: found 18 skills" "pass"
-    else
-        test_result "Skills structure: found 18 skills" "fail" "Expected 18 skills, found $SKILL_COUNT"
-    fi
-else
-    test_result "Skills directory exists" "fail" "skills/ directory not found"
-fi
-
-# Test 3.5: marketplace.json contains unified meta-cc plugin
-# (Merged meta-cc-skills into meta-cc in v0.32.0)
+# Test 3.4: marketplace.json contains unified meta-cc plugin
 if [ -f ".claude-plugin/marketplace.json" ]; then
     META_CC_PLUGIN_EXISTS=$(jq '.plugins[] | select(.name=="meta-cc")' .claude-plugin/marketplace.json 2>/dev/null)
     if [ -n "$META_CC_PLUGIN_EXISTS" ]; then
-        AGENT_COUNT=$(jq '.plugins[] | select(.name=="meta-cc") | .agents | length' .claude-plugin/marketplace.json 2>/dev/null || echo 0)
-        SKILLS_COUNT=$(jq '.plugins[] | select(.name=="meta-cc") | .skills | length' .claude-plugin/marketplace.json 2>/dev/null || echo 0)
-
-        if [ "$AGENT_COUNT" -eq 5 ]; then
-            test_result "marketplace.json declares meta-cc plugin with 5 agents" "pass"
+        CMD_COUNT=$(jq '.plugins[] | select(.name=="meta-cc") | .commands | length' .claude-plugin/marketplace.json 2>/dev/null || echo 0)
+        if [ "$CMD_COUNT" -eq 3 ]; then
+            test_result "marketplace.json declares meta-cc plugin with 3 commands" "pass"
         else
-            test_result "marketplace.json declares meta-cc plugin with agents" "fail" "Expected 5 agents in meta-cc plugin, found $AGENT_COUNT"
-        fi
-
-        if [ "$SKILLS_COUNT" -eq 18 ]; then
-            test_result "marketplace.json declares meta-cc plugin with 18 skills" "pass"
-        else
-            test_result "marketplace.json declares meta-cc plugin with skills" "fail" "Expected 18 skills in meta-cc plugin, found $SKILLS_COUNT"
+            test_result "marketplace.json declares meta-cc plugin with 3 commands" "fail" "Expected 3 commands in meta-cc plugin, found $CMD_COUNT"
         fi
     else
         test_result "marketplace.json declares meta-cc plugin" "fail" "meta-cc plugin not found in marketplace.json"
     fi
 fi
 
-# Test 3.7: Verify specific agents exist
-EXPECTED_AGENTS=(
-    "agents/iteration-executor.md"
-    "agents/iteration-prompt-designer.md"
-    "agents/knowledge-extractor.md"
-    "agents/project-planner.md"
-    "agents/stage-executor.md"
-)
-
-for agent in "${EXPECTED_AGENTS[@]}"; do
-    if [ -f "$agent" ]; then
-        test_result "Agent exists: $agent" "pass"
-    else
-        test_result "Agent exists: $agent" "fail" "Expected agent file missing"
-    fi
-done
-
-
-# Test 3.8: No dev-only agents in archive
-DEV_AGENTS=("agents/feature-developer.md" "agents/phase-planner-executor.md")
-for agent in "${DEV_AGENTS[@]}"; do
-    if [ -f "$agent" ]; then
-        test_result "Dev-only agent NOT in archive: $agent" "fail" "Dev-only agent found in release package"
-    else
-        test_result "Dev-only agent NOT in archive: $agent" "pass"
-    fi
-done
-
-# Test 3.9: All published commands present
+# Test 3.5: All published commands present
 EXPECTED_COMMANDS=(
-    "commands/meta.md"
     "commands/prompt-find.md"
     "commands/prompt-list.md"
     "commands/prompt-show.md"
@@ -388,6 +338,20 @@ for cmd in "${EXPECTED_COMMANDS[@]}"; do
         test_result "Command exists: $cmd" "fail" "Expected command file missing"
     fi
 done
+
+# Test 3.6: No agents directory in archive (removed in 3.0.0)
+if [ -d "agents" ]; then
+    test_result "agents/ directory NOT in archive (removed in 3.0.0)" "fail" "agents/ directory found in release package"
+else
+    test_result "agents/ directory NOT in archive (removed in 3.0.0)" "pass"
+fi
+
+# Test 3.7: No skills directory in archive (removed in 3.0.0)
+if [ -d "skills" ]; then
+    test_result "skills/ directory NOT in archive (removed in 3.0.0)" "fail" "skills/ directory found in release package"
+else
+    test_result "skills/ directory NOT in archive (removed in 3.0.0)" "pass"
+fi
 
 # Test 3.10: plugin.json in archive .claude-plugin/
 if [ -f ".claude-plugin/plugin.json" ]; then
