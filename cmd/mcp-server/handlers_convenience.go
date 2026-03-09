@@ -20,6 +20,14 @@ func (e *ToolExecutor) handleQueryUserMessages(cfg *config.Config, scope string,
 	minContentLength := getIntParam(args, "min_content_length", 0)
 	maxContentLength := getIntParam(args, "max_content_length", 0)
 	workingDir := getStringParam(args, "working_dir", "")
+	sinceStr := getStringParam(args, "since", "")
+	untilStr := getStringParam(args, "until", "")
+
+	// Parse time range before any session lookup (fail fast on bad input)
+	tr, err := parseTimeRange(sinceStr, untilStr)
+	if err != nil {
+		return QueryResult{}, err
+	}
 
 	// Content length filtering only applies to string content type
 	if contentType != "string" && (minContentLength > 0 || maxContentLength > 0) {
@@ -48,8 +56,7 @@ func (e *ToolExecutor) handleQueryUserMessages(cfg *config.Config, scope string,
 		jqFilter = fmt.Sprintf(`%s | select(.message.content | length <= %d)`, jqFilter, maxContentLength)
 	}
 
-	// Call executeQuery directly
-	return e.executeQuery(scope, jqFilter, limit, workingDir)
+	return e.executeQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
 }
 
 // handleQueryTools implements query_tools convenience tool
@@ -101,6 +108,13 @@ func (e *ToolExecutor) handleQueryTokenUsage(cfg *config.Config, scope string, a
 func (e *ToolExecutor) handleQueryConversationFlow(cfg *config.Config, scope string, args map[string]interface{}) (QueryResult, error) {
 	limit := getIntParam(args, "limit", 0)
 	workingDir := getStringParam(args, "working_dir", "")
+	sinceStr := getStringParam(args, "since", "")
+	untilStr := getStringParam(args, "until", "")
+
+	tr, err := parseTimeRange(sinceStr, untilStr)
+	if err != nil {
+		return QueryResult{}, err
+	}
 
 	// Filter for user and assistant messages only
 	jqFilter := `select(.type == "user" or .type == "assistant")`
@@ -108,7 +122,7 @@ func (e *ToolExecutor) handleQueryConversationFlow(cfg *config.Config, scope str
 	// Note: jq_transform was removed in Phase 27 - transform parameter is ignored
 	// Users should use jq_filter for transformations instead
 
-	return e.executeQuery(scope, jqFilter, limit, workingDir)
+	return e.executeQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
 }
 
 // handleQuerySystemErrors implements query_system_errors convenience tool
@@ -140,11 +154,18 @@ func (e *ToolExecutor) handleQueryFileSnapshots(cfg *config.Config, scope string
 func (e *ToolExecutor) handleQueryTimestamps(cfg *config.Config, scope string, args map[string]interface{}) (QueryResult, error) {
 	limit := getIntParam(args, "limit", 0)
 	workingDir := getStringParam(args, "working_dir", "")
+	sinceStr := getStringParam(args, "since", "")
+	untilStr := getStringParam(args, "until", "")
+
+	tr, err := parseTimeRange(sinceStr, untilStr)
+	if err != nil {
+		return QueryResult{}, err
+	}
 
 	// Filter for entries with timestamp
 	jqFilter := `select(.timestamp != null)`
 
-	return e.executeQuery(scope, jqFilter, limit, workingDir)
+	return e.executeQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
 }
 
 // handleQuerySummaries implements query_summaries convenience tool

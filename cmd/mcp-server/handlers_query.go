@@ -6,9 +6,38 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/yaleh/meta-cc/internal/locator"
 )
+
+// TimeRange specifies optional lower and upper bounds for timestamp filtering.
+// A nil pointer means "no bound" (open-ended).
+type TimeRange struct {
+	Since *time.Time
+	Until *time.Time
+}
+
+// parseTimeRange parses since/until strings (RFC3339) into a TimeRange.
+// Empty string means no bound. Non-RFC3339 values return an error.
+func parseTimeRange(sinceStr, untilStr string) (TimeRange, error) {
+	var tr TimeRange
+	if sinceStr != "" {
+		t, err := time.Parse(time.RFC3339, sinceStr)
+		if err != nil {
+			return TimeRange{}, fmt.Errorf("invalid since value %q: must be RFC3339 (e.g. 2026-03-07T00:00:00Z)", sinceStr)
+		}
+		tr.Since = &t
+	}
+	if untilStr != "" {
+		t, err := time.Parse(time.RFC3339, untilStr)
+		if err != nil {
+			return TimeRange{}, fmt.Errorf("invalid until value %q: must be RFC3339 (e.g. 2026-03-09T00:00:00Z)", untilStr)
+		}
+		tr.Until = &t
+	}
+	return tr, nil
+}
 
 // handleQuery and handleQueryRaw deleted in Phase 27 Stage 27.1
 // These tools were removed to simplify the query interface
@@ -20,6 +49,12 @@ import (
 // workingDir specifies the project directory for session lookup;
 // empty string ("") means use os.Getwd() as fallback (backward compatible).
 func (e *ToolExecutor) executeQuery(scope string, jqFilter string, limit int, workingDir string) (QueryResult, error) {
+	return e.executeQueryWithTimeRange(scope, jqFilter, limit, workingDir, TimeRange{})
+}
+
+// executeQueryWithTimeRange is like executeQuery but applies time-range filtering before jq execution.
+// tr.Since and tr.Until are optional (nil = no bound).
+func (e *ToolExecutor) executeQueryWithTimeRange(scope string, jqFilter string, limit int, workingDir string, tr TimeRange) (QueryResult, error) {
 	// Get base directory using pipeline infrastructure
 	baseDir, err := getQueryBaseDir(scope, workingDir)
 	if err != nil {
@@ -45,9 +80,9 @@ func (e *ToolExecutor) executeQuery(scope string, jqFilter string, limit int, wo
 		return QueryResult{}, fmt.Errorf("no JSONL files found in %s", baseDir)
 	}
 
-	// Execute query with streaming
+	// Execute query with streaming and time range filtering
 	ctx := context.Background()
-	result := executor.streamFiles(ctx, files, code, limit)
+	result := executor.streamFilesWithTimeRange(ctx, files, code, limit, tr)
 
 	// Return QueryResult directly
 	// Response adapters will handle serialization (inline or file_ref)

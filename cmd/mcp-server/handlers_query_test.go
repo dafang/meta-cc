@@ -369,6 +369,155 @@ func TestGetQueryBaseDirIntegration(t *testing.T) {
 	})
 }
 
+// TestExecuteQueryTimeFilter tests time-range filtering in executeQueryWithTimeRange
+func TestExecuteQueryTimeFilter(t *testing.T) {
+	now := time.Now().UTC()
+	tMinus2h := now.Add(-2 * time.Hour)
+	tMinus1h := now.Add(-1 * time.Hour)
+	tPlus0 := now
+
+	// Create temp dir with fixture JSONL
+	tmpDir := t.TempDir()
+	sessionFile := filepath.Join(tmpDir, "session.jsonl")
+
+	entries := []map[string]interface{}{
+		{"type": "user", "id": 1, "timestamp": tMinus2h.Format(time.RFC3339)},
+		{"type": "user", "id": 2, "timestamp": tMinus1h.Format(time.RFC3339)},
+		{"type": "user", "id": 3, "timestamp": tPlus0.Format(time.RFC3339)},
+	}
+
+	f, err := os.Create(sessionFile)
+	require.NoError(t, err)
+	encoder := json.NewEncoder(f)
+	for _, entry := range entries {
+		require.NoError(t, encoder.Encode(entry))
+	}
+	f.Close()
+
+	executor := NewQueryExecutor(tmpDir)
+	code, err := executor.compileExpression(".")
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	files := []string{sessionFile}
+
+	// since=T-1.5h → T-1h and T+0 (2 results)
+	tMinus1h30m := now.Add(-90 * time.Minute)
+	tr1 := TimeRange{Since: &tMinus1h30m}
+	result1 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr1)
+	assert.Len(t, result1.Entries, 2, "since=T-1.5h should return 2 results")
+
+	// until=T-0.5h → T-2h and T-1h (2 results)
+	tMinus30m := now.Add(-30 * time.Minute)
+	tr2 := TimeRange{Until: &tMinus30m}
+	result2 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr2)
+	assert.Len(t, result2.Entries, 2, "until=T-0.5h should return 2 results")
+
+	// since=T-1.5h, until=T-0.5h → T-1h only (1 result)
+	tr3 := TimeRange{Since: &tMinus1h30m, Until: &tMinus30m}
+	result3 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr3)
+	assert.Len(t, result3.Entries, 1, "since=T-1.5h,until=T-0.5h should return 1 result")
+
+	// zero TimeRange → all 3 results
+	tr4 := TimeRange{}
+	result4 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr4)
+	assert.Len(t, result4.Entries, 3, "zero TimeRange should return all 3 results")
+}
+
+// setupTimeFilterFixture creates a proper session fixture directory structure using META_CC_PROJECTS_ROOT.
+// It returns the project path (working_dir), executor, and a cleanup function.
+func setupTimeFilterFixture(t *testing.T) (string, *ToolExecutor, func()) {
+	t.Helper()
+	now := time.Now().UTC()
+
+	// Use a stable project path (a temp dir that will be the "project root")
+	projectDir := t.TempDir()
+
+	// Compute hash the same way pathToHash does: replace / with -
+	absPath := projectDir
+	hash := strings.ReplaceAll(absPath, "/", "-")
+
+	// Create META_CC_PROJECTS_ROOT structure
+	projectsRoot := t.TempDir()
+	sessionDir := filepath.Join(projectsRoot, hash)
+	require.NoError(t, os.MkdirAll(sessionDir, 0755))
+
+	entries := []map[string]interface{}{
+		{
+			"type":      "user",
+			"timestamp": now.Add(-72 * time.Hour).Format(time.RFC3339),
+			"message":   map[string]interface{}{"content": "old message 3 days ago"},
+		},
+		{
+			"type":      "user",
+			"timestamp": now.Add(-48 * time.Hour).Format(time.RFC3339),
+			"message":   map[string]interface{}{"content": "old message 2 days ago"},
+		},
+		{
+			"type":      "user",
+			"timestamp": now.Add(-12 * time.Hour).Format(time.RFC3339),
+			"message":   map[string]interface{}{"content": "recent message 12 hours ago"},
+		},
+	}
+
+	file := filepath.Join(sessionDir, "session.jsonl")
+	f, err := os.Create(file)
+	require.NoError(t, err)
+	encoder := json.NewEncoder(f)
+	for _, e := range entries {
+		require.NoError(t, encoder.Encode(e))
+	}
+	f.Close()
+
+	// Set META_CC_PROJECTS_ROOT so the locator uses our fixture
+	origRoot := os.Getenv("META_CC_PROJECTS_ROOT")
+	os.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+
+	cleanup := func() {
+		os.Setenv("META_CC_PROJECTS_ROOT", origRoot)
+	}
+
+	return projectDir, NewToolExecutor(), cleanup
+}
+
+// TestHandleQueryUserMessagesSince verifies that since= filters out older entries
+func TestHandleQueryUserMessagesSince(t *testing.T) {
+	projectDir, executor, cleanup := setupTimeFilterFixture(t)
+	defer cleanup()
+
+	sinceStr := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+	args := map[string]interface{}{
+		"since":       sinceStr,
+		"working_dir": projectDir,
+	}
+
+	result, err := executor.handleQueryUserMessages(nil, "project", args)
+	require.NoError(t, err)
+	// only the entry 12h ago should match (the 2d and 3d old ones are filtered)
+	assert.Len(t, result.Entries, 1, "since=T-24h should return only the 12h-ago entry")
+}
+
+// TestHandleQueryUserMessagesBadSince verifies that invalid since/until values return errors
+func TestHandleQueryUserMessagesBadSince(t *testing.T) {
+	executor := NewToolExecutor()
+
+	// Date-only format (not RFC3339)
+	args := map[string]interface{}{
+		"since": "2026-03-07",
+	}
+	_, err := executor.handleQueryUserMessages(nil, "project", args)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid since value")
+
+	// Totally invalid value
+	args2 := map[string]interface{}{
+		"since": "not-a-date",
+	}
+	_, err2 := executor.handleQueryUserMessages(nil, "project", args2)
+	require.Error(t, err2)
+	assert.Contains(t, err2.Error(), "invalid since value")
+}
+
 // TestGetJSONLFilesOrderByModTime tests that getJSONLFiles returns files ordered by modification time (newest first)
 func TestGetJSONLFilesOrderByModTime(t *testing.T) {
 	tmpDir := t.TempDir()

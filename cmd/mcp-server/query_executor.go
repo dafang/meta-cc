@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/itchyny/gojq"
 
@@ -137,6 +138,119 @@ func (e *QueryExecutor) streamFiles(ctx context.Context, files []string, code *g
 	}
 
 	return result
+}
+
+// streamFilesWithTimeRange is like streamFiles but applies TimeRange filtering before jq execution.
+func (e *QueryExecutor) streamFilesWithTimeRange(ctx context.Context, files []string, code *gojq.Code, limit int, tr TimeRange) QueryResult {
+	var result QueryResult
+
+	for _, file := range files {
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return result
+		default:
+		}
+
+		fileResults, err := e.processFileWithTimeRange(ctx, file, code, tr)
+		if err != nil {
+			// Log warning and continue processing other files
+			slog.Warn("skipping file due to read error", "file", file, "error", err)
+			result.Warnings = append(result.Warnings, fmt.Sprintf("skipped %s: %s", file, err.Error()))
+			continue
+		}
+
+		result.Entries = append(result.Entries, fileResults...)
+
+		// Check limit
+		if limit > 0 && len(result.Entries) >= limit {
+			result.Entries = result.Entries[:limit]
+			return result
+		}
+	}
+
+	return result
+}
+
+// processFileWithTimeRange is like processFile but filters each entry by its timestamp field
+// before running the jq expression. Entries with unparseable or missing timestamps are included.
+func (e *QueryExecutor) processFileWithTimeRange(ctx context.Context, filepath string, code *gojq.Code, tr TimeRange) ([]interface{}, error) {
+	file, err := os.Open(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file %s: %w", filepath, err)
+	}
+	defer file.Close()
+
+	var results []interface{}
+	scanner := bufio.NewScanner(file)
+
+	// Increase buffer size for large lines
+	buf := make([]byte, parser.MaxScannerLineBytes)
+	scanner.Buffer(buf, parser.MaxScannerLineBytes)
+
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			return results, nil
+		default:
+		}
+
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+
+		// Parse JSON line to map for timestamp inspection
+		var entry map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			// Skip invalid JSON lines (don't fail entire file)
+			continue
+		}
+
+		// Apply time range filter if bounds are set
+		if tr.Since != nil || tr.Until != nil {
+			if ts, ok := entry["timestamp"].(string); ok {
+				if t, err := time.Parse(time.RFC3339, ts); err == nil {
+					if tr.Since != nil && t.Before(*tr.Since) {
+						continue
+					}
+					if tr.Until != nil && !t.Before(*tr.Until) {
+						continue
+					}
+				}
+				// unparseable timestamp: include the entry (non-fatal)
+			}
+			// missing timestamp field: include the entry
+		}
+
+		// Execute jq query on this entry
+		iter := code.Run(entry)
+		for {
+			value, ok := iter.Next()
+			if !ok {
+				break
+			}
+
+			// Check for errors
+			if err, ok := value.(error); ok {
+				// Skip entries that cause jq errors
+				_ = err
+				continue
+			}
+
+			results = append(results, value)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return results, fmt.Errorf("error reading file %s: %w", filepath, err)
+	}
+
+	return results, nil
 }
 
 // processFile processes a single JSONL file
