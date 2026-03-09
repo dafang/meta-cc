@@ -3,7 +3,9 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/itchyny/gojq"
 
@@ -64,6 +66,97 @@ func GenerateStats(jsonlData string) (string, error) {
 		}
 		jsonBytes, _ := json.Marshal(statObj)
 		output.Write(jsonBytes)
+		output.WriteString("\n")
+	}
+
+	return output.String(), nil
+}
+
+// GenerateTimestampStats generates time-bucketed statistics (by hour) from JSONL data.
+// It outputs a summary line followed by per-hour bucket lines, sorted chronologically.
+// Records with unparseable timestamps are skipped (non-fatal).
+// Returns empty string for empty input.
+func GenerateTimestampStats(jsonlData string) (string, error) {
+	trimmed := strings.TrimSpace(jsonlData)
+	if trimmed == "" {
+		return "", nil
+	}
+
+	lines := strings.Split(trimmed, "\n")
+	hourCounts := make(map[string]int)
+	sessions := make(map[string]bool)
+	total := 0
+	var minTS, maxTS time.Time
+
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+
+		var obj map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			continue
+		}
+
+		tsStr, _ := obj["timestamp"].(string)
+		if tsStr == "" {
+			continue
+		}
+
+		ts, err := time.Parse(time.RFC3339, tsStr)
+		if err != nil {
+			continue
+		}
+
+		hourKey := ts.UTC().Format("2006-01-02T15")
+		hourCounts[hourKey]++
+		total++
+
+		if sessionID, ok := obj["sessionId"].(string); ok && sessionID != "" {
+			sessions[sessionID] = true
+		}
+
+		if minTS.IsZero() || ts.Before(minTS) {
+			minTS = ts
+		}
+		if maxTS.IsZero() || ts.After(maxTS) {
+			maxTS = ts
+		}
+	}
+
+	if total == 0 {
+		return "", nil
+	}
+
+	var output strings.Builder
+
+	// Line 1: summary
+	summary := map[string]interface{}{
+		"total":         total,
+		"session_count": len(sessions),
+		"time_range": map[string]interface{}{
+			"from": minTS.UTC().Format(time.RFC3339),
+			"to":   maxTS.UTC().Format(time.RFC3339),
+		},
+	}
+	summaryBytes, _ := json.Marshal(summary)
+	output.Write(summaryBytes)
+	output.WriteString("\n")
+
+	// Lines 2+: hourly buckets sorted chronologically
+	hours := make([]string, 0, len(hourCounts))
+	for h := range hourCounts {
+		hours = append(hours, h)
+	}
+	sort.Strings(hours)
+
+	for _, hour := range hours {
+		bucket := map[string]interface{}{
+			"hour":  hour,
+			"count": hourCounts[hour],
+		}
+		bucketBytes, _ := json.Marshal(bucket)
+		output.Write(bucketBytes)
 		output.WriteString("\n")
 	}
 

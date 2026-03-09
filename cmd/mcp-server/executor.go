@@ -14,6 +14,17 @@ import (
 	querypkg "github.com/yaleh/meta-cc/internal/query"
 )
 
+// timestampStatsTools is the set of tool names that should use GenerateTimestampStats
+// instead of GenerateStats when producing stats_only or stats_first output.
+// These tools return records that lack a tool/ToolName field but have timestamp data,
+// so time-bucketed stats are more meaningful than the meaningless "unknown" key.
+var timestampStatsTools = map[string]bool{
+	"query_user_messages":     true,
+	"query_conversation_flow": true,
+	"query_timestamps":        true,
+	"query_summaries":         true,
+}
+
 type ToolExecutor struct{}
 
 type toolPipelineConfig struct {
@@ -359,7 +370,12 @@ func (e *ToolExecutor) buildStatsOnlyResponse(parsedData []interface{}, toolName
 		return "", err
 	}
 
-	output, err := querypkg.GenerateStats(jsonlData)
+	var output string
+	if timestampStatsTools[toolName] {
+		output, err = querypkg.GenerateTimestampStats(jsonlData)
+	} else {
+		output, err = querypkg.GenerateStats(jsonlData)
+	}
 	if err != nil {
 		slog.Error("stats generation failed",
 			"tool_name", toolName,
@@ -383,7 +399,12 @@ func (e *ToolExecutor) buildStatsFirstResponse(cfg *config.Config, parsedData []
 		return "", err
 	}
 
-	stats, _ := querypkg.GenerateStats(jsonlData)
+	var stats string
+	if timestampStatsTools[toolName] {
+		stats, _ = querypkg.GenerateTimestampStats(jsonlData)
+	} else {
+		stats, _ = querypkg.GenerateStats(jsonlData)
+	}
 	response, err := adaptResponse(cfg, parsedData, args, toolName)
 	if err != nil {
 		slog.Error("response adaptation failed (stats_first)",

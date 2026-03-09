@@ -789,6 +789,74 @@ func TestGetSessionHash(t *testing.T) {
 // All query tools now use internal/query library directly. See executor_no_cli_test.go for
 // tests verifying that tools don't attempt CLI execution.
 
+// TestStatsDispatch verifies that buildStatsOnlyResponse uses timestamp-based stats for
+// user-message tools and tool-name stats for tool-record tools (Phase 49).
+func TestStatsDispatch(t *testing.T) {
+	executor := NewToolExecutor()
+
+	// User message records (no tool field, have timestamp + sessionId)
+	userRecords := []interface{}{
+		map[string]interface{}{
+			"type":      "user",
+			"timestamp": "2026-03-09T06:10:00Z",
+			"sessionId": "sess-A",
+		},
+		map[string]interface{}{
+			"type":      "user",
+			"timestamp": "2026-03-09T07:20:00Z",
+			"sessionId": "sess-B",
+		},
+	}
+
+	// Tool records (have tool field)
+	toolRecords := []interface{}{
+		map[string]interface{}{
+			"tool":   "Bash",
+			"status": "error",
+		},
+		map[string]interface{}{
+			"tool":   "Bash",
+			"status": "error",
+		},
+		map[string]interface{}{
+			"tool":   "Read",
+			"status": "success",
+		},
+	}
+
+	// User-message tools should use timestamp stats (output should have "hour" key)
+	for _, toolName := range []string{"query_user_messages", "query_conversation_flow", "query_timestamps", "query_summaries"} {
+		t.Run(toolName+"_uses_timestamp_stats", func(t *testing.T) {
+			output, err := executor.buildStatsOnlyResponse(userRecords, toolName)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !strings.Contains(output, `"hour"`) {
+				t.Errorf("tool %s should use timestamp stats (containing 'hour'), got: %s", toolName, output)
+			}
+			if strings.Contains(output, `"key":"unknown"`) {
+				t.Errorf("tool %s should NOT use tool stats (containing 'key:unknown'), got: %s", toolName, output)
+			}
+		})
+	}
+
+	// Tool-record tools should use tool-name stats (output should have "key" field, not "hour")
+	for _, toolName := range []string{"query_tools", "query_tool_errors"} {
+		t.Run(toolName+"_uses_tool_stats", func(t *testing.T) {
+			output, err := executor.buildStatsOnlyResponse(toolRecords, toolName)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !strings.Contains(output, `"key"`) {
+				t.Errorf("tool %s should use tool stats (containing 'key'), got: %s", toolName, output)
+			}
+			if strings.Contains(output, `"hour"`) {
+				t.Errorf("tool %s should NOT use timestamp stats (containing 'hour'), got: %s", toolName, output)
+			}
+		})
+	}
+}
+
 // TestQueryToolsNotRegistered verifies that query and query_raw tools are NOT registered
 // Phase 27 Stage 27.1: Delete old query interfaces
 func TestQueryToolsNotRegistered(t *testing.T) {

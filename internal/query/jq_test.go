@@ -1,6 +1,7 @@
 package query
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -132,6 +133,72 @@ func TestGenerateStats_EmptyData(t *testing.T) {
 
 	if strings.TrimSpace(stats) != "" {
 		t.Error("expected empty stats for empty data")
+	}
+}
+
+func TestGenerateTimestampStats(t *testing.T) {
+	// 5 records: 2 in hour 06, 2 in hour 07, 1 in hour 08
+	// 2 distinct sessions
+	jsonlData := `{"timestamp":"2026-03-09T06:10:00Z","sessionId":"sess-A","type":"user"}
+{"timestamp":"2026-03-09T06:50:00Z","sessionId":"sess-A","type":"user"}
+{"timestamp":"2026-03-09T07:05:00Z","sessionId":"sess-B","type":"user"}
+{"timestamp":"2026-03-09T07:55:00Z","sessionId":"sess-B","type":"user"}
+{"timestamp":"2026-03-09T08:30:00Z","sessionId":"sess-A","type":"user"}`
+
+	result, err := GenerateTimestampStats(jsonlData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(result), "\n")
+	if len(lines) < 4 { // 1 summary + 3 hour lines
+		t.Fatalf("expected at least 4 lines, got %d: %s", len(lines), result)
+	}
+
+	// First line is summary
+	var summary map[string]interface{}
+	if err := json.Unmarshal([]byte(lines[0]), &summary); err != nil {
+		t.Fatalf("failed to parse summary line: %v", err)
+	}
+	if int(summary["total"].(float64)) != 5 {
+		t.Errorf("total = %v, want 5", summary["total"])
+	}
+	if int(summary["session_count"].(float64)) != 2 {
+		t.Errorf("session_count = %v, want 2", summary["session_count"])
+	}
+	if summary["time_range"] == nil {
+		t.Error("time_range missing")
+	}
+
+	// Remaining lines are hourly buckets
+	hourCounts := map[string]int{}
+	for _, line := range lines[1:] {
+		var bucket map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &bucket); err != nil {
+			t.Fatalf("failed to parse bucket line: %v", err)
+		}
+		hour := bucket["hour"].(string)
+		count := int(bucket["count"].(float64))
+		hourCounts[hour] = count
+	}
+	if hourCounts["2026-03-09T06"] != 2 {
+		t.Errorf("hour 06: got %d, want 2", hourCounts["2026-03-09T06"])
+	}
+	if hourCounts["2026-03-09T07"] != 2 {
+		t.Errorf("hour 07: got %d, want 2", hourCounts["2026-03-09T07"])
+	}
+	if hourCounts["2026-03-09T08"] != 1 {
+		t.Errorf("hour 08: got %d, want 1", hourCounts["2026-03-09T08"])
+	}
+}
+
+func TestGenerateTimestampStats_Empty(t *testing.T) {
+	result, err := GenerateTimestampStats("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.TrimSpace(result) != "" {
+		t.Error("expected empty result for empty input")
 	}
 }
 
