@@ -195,6 +195,16 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		recordToolSuccess(toolName, scope, start)
 		return string(jsonData), true, nil
 
+	case "get_timeline":
+		output, err := executeGetTimelineTool(cfg, args)
+		if err != nil {
+			errorType := classifyError(err)
+			recordToolFailure(toolName, scope, start, errorType)
+			return "", true, err
+		}
+		recordToolSuccess(toolName, scope, start)
+		return output, true, nil
+
 	default:
 		return "", false, nil
 	}

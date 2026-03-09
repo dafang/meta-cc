@@ -97,7 +97,7 @@ func TestHandleToolsList(t *testing.T) {
 		t.Fatalf("expected tools to be a slice, got %T", toolsInterface)
 	}
 
-	// Should have 19 tools after Phase 42.3
+	// Should have 21 tools after Phase 43.3
 	// Phase 25: 15 tools (1 query + 1 query_raw + 10 convenience + 3 utility)
 	// Phase 27 Stage 27.1: Removed query and query_raw (15 -> 13)
 	// Phase 27 Stage 27.2: Added get_session_directory (13 -> 14)
@@ -107,9 +107,10 @@ func TestHandleToolsList(t *testing.T) {
 	// Phase 42.2: Added analyze_errors (17 -> 18)
 	// Phase 42.3: Added quality_scan (18 -> 19)
 	// Phase 43.2: Added get_work_patterns (19 -> 20)
-	// Final: 20 tools (10 convenience + 3 utility + 4 two-stage + 3 analysis)
-	if len(toolsSlice) != 20 {
-		t.Errorf("expected 20 tools after Phase 43.2, got %d", len(toolsSlice))
+	// Phase 43.3: Added get_timeline (20 -> 21)
+	// Final: 21 tools (10 convenience + 3 utility + 4 two-stage + 4 analysis)
+	if len(toolsSlice) != 21 {
+		t.Errorf("expected 21 tools after Phase 43.3, got %d", len(toolsSlice))
 	}
 }
 

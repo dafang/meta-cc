@@ -401,6 +401,16 @@ func getToolDefinitions() []Tool {
 				Description: "Query scope: 'project' (default) or 'session'",
 			},
 		}),
+		buildTool("get_timeline", "Get chronological session events as JSON. Claude renders visualization. Default scope: project.", map[string]Property{
+			"limit": {
+				Type:        "number",
+				Description: "Max events to return (0 = unlimited)",
+			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
+		}),
 	}
 }
 

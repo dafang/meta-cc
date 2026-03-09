@@ -101,6 +101,27 @@ func executeGetWorkPatternsTool(cfg *config.Config, args map[string]interface{})
 	return string(data), nil
 }
 
+// executeGetTimelineTool implements the get_timeline MCP tool.
+func executeGetTimelineTool(cfg *config.Config, args map[string]interface{}) (string, error) {
+	entries, _, err := loadEntriesAndToolCalls(cfg, args)
+	if err != nil {
+		return "", fmt.Errorf("failed to load session data: %w", err)
+	}
+	limit := 0
+	if l, ok := args["limit"].(float64); ok {
+		limit = int(l)
+	}
+	result, err := analyzer.GetTimeline(entries, limit)
+	if err != nil {
+		return "", fmt.Errorf("get timeline failed: %w", err)
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
 // executeAnalyzeErrorsTool implements the analyze_errors MCP tool.
 // It aggregates tool errors by tool name and error type.
 func executeAnalyzeErrorsTool(cfg *config.Config, args map[string]interface{}) (string, error) {
