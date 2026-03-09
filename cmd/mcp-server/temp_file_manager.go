@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -10,6 +11,73 @@ import (
 
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
 )
+
+// Session cache variables (moved from capabilities.go for Phase 45.1)
+var (
+	sessionCacheDir     string
+	sessionCacheInitErr error
+	sessionCacheOnce    sync.Once
+)
+
+// getSessionCacheDir returns the session-scoped cache directory
+// Creates temp directory on first call, reuses for subsequent calls in same session
+func getSessionCacheDir() (string, error) {
+	sessionCacheOnce.Do(func() {
+		// Try to get session ID from environment
+		sessionID := os.Getenv("CLAUDE_CODE_SESSION_ID")
+		if sessionID == "" {
+			// Fallback: use process ID
+			sessionID = fmt.Sprintf("mcp-%d", os.Getpid())
+		}
+
+		// Create session temp directory
+		tempBase := os.TempDir()
+		sessionDir := filepath.Join(tempBase, fmt.Sprintf("claude-session-%s", sessionID))
+
+		// Create cache directory within session dir
+		cacheDir := filepath.Join(sessionDir, ".meta-cc-capabilities")
+
+		slog.Debug("initializing session cache",
+			"session_id", sessionID,
+			"cache_dir", cacheDir,
+		)
+
+		// Create directory if it doesn't exist
+		if err := os.MkdirAll(cacheDir, 0755); err != nil {
+			slog.Error("failed to create session cache directory",
+				"cache_dir", cacheDir,
+				"error", err.Error(),
+				"error_type", "io_error",
+			)
+			sessionCacheInitErr = fmt.Errorf("failed to create session cache directory '%s': %w", cacheDir, mcerrors.ErrFileIO)
+			return
+		}
+
+		sessionCacheDir = cacheDir
+	})
+
+	if sessionCacheInitErr != nil {
+		return "", sessionCacheInitErr
+	}
+
+	return sessionCacheDir, nil
+}
+
+// CleanupSessionCache removes the session cache directory
+// Should be called on MCP server shutdown
+func CleanupSessionCache() error {
+	if sessionCacheDir == "" {
+		return nil
+	}
+
+	// Remove the entire session directory (parent of cache dir)
+	sessionDir := filepath.Dir(sessionCacheDir)
+	if err := os.RemoveAll(sessionDir); err != nil {
+		return fmt.Errorf("failed to cleanup session cache directory '%s': %w", sessionDir, mcerrors.ErrFileIO)
+	}
+
+	return nil
+}
 
 // TempFileManager manages temporary JSONL files with concurrency safety
 type TempFileManager struct {

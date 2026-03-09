@@ -106,7 +106,7 @@ func TestAllToolsHaveStandardParameters(t *testing.T) {
 			}
 
 			// Skip utility tools and Stage 1/2 tools that don't follow query tool patterns
-			if tool.Name == "cleanup_temp_files" || tool.Name == "list_capabilities" || tool.Name == "get_capability" ||
+			if tool.Name == "cleanup_temp_files" ||
 				tool.Name == "get_session_directory" || tool.Name == "inspect_session_files" || tool.Name == "execute_stage2_query" {
 				t.Logf("Skipping utility/two-stage tool: %s", tool.Name)
 				return
@@ -163,7 +163,7 @@ func TestToolDescriptionConsistency(t *testing.T) {
 		}
 
 		// Skip utility tools and two-stage tools (no scope param) that don't follow "Default scope:" pattern
-		if tool.Name == "cleanup_temp_files" || tool.Name == "list_capabilities" || tool.Name == "get_capability" ||
+		if tool.Name == "cleanup_temp_files" ||
 			tool.Name == "get_session_directory" || tool.Name == "inspect_session_files" || tool.Name == "execute_stage2_query" {
 			continue
 		}
@@ -359,90 +359,18 @@ func TestToolCountIncreasedTo14(t *testing.T) {
 	// Phase 43.3: Added get_timeline (20 -> 21)
 	// Phase 44.2: Added analyze_bugs (21 -> 22)
 	// Phase 44.3: Added get_tech_debt (22 -> 23)
-	// New target: 23 tools (10 convenience + 3 utility + 4 two-stage + 6 analysis)
-	expectedCount := 23
+	// Phase 45.1: Removed list_capabilities, get_capability (23 -> 21)
+	// New target: 21 tools (10 convenience + 1 utility + 4 two-stage + 6 analysis)
+	expectedCount := 21
 	actualCount := len(tools)
 
 	if actualCount != expectedCount {
-		t.Errorf("expected %d tools after Phase 44.3, got %d", expectedCount, actualCount)
+		t.Errorf("expected %d tools after Phase 45.1, got %d", expectedCount, actualCount)
 
 		// List all tool names for debugging
 		t.Log("Current tools:")
 		for _, tool := range tools {
 			t.Logf("  - %s", tool.Name)
-		}
-	}
-}
-
-// TestListCapabilitiesToolRegistration verifies that list_capabilities tool is registered
-func TestListCapabilitiesToolRegistration(t *testing.T) {
-	tools := getToolDefinitions()
-
-	var listCapTool *Tool
-	for i := range tools {
-		if tools[i].Name == "list_capabilities" {
-			listCapTool = &tools[i]
-			break
-		}
-	}
-
-	if listCapTool == nil {
-		t.Fatal("list_capabilities tool not found")
-	}
-
-	// Verify description
-	if !strings.Contains(listCapTool.Description, "capabilities") {
-		t.Errorf("description should mention 'capabilities', got: %s", listCapTool.Description)
-	}
-
-	// list_capabilities is a utility tool, not a query tool, so it shouldn't have standard params
-	// It should NOT have "Default scope:" suffix
-	if strings.Contains(listCapTool.Description, "Default scope:") {
-		t.Errorf("list_capabilities should not have 'Default scope:' (it's a utility tool), got: %s", listCapTool.Description)
-	}
-}
-
-// TestListCapabilitiesToolSchema verifies the list_capabilities tool schema
-func TestListCapabilitiesToolSchema(t *testing.T) {
-	tools := getToolDefinitions()
-
-	var tool *Tool
-	for i := range tools {
-		if tools[i].Name == "list_capabilities" {
-			tool = &tools[i]
-			break
-		}
-	}
-
-	if tool == nil {
-		t.Fatal("list_capabilities tool not found")
-	}
-
-	props := tool.InputSchema.Properties
-
-	// list_capabilities should NOT have standard parameters
-	// It's a utility tool like cleanup_temp_files
-	standardParams := []string{"scope", "jq_filter", "stats_only", "stats_first", "inline_threshold_bytes", "output_format"}
-	for _, param := range standardParams {
-		if _, exists := props[param]; exists {
-			t.Errorf("list_capabilities should NOT have standard parameter: %s (it's a utility tool)", param)
-		}
-	}
-
-	// list_capabilities has no public parameters (all are hidden test parameters)
-	// Hidden test parameters (_sources, _disable_cache) should NOT be in the schema
-	if _, exists := props["_sources"]; exists {
-		t.Error("_sources is a hidden test parameter and should NOT be in schema")
-	}
-	if _, exists := props["_disable_cache"]; exists {
-		t.Error("_disable_cache is a hidden test parameter and should NOT be in schema")
-	}
-
-	// Verify schema is valid (should be empty properties object)
-	if len(props) > 0 {
-		t.Errorf("list_capabilities should have no public parameters, got %d parameters", len(props))
-		for name := range props {
-			t.Logf("  - %s", name)
 		}
 	}
 }

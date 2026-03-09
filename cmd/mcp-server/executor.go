@@ -77,26 +77,6 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		recordToolSuccess(toolName, scope, start)
 		return output, true, nil
 
-	case "list_capabilities":
-		output, err := executeListCapabilitiesTool(cfg, args)
-		if err != nil {
-			errorType := classifyError(err)
-			recordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		recordToolSuccess(toolName, scope, start)
-		return output, true, nil
-
-	case "get_capability":
-		output, err := executeGetCapabilityTool(cfg, args)
-		if err != nil {
-			errorType := classifyError(err)
-			recordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		recordToolSuccess(toolName, scope, start)
-		return output, true, nil
-
 	case "get_session_directory":
 		result, err := handleGetSessionDirectory(context.Background(), args)
 		if err != nil {

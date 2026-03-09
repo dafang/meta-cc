@@ -168,8 +168,6 @@ func TestGetToolSchemaByName_SpecialTools(t *testing.T) {
 	// Special tools handled by executeSpecialTool should also have schemas
 	specialTools := []string{
 		"cleanup_temp_files",
-		"list_capabilities",
-		"get_capability",
 		"get_session_directory",
 		"inspect_session_files",
 		"execute_stage2_query",
