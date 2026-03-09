@@ -291,6 +291,10 @@ func getToolDefinitions() []Tool {
 				Type:        "boolean",
 				Description: "Return only session_id/turn/timestamp/preview (100 chars), skip full content. Use hybrid mode instead for better information preservation.",
 			},
+			"preview_length": {
+				Type:        "integer",
+				Description: "Max characters (runes) per content_preview when content_summary=true. Default: 100. For CJK content, set to 30 for ~30 readable characters (CJK chars are 3 bytes each in UTF-8).",
+			},
 			// Tier 3: Time range filtering
 			"since": {
 				Type:        "string",

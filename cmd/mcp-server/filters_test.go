@@ -270,7 +270,7 @@ func TestApplyContentSummary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ApplyContentSummary(tt.messages)
+			result := ApplyContentSummary(tt.messages, 100)
 
 			if len(result) != len(tt.messages) {
 				t.Errorf("expected %d messages, got %d", len(tt.messages), len(result))
@@ -340,7 +340,7 @@ func TestApplyContentSummary_TurnSequenceAndUUID(t *testing.T) {
 		},
 	}
 
-	result := ApplyContentSummary(messages)
+	result := ApplyContentSummary(messages, 100)
 
 	for i, r := range result {
 		m := r.(map[string]interface{})
@@ -417,7 +417,7 @@ func TestApplyContentSummary_Immutability(t *testing.T) {
 	originalContent := originalMap["content"].(string)
 
 	// Apply summary
-	ApplyContentSummary(original)
+	ApplyContentSummary(original, 100)
 
 	// Check original is unchanged
 	afterContent := originalMap["content"].(string)
@@ -524,7 +524,7 @@ func TestContentSummaryIncludesSessionID(t *testing.T) {
 			},
 		},
 	}
-	result := ApplyContentSummary(messages)
+	result := ApplyContentSummary(messages, 100)
 	if len(result) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(result))
 	}
@@ -540,6 +540,152 @@ func TestContentSummaryIncludesSessionID(t *testing.T) {
 		if sessionID != "abc-session-123" {
 			t.Errorf("result[%d] session_id = %q, want %q", i, sessionID, "abc-session-123")
 		}
+	}
+}
+
+// TestApplyContentSummaryPreviewLength tests preview length parameter for ApplyContentSummary
+func TestApplyContentSummaryPreviewLength(t *testing.T) {
+	longASCII := strings.Repeat("a", 200)
+	longCJK := "你好世界测试内容ABCDE" // 9 CJK + 5 ASCII = 14 runes
+
+	tests := []struct {
+		name          string
+		messages      []interface{}
+		previewLength int
+		wantMaxRunes  int
+		wantPreview   string
+		wantEllipsis  bool
+	}{
+		{
+			name: "previewLength=30 truncates to 30 runes",
+			messages: []interface{}{
+				map[string]interface{}{"content": longASCII},
+			},
+			previewLength: 30,
+			wantMaxRunes:  30,
+			wantEllipsis:  true,
+		},
+		{
+			name: "previewLength=0 falls back to DefaultPreviewLength",
+			messages: []interface{}{
+				map[string]interface{}{"content": longASCII},
+			},
+			previewLength: 0,
+			wantMaxRunes:  DefaultPreviewLength,
+			wantEllipsis:  true,
+		},
+		{
+			name: "previewLength=-1 falls back to DefaultPreviewLength",
+			messages: []interface{}{
+				map[string]interface{}{"content": longASCII},
+			},
+			previewLength: -1,
+			wantMaxRunes:  DefaultPreviewLength,
+			wantEllipsis:  true,
+		},
+		{
+			name: "ASCII content previewLength=5 truncates to 5 chars plus ellipsis",
+			messages: []interface{}{
+				map[string]interface{}{"content": "Hello World"},
+			},
+			previewLength: 5,
+			wantPreview:   "Hello...",
+			wantEllipsis:  true,
+		},
+		{
+			name: "CJK content previewLength=5 exactly 5 Chinese chars no mid-rune cut",
+			messages: []interface{}{
+				map[string]interface{}{"content": longCJK},
+			},
+			previewLength: 5,
+			wantMaxRunes:  5,
+			wantEllipsis:  true,
+		},
+		{
+			name: "content shorter than previewLength returned in full no ellipsis",
+			messages: []interface{}{
+				map[string]interface{}{"content": "short"},
+			},
+			previewLength: 30,
+			wantPreview:   "short",
+			wantEllipsis:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ApplyContentSummary(tt.messages, tt.previewLength)
+			if len(result) != len(tt.messages) {
+				t.Fatalf("expected %d results, got %d", len(tt.messages), len(result))
+			}
+			m, ok := result[0].(map[string]interface{})
+			if !ok {
+				t.Fatal("expected map result")
+			}
+			preview, _ := m["content_preview"].(string)
+
+			if tt.wantPreview != "" {
+				if preview != tt.wantPreview {
+					t.Errorf("expected preview=%q, got %q", tt.wantPreview, preview)
+				}
+			}
+
+			if tt.wantMaxRunes > 0 {
+				runeCount := len([]rune(preview))
+				// subtract 3 for "..." if ellipsis
+				if tt.wantEllipsis {
+					// preview ends with "..." so actual content runes = runeCount - 3
+					if !strings.HasSuffix(preview, "...") {
+						t.Errorf("expected ellipsis in preview %q", preview)
+					}
+					contentRunes := len([]rune(strings.TrimSuffix(preview, "...")))
+					if contentRunes != tt.wantMaxRunes {
+						t.Errorf("expected %d content runes, got %d (preview=%q)", tt.wantMaxRunes, contentRunes, preview)
+					}
+				} else {
+					if runeCount > tt.wantMaxRunes {
+						t.Errorf("expected ≤%d runes, got %d (preview=%q)", tt.wantMaxRunes, runeCount, preview)
+					}
+				}
+			}
+
+			// Verify valid UTF-8
+			for i, r := range preview {
+				if r == '\uFFFD' {
+					t.Errorf("invalid UTF-8 at rune index %d in preview %q", i, preview)
+				}
+			}
+
+			if tt.wantEllipsis && tt.wantPreview == "" {
+				if !strings.HasSuffix(preview, "...") {
+					t.Errorf("expected preview to end with '...', got %q", preview)
+				}
+			}
+			if !tt.wantEllipsis {
+				if strings.HasSuffix(preview, "...") {
+					t.Errorf("expected no ellipsis in preview %q", preview)
+				}
+			}
+		})
+	}
+}
+
+// TestApplyContentSummaryPreviewLength_Default regression: previewLength=100 matches current behavior
+func TestApplyContentSummaryPreviewLength_Default(t *testing.T) {
+	content := strings.Repeat("a", 200)
+	messages := []interface{}{
+		map[string]interface{}{"content": content},
+	}
+
+	result := ApplyContentSummary(messages, 100)
+	if len(result) == 0 {
+		t.Fatal("expected 1 result")
+	}
+	m := result[0].(map[string]interface{})
+	preview, _ := m["content_preview"].(string)
+	expected := strings.Repeat("a", 100) + "..."
+	if preview != expected {
+		t.Errorf("expected preview=%q, got %q", expected, preview)
 	}
 }
 

@@ -709,7 +709,7 @@ func TestApplyMessageFiltersToData(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := executor.applyMessageFiltersToData(tt.data, tt.maxMessageLength, tt.contentSummary)
+			result := executor.applyMessageFiltersToData(tt.data, tt.maxMessageLength, tt.contentSummary, DefaultPreviewLength)
 
 			if len(result) != len(tt.data) {
 				t.Errorf("expected %d items, got %d", len(tt.data), len(result))
@@ -1001,6 +1001,78 @@ func TestStatsFirstWithoutContentSummary(t *testing.T) {
 	if sessionCount != 2 {
 		t.Errorf("session_count = %d, want 2", sessionCount)
 	}
+}
+
+// TestPreviewLengthParameter tests the preview_length parameter for query_user_messages
+func TestPreviewLengthParameter(t *testing.T) {
+	// Build a fixture with content longer than 20 chars
+	projectDir := t.TempDir()
+	projectsRoot := t.TempDir()
+	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+
+	longContent := strings.Repeat("x", 200)
+	fixture := "{\"type\":\"user\",\"timestamp\":\"2026-03-09T06:00:00Z\",\"uuid\":\"u1\",\"sessionId\":\"sess-A\",\"message\":{\"role\":\"user\",\"content\":\"" + longContent + "\"}}\n"
+
+	writeSessionFixture(t, projectDir, "preview-session", fixture)
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	t.Run("content_summary=true, preview_length=20: all previews ≤ 20 runes", func(t *testing.T) {
+		output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+			"pattern":         ".",
+			"content_summary": true,
+			"preview_length":  float64(20),
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		lines := strings.Split(strings.TrimSpace(output), "\n")
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+			var item map[string]interface{}
+			if err := json.Unmarshal([]byte(line), &item); err != nil {
+				continue
+			}
+			preview, ok := item["content_preview"].(string)
+			if !ok {
+				continue
+			}
+			runeCount := len([]rune(preview))
+			// Account for "..." suffix (3 runes)
+			contentRunes := runeCount
+			if strings.HasSuffix(preview, "...") {
+				contentRunes = len([]rune(strings.TrimSuffix(preview, "...")))
+			}
+			if contentRunes > 20 {
+				t.Errorf("content_preview has %d runes, expected ≤ 20: %q", contentRunes, preview)
+			}
+		}
+	})
+
+	t.Run("content_summary=false, preview_length=20: no error, full content returned", func(t *testing.T) {
+		output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+			"pattern":        ".",
+			"preview_length": float64(20),
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if output == "" {
+			t.Error("expected non-empty output")
+		}
+	})
 }
 
 // TestShortcutQueryToolsRegistered verifies that all 10 shortcut query tools are still registered

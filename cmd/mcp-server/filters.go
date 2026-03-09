@@ -80,15 +80,20 @@ func TruncateMessageContent(messages []interface{}, maxLen int) []interface{} {
 //
 // Parameters:
 //   - messages: Array of message objects (maps)
+//   - previewLength: Max runes for content_preview (0 or negative = DefaultPreviewLength)
 //
 // Returns:
 //   - New array with summary objects containing:
 //   - turn_sequence: message turn number
 //   - timestamp: message timestamp
-//   - content_preview: first 100 characters of content
+//   - content_preview: first previewLength characters of content
 //
 // All other fields are removed to reduce output size.
-func ApplyContentSummary(messages []interface{}) []interface{} {
+func ApplyContentSummary(messages []interface{}, previewLength int) []interface{} {
+	if previewLength <= 0 {
+		previewLength = DefaultPreviewLength
+	}
+
 	summary := make([]interface{}, len(messages))
 
 	for i, msg := range messages {
@@ -99,12 +104,13 @@ func ApplyContentSummary(messages []interface{}) []interface{} {
 			continue
 		}
 
-		// Extract preview (first 100 chars) from nested or flat content
+		// Extract preview from nested or flat content using rune-safe truncation
 		preview := ""
 		content := extractContentString(msgMap)
 		if content != "" {
-			if len(content) > DefaultPreviewLength {
-				preview = content[:DefaultPreviewLength] + "..."
+			runes := []rune(content)
+			if len(runes) > previewLength {
+				preview = string(runes[:previewLength]) + "..."
 			} else {
 				preview = content
 			}

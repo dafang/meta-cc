@@ -34,6 +34,7 @@ type toolPipelineConfig struct {
 	outputFormat     string
 	maxMessageLength int
 	contentSummary   bool
+	previewLength    int
 }
 
 func newToolPipelineConfig(args map[string]interface{}) toolPipelineConfig {
@@ -44,6 +45,7 @@ func newToolPipelineConfig(args map[string]interface{}) toolPipelineConfig {
 		outputFormat:     getStringParam(args, "output_format", "jsonl"),
 		maxMessageLength: getIntParam(args, "max_message_length", 0),
 		contentSummary:   getBoolParam(args, "content_summary", false),
+		previewLength:    getIntParam(args, "preview_length", DefaultPreviewLength),
 	}
 }
 
@@ -331,7 +333,7 @@ func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, arg
 	// so stats always see raw data with original camelCase sessionId.
 	parsedData := rawData
 	if toolName == "query_user_messages" && pipeline.requiresMessageFilters() {
-		parsedData = e.applyMessageFiltersToData(rawData, pipeline.maxMessageLength, pipeline.contentSummary)
+		parsedData = e.applyMessageFiltersToData(rawData, pipeline.maxMessageLength, pipeline.contentSummary, pipeline.previewLength)
 	}
 
 	if pipeline.statsFirst {
@@ -527,9 +529,9 @@ func (e *ToolExecutor) dataToJSONL(data []interface{}) (string, error) {
 }
 
 // applyMessageFiltersToData applies content truncation or summary mode to user messages (data array)
-func (e *ToolExecutor) applyMessageFiltersToData(messages []interface{}, maxMessageLength int, contentSummary bool) []interface{} {
+func (e *ToolExecutor) applyMessageFiltersToData(messages []interface{}, maxMessageLength int, contentSummary bool, previewLength int) []interface{} {
 	if contentSummary {
-		return ApplyContentSummary(messages)
+		return ApplyContentSummary(messages, previewLength)
 	}
 	return TruncateMessageContent(messages, maxMessageLength)
 }
