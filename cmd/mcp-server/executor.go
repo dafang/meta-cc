@@ -295,10 +295,8 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 	// Phase 27 Stage 27.5: Convenience tools now return QueryResult directly
 	// No need to parse JSONL or apply jq filters (filters are already applied internally)
 	// Note: Phase 25 originally introduced these convenience tools with jq execution
-
-	if toolName == "query_user_messages" && config.requiresMessageFilters() {
-		queryResult.Entries = e.applyMessageFiltersToData(queryResult.Entries, config.maxMessageLength, config.contentSummary)
-	}
+	// Note: Phase 51 moved applyMessageFiltersToData into buildResponse so stats always
+	// see raw data with original camelCase sessionId (fixes session_count=0 bug).
 
 	output, err := e.buildResponse(cfg, queryResult, args, toolName, config)
 	if err != nil {
@@ -315,15 +313,29 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 }
 
 func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, args map[string]interface{}, toolName string, pipeline toolPipelineConfig) (string, error) {
-	parsedData := result.Entries
+	rawData := result.Entries
 
 	var output string
 	var err error
 
 	if pipeline.statsOnly {
-		output, err = e.buildStatsOnlyResponse(parsedData, toolName)
-	} else if pipeline.statsFirst {
-		output, err = e.buildStatsFirstResponse(cfg, parsedData, args, toolName)
+		// stats_only: compute stats from raw data (camelCase sessionId preserved)
+		output, err = e.buildStatsOnlyResponse(rawData, toolName)
+		if err != nil {
+			return "", err
+		}
+		return injectWarnings(output, result.Warnings)
+	}
+
+	// Apply message filters for detail rendering AFTER stats path
+	// so stats always see raw data with original camelCase sessionId.
+	parsedData := rawData
+	if toolName == "query_user_messages" && pipeline.requiresMessageFilters() {
+		parsedData = e.applyMessageFiltersToData(rawData, pipeline.maxMessageLength, pipeline.contentSummary)
+	}
+
+	if pipeline.statsFirst {
+		output, err = e.buildStatsFirstResponse(cfg, rawData, parsedData, args, toolName)
 	} else {
 		output, err = e.buildStandardResponse(cfg, parsedData, args, toolName)
 	}
@@ -388,8 +400,9 @@ func (e *ToolExecutor) buildStatsOnlyResponse(parsedData []interface{}, toolName
 	return output, nil
 }
 
-func (e *ToolExecutor) buildStatsFirstResponse(cfg *config.Config, parsedData []interface{}, args map[string]interface{}, toolName string) (string, error) {
-	jsonlData, err := e.dataToJSONL(parsedData)
+func (e *ToolExecutor) buildStatsFirstResponse(cfg *config.Config, rawData []interface{}, parsedData []interface{}, args map[string]interface{}, toolName string) (string, error) {
+	// Use rawData for stats (sessionId field preserved, not renamed by content_summary)
+	jsonlData, err := e.dataToJSONL(rawData)
 	if err != nil {
 		slog.Error("dataToJSONL conversion failed (stats_first)",
 			"tool_name", toolName,
@@ -405,6 +418,8 @@ func (e *ToolExecutor) buildStatsFirstResponse(cfg *config.Config, parsedData []
 	} else {
 		stats, _ = querypkg.GenerateStats(jsonlData)
 	}
+
+	// Use parsedData for detail rendering (may have content_summary applied)
 	response, err := adaptResponse(cfg, parsedData, args, toolName)
 	if err != nil {
 		slog.Error("response adaptation failed (stats_first)",

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -882,6 +883,123 @@ func TestQueryToolsNotRegistered(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown tool") {
 		t.Errorf("expected 'unknown tool' error for query_raw, got: %v", err)
+	}
+}
+
+func setupTwoSessionFixture(t *testing.T) func() {
+	t.Helper()
+	projectDir := t.TempDir()
+	projectsRoot := t.TempDir()
+	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+
+	fixture := "{\"type\":\"user\",\"timestamp\":\"2026-03-09T06:00:00Z\",\"uuid\":\"u1\",\"sessionId\":\"sess-A\",\"message\":{\"role\":\"user\",\"content\":\"hello\"}}\n" +
+		"{\"type\":\"user\",\"timestamp\":\"2026-03-09T07:00:00Z\",\"uuid\":\"u2\",\"sessionId\":\"sess-B\",\"message\":{\"role\":\"user\",\"content\":\"world\"}}\n"
+
+	writeSessionFixture(t, projectDir, "two-sessions", fixture)
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	return func() { _ = os.Chdir(oldWd) }
+}
+
+func TestStatsFirstWithContentSummary(t *testing.T) {
+	cleanup := setupTwoSessionFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":         ".",
+		"stats_first":     true,
+		"content_summary": true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// stats_first output: "<stats lines>\n---\n<detail>"
+	parts := strings.SplitN(output, "\n---\n", 2)
+	if len(parts) < 2 {
+		t.Fatalf("expected stats separator in output, got: %s", output)
+	}
+
+	// Parse first line of stats as JSON
+	firstLine := strings.SplitN(strings.TrimSpace(parts[0]), "\n", 2)[0]
+	var summary map[string]interface{}
+	if err := json.Unmarshal([]byte(firstLine), &summary); err != nil {
+		t.Fatalf("failed to parse stats summary: %v", err)
+	}
+
+	sessionCount := int(summary["session_count"].(float64))
+	if sessionCount != 2 {
+		t.Errorf("session_count = %d, want 2", sessionCount)
+	}
+
+	// Detail section should have content_preview (content_summary applied)
+	if !strings.Contains(parts[1], "content_preview") {
+		t.Errorf("detail section should contain content_preview, got: %s", parts[1])
+	}
+}
+
+func TestStatsOnlyWithContentSummary(t *testing.T) {
+	cleanup := setupTwoSessionFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":         ".",
+		"stats_only":      true,
+		"content_summary": true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	firstLine := strings.SplitN(strings.TrimSpace(output), "\n", 2)[0]
+	var summary map[string]interface{}
+	if err := json.Unmarshal([]byte(firstLine), &summary); err != nil {
+		t.Fatalf("failed to parse stats: %v", err)
+	}
+
+	sessionCount := int(summary["session_count"].(float64))
+	if sessionCount != 2 {
+		t.Errorf("session_count = %d, want 2", sessionCount)
+	}
+}
+
+func TestStatsFirstWithoutContentSummary(t *testing.T) {
+	cleanup := setupTwoSessionFixture(t)
+	defer cleanup()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":     ".",
+		"stats_first": true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	parts := strings.SplitN(output, "\n---\n", 2)
+	firstLine := strings.SplitN(strings.TrimSpace(parts[0]), "\n", 2)[0]
+	var summary map[string]interface{}
+	if err := json.Unmarshal([]byte(firstLine), &summary); err != nil {
+		t.Fatalf("failed to parse stats: %v", err)
+	}
+
+	sessionCount := int(summary["session_count"].(float64))
+	if sessionCount != 2 {
+		t.Errorf("session_count = %d, want 2", sessionCount)
 	}
 }
 
