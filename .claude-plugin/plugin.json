@@ -26,8 +26,8 @@
     "technical-debt"
   ],
   "commands": [
-    "./commands/prompt-find.md",
-    "./commands/prompt-list.md",
-    "./commands/prompt-show.md"
+    "./.claude/commands/prompt-find.md",
+    "./.claude/commands/prompt-list.md",
+    "./.claude/commands/prompt-show.md"
   ]
 }

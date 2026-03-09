@@ -144,7 +144,7 @@ else
     echo ""
 
     # Update plugin.json version (must match marketplace.json)
-    PLUGIN_JSON=".claude/.claude-plugin/plugin.json"
+    PLUGIN_JSON=".claude-plugin/plugin.json"
     if [ -f "$PLUGIN_JSON" ]; then
         jq --arg ver "$VERSION_NUM" '.version = $ver' "$PLUGIN_JSON" > "$PLUGIN_JSON.tmp"
         mv "$PLUGIN_JSON.tmp" "$PLUGIN_JSON"

@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "meta-cc",
-      "source": "./.claude",
+      "source": ".",
       "description": "Meta-Cognition tool for Claude Code with 21 MCP tools for session history analysis, error tracking, quality scanning, work patterns, timelines, and bug detection. Focused, fast, and data-driven.",
       "version": "3.0.0",
       "author": {
@@ -34,9 +34,9 @@
         "technical-debt"
       ],
       "commands": [
-        "./commands/prompt-find.md",
-        "./commands/prompt-list.md",
-        "./commands/prompt-show.md"
+        "./.claude/commands/prompt-find.md",
+        "./.claude/commands/prompt-list.md",
+        "./.claude/commands/prompt-show.md"
       ]
     }
   ]

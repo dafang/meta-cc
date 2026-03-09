@@ -16,7 +16,7 @@ check() {
     fi
 }
 
-PLUGIN_JSON=".claude/.claude-plugin/plugin.json"
+PLUGIN_JSON=".claude-plugin/plugin.json"
 MARKETPLACE_JSON=".claude-plugin/marketplace.json"
 
 echo "=== Plugin JSON Validation ==="
@@ -89,7 +89,7 @@ if [ -f "$PLUGIN_JSON" ]; then
 fi
 
 # 6. .mcp.json exists and is valid
-MCP_JSON=".claude/.mcp.json"
+MCP_JSON=".mcp.json"
 if [ ! -f "$MCP_JSON" ]; then
     check ".mcp.json exists at $MCP_JSON" "fail"
 else

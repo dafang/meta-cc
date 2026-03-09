@@ -35,7 +35,7 @@ fi
 
 # Check if version files are already staged (user manually bumped version)
 VERSION_FILES_STAGED=false
-if echo "$STAGED_FILES" | grep -q "\.claude/\.claude-plugin/plugin\.json\|\.claude-plugin/marketplace\.json"; then
+if echo "$STAGED_FILES" | grep -q "\.claude-plugin/plugin\.json\|\.claude-plugin/marketplace\.json"; then
     VERSION_FILES_STAGED=true
 fi
 
@@ -49,7 +49,7 @@ echo -e "${GREEN}=== Auto Plugin Version Bump ===${NC}"
 echo ""
 
 # Get current version
-CURRENT_VERSION=$(jq -r '.version' .claude/.claude-plugin/plugin.json)
+CURRENT_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
 echo "Current plugin version: $CURRENT_VERSION"
 
 # Parse version components
@@ -63,15 +63,15 @@ echo "New plugin version: $NEW_VERSION (auto-bumped patch)"
 echo ""
 
 # Update plugin.json
-jq --arg ver "$NEW_VERSION" '.version = $ver' .claude/.claude-plugin/plugin.json > .claude/.claude-plugin/plugin.json.tmp
-mv .claude/.claude-plugin/plugin.json.tmp .claude/.claude-plugin/plugin.json
+jq --arg ver "$NEW_VERSION" '.version = $ver' .claude-plugin/plugin.json > .claude-plugin/plugin.json.tmp
+mv .claude-plugin/plugin.json.tmp .claude-plugin/plugin.json
 
 # Update marketplace.json
 jq --arg ver "$NEW_VERSION" '.plugins[0].version = $ver' .claude-plugin/marketplace.json > .claude-plugin/marketplace.json.tmp
 mv .claude-plugin/marketplace.json.tmp .claude-plugin/marketplace.json
 
 # Stage the updated version files
-git add .claude/.claude-plugin/plugin.json .claude-plugin/marketplace.json
+git add .claude-plugin/plugin.json .claude-plugin/marketplace.json
 
 echo -e "${GREEN}✓ Plugin version auto-bumped to $NEW_VERSION${NC}"
 echo -e "${GREEN}✓ Version files staged${NC}"
