@@ -67,6 +67,27 @@ func loadEntriesAndToolCalls(cfg *config.Config, args map[string]interface{}) ([
 	return allEntries, toolCalls, nil
 }
 
+// executeAnalyzeBugsTool implements the analyze_bugs MCP tool.
+func executeAnalyzeBugsTool(cfg *config.Config, args map[string]interface{}) (string, error) {
+	entries, toolCalls, err := loadEntriesAndToolCalls(cfg, args)
+	if err != nil {
+		return "", fmt.Errorf("failed to load session data: %w", err)
+	}
+	limit := 0
+	if l, ok := args["limit"].(float64); ok {
+		limit = int(l)
+	}
+	result, err := analyzer.AnalyzeBugs(entries, toolCalls, limit)
+	if err != nil {
+		return "", fmt.Errorf("analyze bugs failed: %w", err)
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal result: %w", err)
+	}
+	return string(data), nil
+}
+
 // executeQualityScanTool implements the quality_scan MCP tool.
 func executeQualityScanTool(cfg *config.Config, args map[string]interface{}) (string, error) {
 	entries, toolCalls, err := loadEntriesAndToolCalls(cfg, args)

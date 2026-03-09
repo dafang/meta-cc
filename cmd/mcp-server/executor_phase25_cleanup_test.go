@@ -173,11 +173,11 @@ func TestLegacyToolsRemoved(t *testing.T) {
 func TestPhase25ToolCount(t *testing.T) {
 	tools := getToolDefinitions()
 
-	// Expected: 21 tools total (Phase 43.3 update)
+	// Expected: 22 tools total (Phase 44.2 update)
 	// - 10 convenience tools (Layer 1)
 	// - 3 utility tools (cleanup_temp_files, list_capabilities, get_capability)
 	// - 4 two-stage query tools (get_session_directory, inspect_session_files, execute_stage2_query, get_session_metadata)
-	// - 4 analysis tools (analyze_errors, quality_scan, get_work_patterns, get_timeline)
+	// - 5 analysis tools (analyze_errors, quality_scan, get_work_patterns, get_timeline, analyze_bugs)
 	//
 	// Phase 27 Removed: query, query_raw (simplified query interface)
 	// Phase 27 Added: inspect_session_files (Stage 27.3), execute_stage2_query (Stage 27.4), get_session_metadata (Stage 27.5)
@@ -185,13 +185,14 @@ func TestPhase25ToolCount(t *testing.T) {
 	// Phase 42.3 Added: quality_scan
 	// Phase 43.2 Added: get_work_patterns
 	// Phase 43.3 Added: get_timeline
+	// Phase 44.2 Added: analyze_bugs
 	// Phase 25 Removed: 5 legacy tools (query_tool_sequences, query_file_access, get_session_stats,
 	//                    query_project_state, query_successful_prompts)
-	expectedCount := 21
+	expectedCount := 22
 
 	actualCount := len(tools)
 	require.Equal(t, expectedCount, actualCount,
-		"Expected %d tools after Phase 43.3, got %d", expectedCount, actualCount)
+		"Expected %d tools after Phase 44.2, got %d", expectedCount, actualCount)
 }
 
 // TestNoBackwardCompatibilityCode verifies all backward compatibility code removed

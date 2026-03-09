@@ -383,6 +383,16 @@ func getToolDefinitions() []Tool {
 				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
 			},
 		}),
+		buildTool("analyze_bugs", "Detect error-fix pairs and recurring bug patterns. Default scope: project.", map[string]Property{
+			"limit": {
+				Type:        "number",
+				Description: "Max examples per pattern (0 = unlimited)",
+			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
+		}),
 		buildTool("quality_scan", "Compute quality dimensions: error rate, retry rate, diversity, completion. Default scope: project.", map[string]Property{
 			"working_dir": {
 				Type:        "string",
