@@ -58,14 +58,14 @@ else
     mkdir -p "$DIST_DIR/commands"
     rm -f "$DIST_DIR/commands/"*.md 2>/dev/null || true
 
-    # Copy published commands
-    echo "  Copying published commands from .claude/commands/..."
+    # Copy published commands (source: plugin-src/commands/)
+    echo "  Copying published commands from plugin-src/commands/..."
     PUBLISHED_COMMANDS="prompt-find prompt-list prompt-show"
     for cmd in $PUBLISHED_COMMANDS; do
-        if [ -f "$PROJECT_ROOT/.claude/commands/${cmd}.md" ]; then
-            cp "$PROJECT_ROOT/.claude/commands/${cmd}.md" "$DIST_DIR/commands/"
+        if [ -f "$PROJECT_ROOT/plugin-src/commands/${cmd}.md" ]; then
+            cp "$PROJECT_ROOT/plugin-src/commands/${cmd}.md" "$DIST_DIR/commands/"
         else
-            echo "  WARNING: Expected command not found: .claude/commands/${cmd}.md"
+            echo "  WARNING: Expected command not found: plugin-src/commands/${cmd}.md"
         fi
     done
 

@@ -3,10 +3,10 @@ set -e
 
 # Usage: ./scripts/bump-plugin-version.sh [patch|minor|major]
 #
-# This script bumps the plugin version when .claude/ files change.
+# This script bumps the plugin version when plugin-src/ files change.
 # It should be run ONLY when:
-# - .claude/commands/*.md changes (e.g., /meta command logic)
-# - .claude/agents/*.md changes (e.g., new/modified subagents)
+# - plugin-src/commands/*.md changes (e.g., /meta command logic)
+# - plugin-src/agents/*.md changes (e.g., new/modified subagents)
 #
 # It should NOT be run when:
 # - capabilities/ files change (content updates, not plugin API changes)
@@ -41,8 +41,8 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 
-# Get current version
-CURRENT=$(jq -r '.version' .claude-plugin/plugin.json)
+# Get current version from plugin-src/.claude-plugin/plugin.json
+CURRENT=$(jq -r '.version' plugin-src/.claude-plugin/plugin.json)
 echo "Current plugin version: $CURRENT"
 
 # Parse version components
@@ -70,17 +70,17 @@ echo ""
 
 # Confirm with user
 echo "This will update:"
-echo "  - .claude-plugin/plugin.json: $CURRENT → $NEW_VERSION"
+echo "  - plugin-src/.claude-plugin/plugin.json: $CURRENT → $NEW_VERSION"
 echo "  - .claude-plugin/marketplace.json: $CURRENT → $NEW_VERSION"
 echo ""
 echo "Press Enter to continue, or Ctrl+C to abort..."
 read
 
-# Update plugin.json version
-echo "Updating plugin.json..."
-jq --arg ver "$NEW_VERSION" '.version = $ver' .claude-plugin/plugin.json > .claude-plugin/plugin.json.tmp
-mv .claude-plugin/plugin.json.tmp .claude-plugin/plugin.json
-echo "✓ plugin.json updated to $NEW_VERSION"
+# Update plugin-src/.claude-plugin/plugin.json version
+echo "Updating plugin-src/.claude-plugin/plugin.json..."
+jq --arg ver "$NEW_VERSION" '.version = $ver' plugin-src/.claude-plugin/plugin.json > plugin-src/.claude-plugin/plugin.json.tmp
+mv plugin-src/.claude-plugin/plugin.json.tmp plugin-src/.claude-plugin/plugin.json
+echo "✓ plugin-src/.claude-plugin/plugin.json updated to $NEW_VERSION"
 
 # Update marketplace.json version
 echo "Updating marketplace.json..."
@@ -91,12 +91,12 @@ echo ""
 
 # Commit changes
 echo "Committing version bump..."
-git add .claude-plugin/plugin.json .claude-plugin/marketplace.json
+git add plugin-src/.claude-plugin/plugin.json .claude-plugin/marketplace.json
 git commit -m "chore: bump plugin version to $NEW_VERSION
 
 Updated plugin.json and marketplace.json version.
 
-This version bump reflects changes to .claude/ plugin structure
+This version bump reflects changes to plugin-src/ plugin structure
 (commands or agents), not capabilities content updates.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

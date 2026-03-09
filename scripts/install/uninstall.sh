@@ -93,6 +93,17 @@ else
     info "No MCP config at $MCP_CONFIG (nothing to remove)"
 fi
 
+# Remove plugin cache entry (created by Claude Code plugin system)
+PLUGIN_CACHE_DIR="${HOME}/.claude/plugins/cache/meta-cc-marketplace/meta-cc"
+if [ -d "$PLUGIN_CACHE_DIR" ]; then
+    rm -rf "$PLUGIN_CACHE_DIR" 2>/dev/null || true
+    info "Plugin cache removed from $PLUGIN_CACHE_DIR"
+else
+    info "No plugin cache found at $PLUGIN_CACHE_DIR (already removed or not present)"
+fi
+
 echo ""
 echo "Uninstallation complete!"
+echo ""
+echo "Note: If installed via 'make install-local', also run 'make uninstall-local'"
 echo ""

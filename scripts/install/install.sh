@@ -108,13 +108,15 @@ install_claude_files() {
 merge_mcp_config() {
     MCP_CONFIG="${HOME}/.claude/mcp.json"
 
-    # Prefer .mcp.json (new standard), fall back to lib/mcp-config.json (legacy)
-    if [ -f ".mcp.json" ]; then
-        MCP_TEMPLATE=".mcp.json"
-    elif [ -f "lib/mcp-config.json" ]; then
+    # For manual installs, prefer lib/mcp-config.json (PATH-based, suitable for manual install).
+    # .mcp.json uses ${CLAUDE_PLUGIN_ROOT}/bin/meta-cc-mcp which only works in plugin-managed
+    # environments. Fall back to .mcp.json only if lib/mcp-config.json is not present.
+    if [ -f "lib/mcp-config.json" ]; then
         MCP_TEMPLATE="lib/mcp-config.json"
+    elif [ -f ".mcp.json" ]; then
+        MCP_TEMPLATE=".mcp.json"
     else
-        warn "No MCP config template found (.mcp.json or lib/mcp-config.json), skipping MCP configuration"
+        warn "No MCP config template found (lib/mcp-config.json or .mcp.json), skipping MCP configuration"
         return
     fi
 

@@ -19,7 +19,7 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 # Default target when running 'make' without arguments
 .DEFAULT_GOAL := all
 
-.PHONY: all build test test-all test-coverage clean install cross-compile bundle-release lint lint-errors fmt vet help sync-plugin-files dev check-workspace check-temp-files check-fixtures check-deps check-imports check-scripts check-debug check-go-quality pre-commit ci metrics-mcp check-test-quality check-formatting fix-formatting check-plugin-sync check-mod-tidy test-bats check-release-ready test-all-local pre-commit-full check-essential check-code-quality check-build-quality check-comprehensive check-commit-ready check-push-ready
+.PHONY: all build stage test test-all test-coverage clean install install-local install-user uninstall-local uninstall-user uninstall-legacy cross-compile bundle-release lint lint-errors fmt vet help sync-plugin-files dev check-workspace check-temp-files check-fixtures check-deps check-imports check-scripts check-debug check-go-quality pre-commit ci metrics-mcp check-test-quality check-formatting fix-formatting check-plugin-sync check-mod-tidy test-bats check-release-ready test-all-local pre-commit-full check-essential check-code-quality check-build-quality check-comprehensive check-commit-ready check-push-ready
 
 # ==============================================================================
 # Build Quality Gates (BAIME Experiment - Iteration 1)
@@ -283,6 +283,144 @@ build:
 	@mkdir -p bin
 	$(GOBUILD) -o bin/$(MCP_BINARY_NAME) ./cmd/mcp-server
 
+stage: build
+	@echo "Staging binary to plugin-src/bin/..."
+	@mkdir -p plugin-src/bin
+	@cp bin/$(MCP_BINARY_NAME) plugin-src/bin/$(MCP_BINARY_NAME)
+	@echo "✓ Staged plugin-src/bin/$(MCP_BINARY_NAME)"
+
+install-local: stage
+	@echo "Installing plugin at local scope (this project only)..."
+	@PROJECT_PATH="$(shell pwd)"; \
+	mkdir -p .claude; \
+	jq -n \
+		--arg path "$$PROJECT_PATH" \
+		'{"permissions": {"allow": ["Bash(make:*)", "Bash(go test:*)"]}, "extraKnownMarketplaces": {"meta-cc-marketplace": {"source": {"source": "directory", "path": $$path}}}, "enabledPlugins": {"meta-cc@meta-cc-marketplace": true}}' \
+		> .claude/settings.local.json; \
+	echo "✓ Generated .claude/settings.local.json (source: $$PROJECT_PATH)"
+	@if [ -f ~/.claude/settings.json ]; then \
+		if ! jq -e '.enabledPlugins' ~/.claude/settings.json > /dev/null 2>&1; then \
+			jq '. + {"enabledPlugins": {}}' ~/.claude/settings.json > /tmp/cc-settings-tmp.json && mv /tmp/cc-settings-tmp.json ~/.claude/settings.json; \
+			echo "✓ Added enabledPlugins key to ~/.claude/settings.json (CC bug workaround)"; \
+		fi; \
+	fi
+	@rm -rf ~/.claude/plugins/cache/meta-cc-marketplace/meta-cc/
+	@echo "✓ Purged plugin cache"
+	@mkdir -p ~/.claude/plugins; \
+	INSTALLED=~/.claude/plugins/installed_plugins.json; \
+	if [ ! -f "$$INSTALLED" ]; then \
+		echo '{"version": 2, "plugins": {}}' > "$$INSTALLED"; \
+	fi; \
+	VERSION=$$(jq -r '.version' plugin-src/.claude-plugin/plugin.json); \
+	PROJECT_PATH="$(shell pwd)"; \
+	CACHE_PATH=~/.claude/plugins/cache/meta-cc-marketplace/meta-cc/$$VERSION; \
+	NOW=$$(date -u +%Y-%m-%dT%H:%M:%S.000Z); \
+	GIT_SHA=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	jq --arg key "meta-cc@meta-cc-marketplace" \
+		--arg ver "$$VERSION" \
+		--arg path "$$PROJECT_PATH" \
+		--arg cache "$$CACHE_PATH" \
+		--arg now "$$NOW" \
+		--arg sha "$$GIT_SHA" \
+		'.plugins[$$key] = {"scope": "local", "version": $$ver, "source": {"source": "directory", "path": $$path}, "installedAt": $$now, "gitSha": $$sha}' \
+		"$$INSTALLED" > /tmp/installed_plugins_tmp.json && mv /tmp/installed_plugins_tmp.json "$$INSTALLED"; \
+	echo "✓ Updated ~/.claude/plugins/installed_plugins.json (version: $$VERSION, sha: $$GIT_SHA)"
+	@echo ""
+	@echo "✅ Local install complete. Restart Claude Code to load the plugin."
+
+install-user: stage
+	@if [ -f .claude/settings.local.json ] && jq -e '.enabledPlugins["meta-cc@meta-cc-marketplace"]' .claude/settings.local.json > /dev/null 2>&1; then \
+		echo "❌ Local scope active. Run 'make uninstall-local' first."; \
+		exit 1; \
+	fi
+	@echo "Installing plugin at user scope (~/.local/share/meta-cc)..."
+	@mkdir -p ~/.local/share/meta-cc
+	@rsync -a --delete plugin-src/ ~/.local/share/meta-cc/
+	@echo "✓ Copied plugin-src/ to ~/.local/share/meta-cc/"
+	@jq -n '{"name": "meta-cc-marketplace", "plugins": [{"name": "meta-cc", "source": "."}]}' \
+		> ~/.local/share/meta-cc/.claude-plugin/marketplace.json
+	@echo "✓ Generated ~/.local/share/meta-cc/.claude-plugin/marketplace.json"
+	@mkdir -p ~/.claude; \
+	SETTINGS=~/.claude/settings.json; \
+	if [ ! -f "$$SETTINGS" ]; then \
+		echo '{}' > "$$SETTINGS"; \
+	fi; \
+	jq '. + {"extraKnownMarketplaces": ((.extraKnownMarketplaces // {}) + {"meta-cc-marketplace": {"source": {"source": "directory", "path": (env.HOME + "/.local/share/meta-cc")}}}), "enabledPlugins": ((.enabledPlugins // {}) + {"meta-cc@meta-cc-marketplace": true})}' \
+		"$$SETTINGS" > /tmp/cc-user-settings-tmp.json && mv /tmp/cc-user-settings-tmp.json "$$SETTINGS"; \
+	echo "✓ Updated ~/.claude/settings.json"
+	@rm -rf ~/.claude/plugins/cache/meta-cc-marketplace/meta-cc/
+	@echo "✓ Purged plugin cache"
+	@echo ""
+	@echo "✅ User install complete. Restart Claude Code to load the plugin."
+
+uninstall-local:
+	@echo "Removing local scope plugin install..."
+	@if [ -f .claude/settings.local.json ]; then \
+		jq 'del(.enabledPlugins["meta-cc@meta-cc-marketplace"])' .claude/settings.local.json > /tmp/settings_local_tmp.json && mv /tmp/settings_local_tmp.json .claude/settings.local.json; \
+		echo "✓ Removed meta-cc@meta-cc-marketplace from .claude/settings.local.json"; \
+	else \
+		echo "  (no .claude/settings.local.json found, skipping)"; \
+	fi
+	@rm -rf ~/.claude/plugins/cache/meta-cc-marketplace/meta-cc/
+	@echo "✓ Purged plugin cache"
+	@INSTALLED=~/.claude/plugins/installed_plugins.json; \
+	if [ -f "$$INSTALLED" ]; then \
+		jq 'del(.plugins["meta-cc@meta-cc-marketplace"])' "$$INSTALLED" > /tmp/installed_plugins_tmp.json && mv /tmp/installed_plugins_tmp.json "$$INSTALLED"; \
+		echo "✓ Removed meta-cc@meta-cc-marketplace from $$INSTALLED"; \
+	else \
+		echo "  (no installed_plugins.json found, skipping)"; \
+	fi
+	@echo ""
+	@echo "✅ Local uninstall complete."
+
+uninstall-user:
+	@if [ -f .claude/settings.local.json ] && jq -e '.enabledPlugins["meta-cc@meta-cc-marketplace"]' .claude/settings.local.json > /dev/null 2>&1; then \
+		echo "Note: local scope also active. Run 'make uninstall-local' to remove it."; \
+	fi
+	@echo "Removing user scope plugin install..."
+	@rm -rf ~/.local/share/meta-cc/
+	@echo "✓ Removed ~/.local/share/meta-cc/"
+	@SETTINGS=~/.claude/settings.json; \
+	if [ -f "$$SETTINGS" ]; then \
+		jq 'del(.extraKnownMarketplaces["meta-cc-marketplace"]) | del(.enabledPlugins["meta-cc@meta-cc-marketplace"])' "$$SETTINGS" > /tmp/cc-user-settings-tmp.json && mv /tmp/cc-user-settings-tmp.json "$$SETTINGS"; \
+		echo "✓ Removed meta-cc entries from ~/.claude/settings.json"; \
+	else \
+		echo "  (no ~/.claude/settings.json found, skipping)"; \
+	fi
+	@rm -rf ~/.claude/plugins/cache/meta-cc-marketplace/meta-cc/
+	@echo "✓ Purged plugin cache"
+	@echo ""
+	@echo "✅ User uninstall complete."
+
+uninstall-legacy:
+	@echo "Removing legacy meta-cc artifacts..."
+	@if [ -f ~/.claude/mcp.json ]; then \
+		if jq -e '.mcpServers["meta-cc"]' ~/.claude/mcp.json > /dev/null 2>&1; then \
+			jq 'del(.mcpServers["meta-cc"])' ~/.claude/mcp.json > /tmp/mcp_tmp.json && mv /tmp/mcp_tmp.json ~/.claude/mcp.json; \
+			echo "✓ Removed meta-cc from ~/.claude/mcp.json"; \
+		else \
+			echo "  (meta-cc not found in ~/.claude/mcp.json, skipping)"; \
+		fi; \
+	else \
+		echo "  (no ~/.claude/mcp.json found, skipping)"; \
+	fi
+	@if [ -f ~/.local/bin/meta-cc-mcp ]; then \
+		rm -f ~/.local/bin/meta-cc-mcp; \
+		echo "✓ Removed ~/.local/bin/meta-cc-mcp"; \
+	else \
+		echo "  (no ~/.local/bin/meta-cc-mcp found, skipping)"; \
+	fi
+	@for cmd in prompt-find prompt-list prompt-show; do \
+		if [ -f ~/.claude/commands/$${cmd}.md ]; then \
+			rm -f ~/.claude/commands/$${cmd}.md; \
+			echo "✓ Removed ~/.claude/commands/$${cmd}.md"; \
+		else \
+			echo "  (no ~/.claude/commands/$${cmd}.md found, skipping)"; \
+		fi; \
+	done
+	@echo ""
+	@echo "✅ Legacy uninstall complete."
+
 test:
 	@echo "Running tests (short mode, skips slow E2E tests)..."
 	$(GOTEST) -short -v ./...
@@ -340,10 +478,10 @@ cross-compile:
 sync-plugin-files:
 	@echo "Preparing plugin files for release packaging..."
 	@mkdir -p $(DIST_DIR)/commands
-	@echo "  Copying commands from .claude/commands/..."
-	@cp .claude/commands/prompt-find.md $(DIST_DIR)/commands/ 2>/dev/null || true
-	@cp .claude/commands/prompt-list.md $(DIST_DIR)/commands/ 2>/dev/null || true
-	@cp .claude/commands/prompt-show.md $(DIST_DIR)/commands/ 2>/dev/null || true
+	@echo "  Copying commands from plugin-src/commands/..."
+	@cp plugin-src/commands/prompt-find.md $(DIST_DIR)/commands/ 2>/dev/null || true
+	@cp plugin-src/commands/prompt-list.md $(DIST_DIR)/commands/ 2>/dev/null || true
+	@cp plugin-src/commands/prompt-show.md $(DIST_DIR)/commands/ 2>/dev/null || true
 	@echo "✓ Plugin files synced to $(DIST_DIR)/"
 	@CMD_COUNT=$$(find $(DIST_DIR)/commands -name "*.md" 2>/dev/null | wc -l); \
 	echo "✓ Total: $$CMD_COUNT command(s)"
@@ -369,10 +507,10 @@ bundle-release: sync-plugin-files
 		cp -r $(DIST_DIR)/commands/* $$BUNDLE_DIR/commands/; \
 		cp -r lib/* $$BUNDLE_DIR/lib/; \
 		cp -r .claude-plugin/* $$BUNDLE_DIR/.claude-plugin/; \
-		cp .claude-plugin/plugin.json $$BUNDLE_DIR/.claude-plugin/ 2>/dev/null || true; \
-		cp .claude-plugin/mcp.json $$BUNDLE_DIR/ 2>/dev/null || true; \
-		jq '.commands |= map(gsub("\\./.claude/commands/"; "./commands/"))' $$BUNDLE_DIR/.claude-plugin/plugin.json > $$BUNDLE_DIR/.claude-plugin/plugin.json.tmp && mv $$BUNDLE_DIR/.claude-plugin/plugin.json.tmp $$BUNDLE_DIR/.claude-plugin/plugin.json 2>/dev/null || true; \
-		jq '.plugins[0].commands |= map(gsub("\\./.claude/commands/"; "./commands/"))' $$BUNDLE_DIR/.claude-plugin/marketplace.json > $$BUNDLE_DIR/.claude-plugin/marketplace.json.tmp && mv $$BUNDLE_DIR/.claude-plugin/marketplace.json.tmp $$BUNDLE_DIR/.claude-plugin/marketplace.json 2>/dev/null || true; \
+		cp plugin-src/.claude-plugin/plugin.json $$BUNDLE_DIR/.claude-plugin/ 2>/dev/null || true; \
+		cp plugin-src/.mcp.json $$BUNDLE_DIR/ 2>/dev/null || true; \
+		jq '.commands |= map(gsub("\\./commands/"; "./commands/"))' $$BUNDLE_DIR/.claude-plugin/plugin.json > $$BUNDLE_DIR/.claude-plugin/plugin.json.tmp && mv $$BUNDLE_DIR/.claude-plugin/plugin.json.tmp $$BUNDLE_DIR/.claude-plugin/plugin.json 2>/dev/null || true; \
+		jq '.plugins[0].commands |= map(gsub("\\./plugin-src/commands/"; "./commands/"))' $$BUNDLE_DIR/.claude-plugin/marketplace.json > $$BUNDLE_DIR/.claude-plugin/marketplace.json.tmp && mv $$BUNDLE_DIR/.claude-plugin/marketplace.json.tmp $$BUNDLE_DIR/.claude-plugin/marketplace.json 2>/dev/null || true; \
 		cp scripts/install/install.sh $$BUNDLE_DIR/; \
 		cp scripts/install/uninstall.sh $$BUNDLE_DIR/ 2>/dev/null || true; \
 		cp README.md $$BUNDLE_DIR/; \
@@ -491,6 +629,7 @@ help:
 	@echo ""
 	@echo "Individual Tasks:"
 	@echo "  make build                   - Build meta-cc-mcp MCP server"
+	@echo "  make stage                   - Build + copy binary to plugin-src/bin/ for local install"
 	@echo "  make test                    - Run tests (short mode, skips slow E2E tests)"
 	@echo "  make test-all                - Run all tests (including slow E2E tests ~30s)"
 	@echo "  make test-coverage           - Run tests with coverage report"
@@ -520,6 +659,13 @@ help:
 	@echo "  make check-test-quality      - Check test quality issues (now part of check-comprehensive)"
 	@echo "  make check-plugin-sync       - Verify plugin file sync (now part of check-build-quality)"
 	@echo "  make install-pre-commit      - Install pre-commit framework hooks"
+	@echo ""
+	@echo "Plugin Install/Uninstall:"
+	@echo "  make install-local           - Install plugin at local scope (this project only)"
+	@echo "  make install-user            - Install plugin at user scope (all projects, this machine)"
+	@echo "  make uninstall-local         - Remove local scope plugin install"
+	@echo "  make uninstall-user          - Remove user scope plugin install"
+	@echo "  make uninstall-legacy        - Remove old-style legacy artifacts (mcp.json, ~/.local/bin, ~/.claude/commands)"
 	@echo ""
 	@echo "Build & Package:"
 	@echo "  make cross-compile           - Build MCP server for all platforms"

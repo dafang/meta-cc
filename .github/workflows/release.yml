@@ -75,18 +75,18 @@ jobs:
             cp -r dist/skills/* $PKG_DIR/skills/
             cp -r lib/* $PKG_DIR/lib/
 
-            # Copy plugin.json from standard location into archive .claude-plugin/
-            cp .claude-plugin/plugin.json $PKG_DIR/.claude-plugin/
+            # Copy plugin.json from plugin-src location into archive .claude-plugin/
+            cp plugin-src/.claude-plugin/plugin.json $PKG_DIR/.claude-plugin/
 
             # Copy .mcp.json to archive root
-            cp .mcp.json $PKG_DIR/
+            cp plugin-src/.mcp.json $PKG_DIR/
 
-            # Rewrite archive commands paths from "./.claude/commands/" to "./commands/" for flat layout
-            jq '.commands |= map(gsub("\\./.claude/commands/"; "./commands/"))' \
+            # Rewrite archive commands paths from "./plugin-src/commands/" to "./commands/" for flat layout
+            jq '.commands |= map(gsub("\\./plugin-src/commands/"; "./commands/"))' \
               $PKG_DIR/.claude-plugin/plugin.json \
               > $PKG_DIR/.claude-plugin/plugin.json.tmp
             mv $PKG_DIR/.claude-plugin/plugin.json.tmp $PKG_DIR/.claude-plugin/plugin.json
-            jq '.plugins[0].commands |= map(gsub("\\./.claude/commands/"; "./commands/"))' \
+            jq '.plugins[0].commands |= map(gsub("\\./plugin-src/commands/"; "./commands/"))' \
               $PKG_DIR/.claude-plugin/marketplace.json \
               > $PKG_DIR/.claude-plugin/marketplace.json.tmp
             mv $PKG_DIR/.claude-plugin/marketplace.json.tmp $PKG_DIR/.claude-plugin/marketplace.json
