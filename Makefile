@@ -280,8 +280,8 @@ ci: push
 
 build:
 	@echo "Building $(MCP_BINARY_NAME) $(VERSION)..."
-	@mkdir -p .claude/bin
-	$(GOBUILD) -o .claude/bin/$(MCP_BINARY_NAME) ./cmd/mcp-server
+	@mkdir -p bin
+	$(GOBUILD) -o bin/$(MCP_BINARY_NAME) ./cmd/mcp-server
 
 test:
 	@echo "Running tests (short mode, skips slow E2E tests)..."
@@ -289,7 +289,7 @@ test:
 
 test-e2e-mcp: build
 	@echo "Running MCP E2E tests..."
-	@bash tests/e2e/mcp-e2e-simple.sh ./.claude/bin/$(MCP_BINARY_NAME)
+	@bash tests/e2e/mcp-e2e-simple.sh ./bin/$(MCP_BINARY_NAME)
 
 test-all: test test-e2e-mcp
 	@echo "Running all tests (including slow E2E tests ~30s)..."
@@ -315,7 +315,7 @@ metrics-mcp:
 clean:
 	@echo "Cleaning..."
 	$(GOCLEAN)
-	rm -f .claude/bin/$(MCP_BINARY_NAME)
+	rm -f bin/$(MCP_BINARY_NAME)
 	rm -f $(MCP_BINARY_NAME)
 	rm -rf $(BUILD_DIR)
 	rm -rf $(DIST_DIR)

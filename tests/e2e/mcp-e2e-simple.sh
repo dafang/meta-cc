@@ -7,7 +7,7 @@
 
 set -e
 
-BINARY="${1:-./.claude/bin/meta-cc-mcp}"
+BINARY="${1:-./bin/meta-cc-mcp}"
 
 # Color codes
 GREEN='\033[0;32m'

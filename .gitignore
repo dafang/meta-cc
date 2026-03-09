@@ -2,7 +2,6 @@
 coverage.out
 /meta-cc-mcp
 /bin/
-.claude/bin/
 coverage.html
 /.gemini/
 /.pre-commit-cache/

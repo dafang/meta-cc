@@ -4,7 +4,7 @@
 
 set -e
 
-BINARY="${1:-./.claude/bin/meta-cc-mcp}"
+BINARY="${1:-./bin/meta-cc-mcp}"
 TESTS_PASSED=0
 TESTS_FAILED=0
 
