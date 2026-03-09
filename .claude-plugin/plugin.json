@@ -10,7 +10,7 @@
   "license": "MIT",
   "homepage": "https://github.com/yaleh/meta-cc",
   "repository": "https://github.com/yaleh/meta-cc",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./.claude-plugin/mcp.json",
   "keywords": [
     "workflow-analysis",
     "session-history",

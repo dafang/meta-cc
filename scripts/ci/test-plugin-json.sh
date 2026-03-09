@@ -89,7 +89,7 @@ if [ -f "$PLUGIN_JSON" ]; then
 fi
 
 # 6. .mcp.json exists and is valid
-MCP_JSON=".mcp.json"
+MCP_JSON=".claude-plugin/mcp.json"
 if [ ! -f "$MCP_JSON" ]; then
     check ".mcp.json exists at $MCP_JSON" "fail"
 else

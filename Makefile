@@ -370,7 +370,7 @@ bundle-release: sync-plugin-files
 		cp -r lib/* $$BUNDLE_DIR/lib/; \
 		cp -r .claude-plugin/* $$BUNDLE_DIR/.claude-plugin/; \
 		cp .claude-plugin/plugin.json $$BUNDLE_DIR/.claude-plugin/ 2>/dev/null || true; \
-		cp .mcp.json $$BUNDLE_DIR/ 2>/dev/null || true; \
+		cp .claude-plugin/mcp.json $$BUNDLE_DIR/ 2>/dev/null || true; \
 		jq '.commands |= map(gsub("\\./.claude/commands/"; "./commands/"))' $$BUNDLE_DIR/.claude-plugin/plugin.json > $$BUNDLE_DIR/.claude-plugin/plugin.json.tmp && mv $$BUNDLE_DIR/.claude-plugin/plugin.json.tmp $$BUNDLE_DIR/.claude-plugin/plugin.json 2>/dev/null || true; \
 		jq '.plugins[0].commands |= map(gsub("\\./.claude/commands/"; "./commands/"))' $$BUNDLE_DIR/.claude-plugin/marketplace.json > $$BUNDLE_DIR/.claude-plugin/marketplace.json.tmp && mv $$BUNDLE_DIR/.claude-plugin/marketplace.json.tmp $$BUNDLE_DIR/.claude-plugin/marketplace.json 2>/dev/null || true; \
 		cp scripts/install/install.sh $$BUNDLE_DIR/; \
