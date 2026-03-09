@@ -353,12 +353,13 @@ func TestToolCountIncreasedTo14(t *testing.T) {
 	// Phase 27 Stage 27.3: Added inspect_session_files (14 -> 15)
 	// Phase 27 Stage 27.4: Added execute_stage2_query (15 -> 16)
 	// Phase 27 Stage 27.5: Added get_session_metadata (16 -> 17)
-	// New target: 17 tools (10 convenience + 3 utility + 4 two-stage)
-	expectedCount := 17
+	// Phase 42.2: Added analyze_errors (17 -> 18)
+	// New target: 18 tools (10 convenience + 3 utility + 4 two-stage + 1 analysis)
+	expectedCount := 18
 	actualCount := len(tools)
 
 	if actualCount != expectedCount {
-		t.Errorf("expected %d tools after Phase 27 Stage 27.5, got %d", expectedCount, actualCount)
+		t.Errorf("expected %d tools after Phase 42.2, got %d", expectedCount, actualCount)
 
 		// List all tool names for debugging
 		t.Log("Current tools:")

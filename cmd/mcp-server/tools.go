@@ -373,6 +373,16 @@ func getToolDefinitions() []Tool {
 				Required: []string{"files", "filter"},
 			},
 		},
+		buildTool("analyze_errors", "Aggregate tool errors by tool name and error type. Default scope: project.", map[string]Property{
+			"limit": {
+				Type:        "number",
+				Description: "Max examples per group (0 = unlimited)",
+			},
+			"working_dir": {
+				Type:        "string",
+				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",
+			},
+		}),
 		buildTool("get_session_metadata", "Get session metadata including JSONL schema, file info, and query templates. Default scope: project.", map[string]Property{
 			"scope": {
 				Type:        "string",
