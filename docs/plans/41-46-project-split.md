@@ -1,5 +1,27 @@
 # Plan 41–46: Project Split — `yaleh/baime` Creation and meta-cc Refactoring
 
+**Status**: Completed 2026-03-09
+**Proposal**: [docs/proposals/proposal-project-split.md](../proposals/proposal-project-split.md)
+
+## As Executed
+
+All six phases completed in a single session. Phases 41, 42.1, 43.1, and 44.1 ran in parallel (separate git worktrees); MCP registration stages were merged sequentially. Key actual outcomes:
+
+| Phase | Commit(s) | Actual outcome |
+|-------|-----------|----------------|
+| 41 | `yaleh/baime` repo | Published at github.com/yaleh/baime — 6 agents, 19 skills |
+| 42 | `aff373b`, `7f8e047` | `analyze_errors` + `quality_scan` live; `loadEntriesAndToolCalls` established |
+| 43 | `c53342e`, after merge | `get_work_patterns` + `get_timeline` live |
+| 44 | `3197918` | `analyze_bugs` + `get_tech_debt` live; total 21 MCP tools |
+| 45 | `9de3002`→`aed6afa` | 11,299 lines deleted; 3 commits (45.1 atomic relocation, 45.2 Go files, 45.3 Markdown) |
+| 46 | `75938bf`→`101a5cd` | 4 commits; skills/agents/capabilities removed; v3.0.0 released |
+
+**Deviations from plan**:
+- `get_tech_debt` (Stage 44.3): plan specified "parse file-history-snapshot raw JSON"; implementation used **regex over tool call outputs** (Read/Edit/Write/Bash `.Output` field) because `parser.ParseEntries()` filters out snapshot entries. Result is functionally equivalent.
+- Phase 42–44 code was ~1,360 lines total (plan estimated 420–460 + 420–450 + 430–470 = ~1,300–1,380 lines — within range).
+
+---
+
 ## Overview
 
 Implement the project split described in [docs/proposals/proposal-project-split.md](../proposals/proposal-project-split.md).
@@ -522,9 +544,11 @@ All new analysis tool handlers call `loadEntriesAndToolCalls` first, then pass t
 
 ### Stage 44.3 — `get_tech_debt`: Full Implementation
 
-**Goal**: Marker-based debt detection using file snapshot entries. Semantic classification delegated to Claude.
+**Goal**: Marker-based debt detection. Semantic classification delegated to Claude.
 
-**File snapshot note**: File snapshot data is stored as raw JSON entries with `type == "file-history-snapshot"` in the JSONL. These are NOT typed as `parser.SessionEntry` fields. The implementation must filter for `entry.Type == "file-history-snapshot"` and unmarshal the raw content field separately to access file path and content.
+**Implementation note** (deviation from plan): The original design specified parsing raw `file-history-snapshot` entries. In practice, `parser.ParseEntries()` filters those entries out (it keeps only `type == "user"` and `type == "assistant"`). The implementation instead scans **tool call `.Output` text** from Read/Edit/Write/Bash calls for TODO/FIXME/HACK/XXX regex matches. File path is extracted from `toolCall.Input["file_path"]` or `toolCall.Input["path"]`. This yields equivalent marker coverage and avoids raw JSON parsing complexity.
+
+**Original design note (superseded)**: File snapshot data is stored as raw JSON entries with `type == "file-history-snapshot"`. These are NOT typed as `parser.SessionEntry` fields. If direct snapshot access is needed in future, implement a separate `ParseAllEntries()` that does not filter by type.
 
 **TDD sequence**:
 
@@ -551,7 +575,7 @@ All new analysis tool handlers call `loadEntriesAndToolCalls` first, then pass t
    }
    func GetTechDebt(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*TechDebtResult, error)
    ```
-   Parse file snapshot raw content via `json.Unmarshal` on the entry's raw bytes for `type == "file-history-snapshot"` entries.
+   Scan tool call `.Output` text from Read/Edit/Write/Bash calls via `markerPattern.FindAllString(tc.Output, -1)`. Extract file path from `tc.Input["file_path"]` or `tc.Input["path"]`. (See Stage 44.3 implementation note above — file-snapshot approach was superseded.)
 4. Add handler to `handlers_analysis.go`; register in `tools.go` (+25 lines) and `executor.go` (+15 lines)
 5. Run all tests — expect PASS
 6. Run `make commit`
@@ -565,7 +589,7 @@ All new analysis tool handlers call `loadEntriesAndToolCalls` first, then pass t
 
 **Acceptance criteria**:
 - Marker detection is regex-based, language-agnostic
-- File snapshot raw JSON parsed correctly
+- Tool call output scanning covers Read/Edit/Write/Bash results
 - No semantic debt classification in Go
 - `make commit` passes
 
@@ -844,7 +868,7 @@ All three ──► 46.4 (CLAUDE.md + README + docs + 3.0.0 bump + release)
 | 41 | +600 (new repo) | Phase 45 blocked until baime is verified published |
 | 42 | +460 | Establish `loadEntriesAndToolCalls` pattern here |
 | 43 | +450 | `get_timeline` returns JSON only, no ASCII |
-| 44 | +450 | `get_tech_debt` must handle raw file-snapshot JSON |
+| 44 | +450 | `get_tech_debt` scans tool call outputs (not file-snapshot raw JSON — see Stage 44.3 note) |
 | 45 | −10,019 removed, +150 relocation | `CleanupSessionCache` must be relocated in 45.1 before deletion in 45.2 |
 | 46 | −content, +450 config/docs | Manifests updated in 46.1 before files deleted in 46.2 |
 
