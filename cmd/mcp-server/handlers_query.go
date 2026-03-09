@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -136,6 +138,51 @@ func getQueryBaseDir(scope, workingDir string) (string, error) {
 	// All session files should be in the same directory
 	// Return the directory of the first session file
 	return filepath.Dir(sessionFiles[0]), nil
+}
+
+// loadTurnsForSession reads all JSONL files in baseDir and returns the turns
+// (entries) that belong to sessionID. Each JSONL file is scanned for entries
+// where obj["sessionId"] == sessionID. Returns nil, nil if no entries are found.
+func loadTurnsForSession(baseDir, sessionID string) ([]interface{}, error) {
+	files, err := getJSONLFiles(baseDir)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, file := range files {
+		var turns []interface{}
+
+		f, err := os.Open(file)
+		if err != nil {
+			continue
+		}
+
+		scanner := bufio.NewScanner(f)
+		// Allow long lines (up to 10 MB per line)
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 10*1024*1024)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "" {
+				continue
+			}
+			var obj map[string]interface{}
+			if err := json.Unmarshal([]byte(line), &obj); err != nil {
+				continue
+			}
+			sid, _ := obj["sessionId"].(string)
+			if sid == sessionID {
+				turns = append(turns, obj)
+			}
+		}
+		f.Close()
+
+		if len(turns) > 0 {
+			return turns, nil
+		}
+	}
+
+	return nil, nil
 }
 
 // getJSONLFiles returns all .jsonl files in a directory (non-recursive)

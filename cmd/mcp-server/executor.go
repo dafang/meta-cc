@@ -37,6 +37,7 @@ type toolPipelineConfig struct {
 	previewLength    int
 	groupBySession   bool
 	statsLevel       string // "turn" (default) or "session"
+	contextTurns     int
 }
 
 func newToolPipelineConfig(args map[string]interface{}) toolPipelineConfig {
@@ -50,6 +51,7 @@ func newToolPipelineConfig(args map[string]interface{}) toolPipelineConfig {
 		previewLength:    getIntParam(args, "preview_length", DefaultPreviewLength),
 		groupBySession:   getBoolParam(args, "group_by_session", false),
 		statsLevel:       getStringParam(args, "stats_level", "turn"),
+		contextTurns:     getIntParam(args, "context_turns", 0),
 	}
 }
 
@@ -348,6 +350,22 @@ func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, arg
 		parsedData = e.applyMessageFiltersToData(rawData, pipeline.maxMessageLength, pipeline.contentSummary, pipeline.previewLength)
 	}
 
+	// Expand context turns (before groupBySession so group_by_session sees context turns too)
+	if pipeline.contextTurns > 0 && toolName == "query_user_messages" &&
+		getStringParam(args, "content_type", "string") != "array" {
+		baseDir, err := getQueryBaseDir(
+			getStringParam(args, "scope", "project"),
+			getStringParam(args, "working_dir", ""),
+		)
+		if err != nil {
+			return "", err
+		}
+		parsedData, err = e.expandContextTurns(parsedData, pipeline.contextTurns, baseDir)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	// Group by session after message filters (so content_summary is applied to turns first)
 	if pipeline.groupBySession && toolName == "query_user_messages" {
 		parsedData = querypkg.GroupBySession(parsedData)
@@ -555,6 +573,142 @@ func (e *ToolExecutor) applyMessageFiltersToData(messages []interface{}, maxMess
 		return ApplyContentSummary(messages, previewLength)
 	}
 	return TruncateMessageContent(messages, maxMessageLength)
+}
+
+// expandContextTurns takes rawData (matched entries) and expands each matched turn
+// by including up to N turns before and after it (within the same session).
+// Matched turns are marked with "context":false; surrounding context turns with "context":true.
+// Overlapping windows are merged (no duplicates). Order is chronological within each session.
+func (e *ToolExecutor) expandContextTurns(rawData []interface{}, N int, baseDir string) ([]interface{}, error) {
+	if N <= 0 || len(rawData) == 0 {
+		return rawData, nil
+	}
+
+	// 1. Build set of matched UUIDs and collect distinct sessionIds (preserving order)
+	matchedUUIDs := make(map[string]bool)
+	var sessionOrder []string
+	sessionSeen := make(map[string]bool)
+
+	for _, entry := range rawData {
+		obj, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		uuid, _ := obj["uuid"].(string)
+		if uuid != "" {
+			matchedUUIDs[uuid] = true
+		}
+		// Raw data uses camelCase sessionId
+		sessionID, _ := obj["sessionId"].(string)
+		if sessionID == "" {
+			// Fallback to snake_case
+			sessionID, _ = obj["session_id"].(string)
+		}
+		if sessionID != "" && !sessionSeen[sessionID] {
+			sessionOrder = append(sessionOrder, sessionID)
+			sessionSeen[sessionID] = true
+		}
+	}
+
+	// 2. For each distinct sessionId, load all turns for that session
+	sessionTurns := make(map[string][]interface{})
+	for _, sessionID := range sessionOrder {
+		turns, err := loadTurnsForSession(baseDir, sessionID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load turns for session %s: %w", sessionID, err)
+		}
+		sessionTurns[sessionID] = turns
+	}
+
+	// 3. For each session, find windows around matched turns and mark context field
+	// Use seen-uuid map to deduplicate across overlapping windows
+	seenUUIDs := make(map[string]bool)
+	var result []interface{}
+
+	for _, sessionID := range sessionOrder {
+		turns := sessionTurns[sessionID]
+		if len(turns) == 0 {
+			continue
+		}
+
+		// Build UUID→index map for this session
+		uuidToIndex := make(map[string]int, len(turns))
+		for i, turn := range turns {
+			obj, ok := turn.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			uuid, _ := obj["uuid"].(string)
+			if uuid != "" {
+				uuidToIndex[uuid] = i
+			}
+		}
+
+		// Collect all window indices for matched turns in this session
+		// Process in index order for chronological output
+		windowSet := make(map[int]bool)
+		for _, entry := range rawData {
+			obj, ok := entry.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			entrySessionID, _ := obj["sessionId"].(string)
+			if entrySessionID == "" {
+				entrySessionID, _ = obj["session_id"].(string)
+			}
+			if entrySessionID != sessionID {
+				continue
+			}
+			uuid, _ := obj["uuid"].(string)
+			idx, exists := uuidToIndex[uuid]
+			if !exists {
+				continue
+			}
+			lo := idx - N
+			if lo < 0 {
+				lo = 0
+			}
+			hi := idx + N
+			if hi >= len(turns) {
+				hi = len(turns) - 1
+			}
+			for i := lo; i <= hi; i++ {
+				windowSet[i] = true
+			}
+		}
+
+		// Emit turns in index order, skipping duplicates
+		for i := 0; i < len(turns); i++ {
+			if !windowSet[i] {
+				continue
+			}
+			turnObj, ok := turns[i].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			uuid, _ := turnObj["uuid"].(string)
+			if uuid != "" && seenUUIDs[uuid] {
+				continue
+			}
+			if uuid != "" {
+				seenUUIDs[uuid] = true
+			}
+
+			// Copy the object and add the "context" field
+			newObj := make(map[string]interface{}, len(turnObj)+1)
+			for k, v := range turnObj {
+				newObj[k] = v
+			}
+			if matchedUUIDs[uuid] {
+				newObj["context"] = false
+			} else {
+				newObj["context"] = true
+			}
+			result = append(result, newObj)
+		}
+	}
+
+	return result, nil
 }
 
 // Helper functions

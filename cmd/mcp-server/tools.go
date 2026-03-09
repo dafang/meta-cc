@@ -316,6 +316,10 @@ func getToolDefinitions() []Tool {
 				Type:        "string",
 				Description: "Aggregation level for stats_only/stats_first: 'turn' (default, hourly buckets) or 'session' (per-session match_count and duration).",
 			},
+			"context_turns": {
+				Type:        "integer",
+				Description: "Number of turns to include before and after each matched turn (same session). Context turns are marked with 'context': true; matched turns with 'context': false. Default: 0 (disabled). Only applies to string content_type.",
+			},
 			// Override jq_filter with schema
 			"jq_filter": jqFilterWithSchema(map[string]string{
 				"sessionId": "string - Session identifier",

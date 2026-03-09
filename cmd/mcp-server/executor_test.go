@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1498,5 +1499,325 @@ func TestStatsLevelInvalid(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "must be 'turn' or 'session'") {
 		t.Errorf("expected error to contain \"must be 'turn' or 'session'\", got: %v", err)
+	}
+}
+
+// setupContextTurnsFixture creates a fixture for context_turns tests.
+// Returns (projectDir, executor, cleanup). The session file is placed in
+// a META_CC_PROJECTS_ROOT hash directory so ExecuteTool can find it.
+// Fixture: 5 turns for "ctx-sess-A", all matching pattern ".".
+func setupContextTurnsFixture(t *testing.T) (string, *ToolExecutor, func()) {
+	t.Helper()
+	projectDir := t.TempDir()
+	projectsRoot := t.TempDir()
+	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+
+	fixture := "" +
+		`{"type":"user","uuid":"ct0","sessionId":"ctx-sess-A","timestamp":"2026-03-09T06:00:00Z","message":{"role":"user","content":"turn 0"}}` + "\n" +
+		`{"type":"user","uuid":"ct1","sessionId":"ctx-sess-A","timestamp":"2026-03-09T06:01:00Z","message":{"role":"user","content":"turn 1"}}` + "\n" +
+		`{"type":"user","uuid":"ct2","sessionId":"ctx-sess-A","timestamp":"2026-03-09T06:02:00Z","message":{"role":"user","content":"turn 2"}}` + "\n" +
+		`{"type":"user","uuid":"ct3","sessionId":"ctx-sess-A","timestamp":"2026-03-09T06:03:00Z","message":{"role":"user","content":"turn 3"}}` + "\n" +
+		`{"type":"user","uuid":"ct4","sessionId":"ctx-sess-A","timestamp":"2026-03-09T06:04:00Z","message":{"role":"user","content":"turn 4"}}` + "\n"
+
+	writeSessionFixture(t, projectDir, "ctx-session", fixture)
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	return projectDir, NewToolExecutor(), func() { _ = os.Chdir(oldWd) }
+}
+
+// setupContextTurnsOverlapFixture creates a fixture with 10 turns for overlap tests.
+func setupContextTurnsOverlapFixture(t *testing.T) (string, *ToolExecutor, func()) {
+	t.Helper()
+	projectDir := t.TempDir()
+	projectsRoot := t.TempDir()
+	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+
+	var lines []string
+	for i := 0; i < 10; i++ {
+		ts := fmt.Sprintf("2026-03-09T06:%02d:00Z", i)
+		// turns 2 and 4 contain "match-me"; others contain "turn N"
+		var content string
+		if i == 2 || i == 4 {
+			content = fmt.Sprintf("match-me turn %d", i)
+		} else {
+			content = fmt.Sprintf("turn %d", i)
+		}
+		lines = append(lines, fmt.Sprintf(
+			`{"type":"user","uuid":"co%d","sessionId":"overlap-sess","timestamp":"%s","message":{"role":"user","content":"%s"}}`,
+			i, ts, content,
+		))
+	}
+
+	fixture := strings.Join(lines, "\n") + "\n"
+	writeSessionFixture(t, projectDir, "overlap-session", fixture)
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	return projectDir, NewToolExecutor(), func() { _ = os.Chdir(oldWd) }
+}
+
+// extractContextTurnsResults reads inline or file_ref output and returns []map[string]interface{}.
+func extractContextTurnsResults(t *testing.T, output string) []map[string]interface{} {
+	t.Helper()
+	var responseObj map[string]interface{}
+	if err := json.Unmarshal([]byte(output), &responseObj); err != nil {
+		t.Fatalf("failed to parse response JSON: %v\noutput: %s", err, output)
+	}
+
+	mode, _ := responseObj["mode"].(string)
+	var items []interface{}
+	if mode == "inline" {
+		var ok bool
+		items, ok = responseObj["data"].([]interface{})
+		if !ok {
+			t.Fatalf("inline mode: expected data array, got %T", responseObj["data"])
+		}
+	} else {
+		fileRefObj, ok := responseObj["file_ref"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected file_ref or inline, got mode=%q output: %s", mode, output)
+		}
+		path, _ := fileRefObj["path"].(string)
+		rawBytes, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read file_ref %s: %v", path, err)
+		}
+		defer os.Remove(path)
+		for _, line := range strings.Split(strings.TrimSpace(string(rawBytes)), "\n") {
+			if line == "" {
+				continue
+			}
+			var obj interface{}
+			if err := json.Unmarshal([]byte(line), &obj); err != nil {
+				t.Fatalf("failed to parse JSONL line: %v", err)
+			}
+			items = append(items, obj)
+		}
+	}
+
+	result := make([]map[string]interface{}, 0, len(items))
+	for _, item := range items {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			t.Fatalf("expected map item, got %T", item)
+		}
+		result = append(result, m)
+	}
+	return result
+}
+
+// TestContextTurns_Basic: 5-turn session, match turn at index 2, context_turns=1 →
+// indices 1,2,3 returned; index 2 has "context":false, others "context":true.
+func TestContextTurns_Basic(t *testing.T) {
+	_, executor, cleanup := setupContextTurnsFixture(t)
+	defer cleanup()
+
+	cfg := &config.Config{}
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":       "turn 2",
+		"context_turns": float64(1),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	results := extractContextTurnsResults(t, output)
+	if len(results) != 3 {
+		t.Fatalf("expected 3 turns (index 1,2,3), got %d: %v", len(results), results)
+	}
+
+	// Find the matched turn (uuid=ct2) and verify context field
+	for _, r := range results {
+		uuid, _ := r["uuid"].(string)
+		ctxVal, hasCtx := r["context"]
+		if uuid == "ct2" {
+			if hasCtx && ctxVal.(bool) == true {
+				t.Errorf("matched turn (ct2) should have context:false, got context:true")
+			}
+		} else {
+			if !hasCtx || ctxVal.(bool) != true {
+				t.Errorf("context turn (%s) should have context:true, got %v", uuid, ctxVal)
+			}
+		}
+	}
+}
+
+// TestContextTurns_BoundaryStart: match turn 0, context_turns=2 → turns 0,1,2 (no negative index).
+func TestContextTurns_BoundaryStart(t *testing.T) {
+	_, executor, cleanup := setupContextTurnsFixture(t)
+	defer cleanup()
+
+	cfg := &config.Config{}
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":       "turn 0",
+		"context_turns": float64(2),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	results := extractContextTurnsResults(t, output)
+	if len(results) != 3 {
+		t.Fatalf("expected 3 turns (index 0,1,2), got %d: %v", len(results), results)
+	}
+
+	// Verify first turn (uuid=ct0) is the matched one
+	first := results[0]
+	if uuid, _ := first["uuid"].(string); uuid != "ct0" {
+		t.Errorf("expected first turn uuid=ct0, got %s", uuid)
+	}
+}
+
+// TestContextTurns_BoundaryEnd: match last turn (index 4), context_turns=2 → turns 2,3,4.
+func TestContextTurns_BoundaryEnd(t *testing.T) {
+	_, executor, cleanup := setupContextTurnsFixture(t)
+	defer cleanup()
+
+	cfg := &config.Config{}
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":       "turn 4",
+		"context_turns": float64(2),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	results := extractContextTurnsResults(t, output)
+	if len(results) != 3 {
+		t.Fatalf("expected 3 turns (index 2,3,4), got %d: %v", len(results), results)
+	}
+
+	// Verify last turn (uuid=ct4) is the matched one
+	last := results[len(results)-1]
+	if uuid, _ := last["uuid"].(string); uuid != "ct4" {
+		t.Errorf("expected last turn uuid=ct4, got %s", uuid)
+	}
+}
+
+// TestContextTurns_OverlappingWindows: 10-turn session, matches at indices 2 and 4,
+// context_turns=2 → indices 0–6 returned (windows merged), no duplicates.
+// Turns 2 and 4 have context:false; others have context:true.
+func TestContextTurns_OverlappingWindows(t *testing.T) {
+	_, executor, cleanup := setupContextTurnsOverlapFixture(t)
+	defer cleanup()
+
+	cfg := &config.Config{}
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":       "match-me",
+		"context_turns": float64(2),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	results := extractContextTurnsResults(t, output)
+	// Window for turn 2: [0,1,2,3,4]; window for turn 4: [2,3,4,5,6]
+	// Union: [0,1,2,3,4,5,6] = 7 items
+	if len(results) != 7 {
+		t.Fatalf("expected 7 turns (indices 0-6), got %d: %v", len(results), results)
+	}
+
+	// Verify no duplicate uuids
+	seen := make(map[string]bool)
+	for _, r := range results {
+		uuid, _ := r["uuid"].(string)
+		if seen[uuid] {
+			t.Errorf("duplicate uuid found: %s", uuid)
+		}
+		seen[uuid] = true
+	}
+
+	// Turns co2 and co4 should have context:false; others context:true
+	for _, r := range results {
+		uuid, _ := r["uuid"].(string)
+		ctxVal, hasCtx := r["context"]
+		if uuid == "co2" || uuid == "co4" {
+			if hasCtx && ctxVal.(bool) == true {
+				t.Errorf("matched turn %s should have context:false, got context:true", uuid)
+			}
+		} else {
+			if !hasCtx || ctxVal.(bool) != true {
+				t.Errorf("context turn %s should have context:true, got %v", uuid, ctxVal)
+			}
+		}
+	}
+}
+
+// TestContextTurns_ArrayContentType: content_type=array with context_turns → no error,
+// no "context" field in output (silently ignored).
+func TestContextTurns_ArrayContentType(t *testing.T) {
+	projectDir := t.TempDir()
+	projectsRoot := t.TempDir()
+	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+
+	fixture := `{"type":"user","uuid":"ar1","sessionId":"arr-sess","timestamp":"2026-03-09T06:00:00Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}}` + "\n" +
+		`{"type":"user","uuid":"ar2","sessionId":"arr-sess","timestamp":"2026-03-09T06:01:00Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t2","content":"done"}]}}` + "\n"
+	writeSessionFixture(t, projectDir, "arr-session", fixture)
+
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get wd: %v", err)
+	}
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(oldWd) }()
+
+	executor := NewToolExecutor()
+	cfg := &config.Config{}
+	output, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"content_type":  "array",
+		"context_turns": float64(2),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should return results without "context" field
+	if strings.Contains(output, `"context"`) {
+		t.Errorf("array content_type: should not add context field, but got: %s", output)
+	}
+}
+
+// TestContextTurns_Zero: context_turns=0 → output identical to not specifying context_turns.
+func TestContextTurns_Zero(t *testing.T) {
+	_, executor, cleanup := setupContextTurnsFixture(t)
+	defer cleanup()
+
+	cfg := &config.Config{}
+
+	// Without context_turns
+	output1, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern": "turn 2",
+	})
+	if err != nil {
+		t.Fatalf("without context_turns: unexpected error: %v", err)
+	}
+
+	// With context_turns=0
+	output2, err := executor.ExecuteTool(cfg, "query_user_messages", map[string]interface{}{
+		"pattern":       "turn 2",
+		"context_turns": float64(0),
+	})
+	if err != nil {
+		t.Fatalf("context_turns=0: unexpected error: %v", err)
+	}
+
+	// Both should have the same number of results (just 1 match, no context)
+	results1 := extractContextTurnsResults(t, output1)
+	results2 := extractContextTurnsResults(t, output2)
+	if len(results1) != len(results2) {
+		t.Errorf("context_turns=0 should produce same count as no context_turns: got %d vs %d", len(results2), len(results1))
 	}
 }

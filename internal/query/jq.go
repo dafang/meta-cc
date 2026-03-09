@@ -207,7 +207,11 @@ func GroupBySession(entries []interface{}) []interface{} {
 		}
 
 		g := groups[sessionID]
-		g.MatchCount++
+		// When context_turns is active, entries with "context":true are surrounding
+		// context turns — don't count them as matches.
+		if ctx, _ := obj["context"].(bool); !ctx {
+			g.MatchCount++
+		}
 		g.Turns = append(g.Turns, entry)
 		if ts != "" && (g.FirstMatch == "" || ts < g.FirstMatch) {
 			g.FirstMatch = ts

@@ -681,6 +681,70 @@ func TestExcludeSystemMessages(t *testing.T) {
 	assert.Len(t, result2.Entries, 2, "with exclusion, only 2 real user messages should be returned")
 }
 
+// TestLoadTurnsForSession_Basic verifies that loadTurnsForSession correctly filters
+// entries by sessionId from a JSONL file.
+func TestLoadTurnsForSession_Basic(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "session.jsonl")
+
+	// 5 turns: 3 for sess-A, 2 for sess-B
+	lines := []string{
+		`{"type":"user","uuid":"a1","sessionId":"sess-A","timestamp":"2026-03-09T06:00:00Z","message":{"role":"user","content":"turn 1 A"}}`,
+		`{"type":"user","uuid":"b1","sessionId":"sess-B","timestamp":"2026-03-09T06:01:00Z","message":{"role":"user","content":"turn 1 B"}}`,
+		`{"type":"user","uuid":"a2","sessionId":"sess-A","timestamp":"2026-03-09T06:02:00Z","message":{"role":"user","content":"turn 2 A"}}`,
+		`{"type":"user","uuid":"b2","sessionId":"sess-B","timestamp":"2026-03-09T06:03:00Z","message":{"role":"user","content":"turn 2 B"}}`,
+		`{"type":"user","uuid":"a3","sessionId":"sess-A","timestamp":"2026-03-09T06:04:00Z","message":{"role":"user","content":"turn 3 A"}}`,
+	}
+	content := strings.Join(lines, "\n") + "\n"
+	require.NoError(t, os.WriteFile(file, []byte(content), 0644))
+
+	// sess-A → 3 turns
+	turnsA, err := loadTurnsForSession(tmpDir, "sess-A")
+	require.NoError(t, err, "loadTurnsForSession sess-A should not error")
+	assert.Len(t, turnsA, 3, "sess-A should have 3 turns")
+
+	// sess-B → 2 turns
+	turnsB, err := loadTurnsForSession(tmpDir, "sess-B")
+	require.NoError(t, err, "loadTurnsForSession sess-B should not error")
+	assert.Len(t, turnsB, 2, "sess-B should have 2 turns")
+
+	// sess-X → 0 turns, nil error
+	turnsX, err := loadTurnsForSession(tmpDir, "sess-X")
+	require.NoError(t, err, "loadTurnsForSession sess-X should not error")
+	assert.Len(t, turnsX, 0, "sess-X should have 0 turns")
+}
+
+// TestLoadTurnsForSession_MultipleFiles verifies that loadTurnsForSession can find
+// a session spread across multiple JSONL files (each file has one session).
+func TestLoadTurnsForSession_MultipleFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// File 1: sess-A
+	f1 := filepath.Join(tmpDir, "session-1.jsonl")
+	require.NoError(t, os.WriteFile(f1, []byte(
+		`{"type":"user","uuid":"a1","sessionId":"sess-A","timestamp":"2026-03-09T06:00:00Z","message":{"role":"user","content":"A1"}}`+"\n"+
+			`{"type":"user","uuid":"a2","sessionId":"sess-A","timestamp":"2026-03-09T06:01:00Z","message":{"role":"user","content":"A2"}}`+"\n",
+	), 0644))
+
+	// File 2: sess-B
+	f2 := filepath.Join(tmpDir, "session-2.jsonl")
+	require.NoError(t, os.WriteFile(f2, []byte(
+		`{"type":"user","uuid":"b1","sessionId":"sess-B","timestamp":"2026-03-09T07:00:00Z","message":{"role":"user","content":"B1"}}`+"\n",
+	), 0644))
+
+	// Touch file 2 to be newer
+	newTime := time.Now()
+	require.NoError(t, os.Chtimes(f2, newTime, newTime))
+
+	turnsA, err := loadTurnsForSession(tmpDir, "sess-A")
+	require.NoError(t, err)
+	assert.Len(t, turnsA, 2, "sess-A should have 2 turns (from file-1)")
+
+	turnsB, err := loadTurnsForSession(tmpDir, "sess-B")
+	require.NoError(t, err)
+	assert.Len(t, turnsB, 1, "sess-B should have 1 turn (from file-2)")
+}
+
 // TestExcludeSystemMessages_NoErrorOnArrayType verifies that exclude_system_messages
 // is silently ignored when content_type is "array".
 func TestExcludeSystemMessages_NoErrorOnArrayType(t *testing.T) {
