@@ -7,7 +7,7 @@ set -e
 ERRORS=0
 
 MARKETPLACE_JSON=".claude-plugin/marketplace.json"
-PLUGIN_JSON=".claude-plugin/plugin.json"
+PLUGIN_JSON="plugin-src/.claude-plugin/plugin.json"
 
 # Validate marketplace.json
 if jq -e '.plugins[0].version' "$MARKETPLACE_JSON" >/dev/null 2>&1; then

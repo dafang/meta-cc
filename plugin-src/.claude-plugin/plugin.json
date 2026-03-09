@@ -10,7 +10,7 @@
   "license": "MIT",
   "homepage": "https://github.com/yaleh/meta-cc",
   "repository": "https://github.com/yaleh/meta-cc",
-  "mcpServers": "./.claude-plugin/mcp.json",
+  "mcpServers": "./.mcp.json",
   "keywords": [
     "workflow-analysis",
     "session-history",
@@ -26,8 +26,8 @@
     "technical-debt"
   ],
   "commands": [
-    "./.claude/commands/prompt-find.md",
-    "./.claude/commands/prompt-list.md",
-    "./.claude/commands/prompt-show.md"
+    "./commands/prompt-find.md",
+    "./commands/prompt-list.md",
+    "./commands/prompt-show.md"
   ]
 }

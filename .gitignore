@@ -2,6 +2,9 @@
 coverage.out
 /meta-cc-mcp
 /bin/
+/plugin-src/bin/
+/.claude/settings.local.json
+/.claude/worktrees/
 coverage.html
 /.gemini/
 /.pre-commit-cache/
