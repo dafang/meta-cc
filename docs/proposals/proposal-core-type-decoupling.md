@@ -1,6 +1,6 @@
 # Proposal: Core Type Decoupling — Move Domain Types out of internal/parser
 
-**Status**: Reviewed
+**Status**: Implemented (2026-03-10, Phases 56–57)
 **Date**: 2026-03-10
 **Author**: Yale Huang
 

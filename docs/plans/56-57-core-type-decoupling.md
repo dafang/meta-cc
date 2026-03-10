@@ -1,6 +1,6 @@
 # Plan 56–57: Core Type Decoupling
 
-**Status**: Planned
+**Status**: Completed 2026-03-10
 **Proposal**: [docs/proposals/proposal-core-type-decoupling.md](../proposals/proposal-core-type-decoupling.md)
 
 ---
