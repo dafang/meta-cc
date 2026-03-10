@@ -8,22 +8,16 @@ import (
 	"strings"
 
 	"github.com/yaleh/meta-cc/internal/parser"
-	pipelinepkg "github.com/yaleh/meta-cc/pkg/pipeline"
 )
 
 // ErrInvalidPattern indicates the provided regex pattern could not be compiled.
 var ErrInvalidPattern = errors.New("query: invalid regex pattern")
 
-// RunUserMessagesQuery extracts user messages from the session pipeline, applies
+// RunUserMessagesQuery extracts user messages from the provided SessionLoader, applies
 // pattern filtering, context expansion, sorting, and pagination according to options.
-func RunUserMessagesQuery(opts UserMessagesQueryOptions) ([]UserMessage, error) {
-	pipe := pipelinepkg.NewSessionPipeline(opts.Pipeline)
-	if err := pipe.Load(pipelinepkg.LoadOptions{AutoDetect: true}); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrSessionLoad, err)
-	}
-
-	entries := pipe.Entries()
-	turnIndex := pipe.BuildTurnIndex()
+func RunUserMessagesQuery(loader SessionLoader, opts UserMessagesQueryOptions) ([]UserMessage, error) {
+	entries := loader.Entries()
+	turnIndex := loader.BuildTurnIndex()
 
 	messages := extractUserMessages(entries, turnIndex)
 

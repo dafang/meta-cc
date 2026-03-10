@@ -32,6 +32,7 @@ We follow the standard ADR format proposed by Michael Nygard:
 | [ADR-003](ADR-003-mcp-server-integration.md) | MCP Server Integration Strategy | Accepted | 2025-10-10 |
 | [ADR-004](ADR-004-hybrid-output-mode.md) | Hybrid Output Mode Design | Accepted | 2025-10-10 |
 | [ADR-005](ADR-005-scope-parameter-standardization.md) | Scope Parameter Standardization | Accepted | 2025-10-10 |
+| [ADR-006](ADR-006-pkg-vs-internal-convention.md) | pkg/ vs internal/ Directory Convention | Accepted | 2026-03-10 |
 
 ## Creating New ADRs
 

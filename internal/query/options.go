@@ -1,29 +1,25 @@
 package query
 
-import pipelinepkg "github.com/yaleh/meta-cc/pkg/pipeline"
-
 // ToolsQueryOptions configures RunToolsQuery behaviour.
 type ToolsQueryOptions struct {
-	Pipeline   pipelinepkg.GlobalOptions // Session/project scope configuration
-	Limit      int                       // Max records to return (0 = no limit)
-	Offset     int                       // Number of records to skip before returning results
-	SortBy     string                    // Sort field (timestamp, tool, status, uuid)
-	Reverse    bool                      // Reverse sort order
-	Status     string                    // Filter by status (success|error)
-	Tool       string                    // Filter by tool name
-	Where      string                    // Key=value filter expression
-	Expression string                    // Advanced expression filter (SQL-like)
+	Limit      int    // Max records to return (0 = no limit)
+	Offset     int    // Number of records to skip before returning results
+	SortBy     string // Sort field (timestamp, tool, status, uuid)
+	Reverse    bool   // Reverse sort order
+	Status     string // Filter by status (success|error)
+	Tool       string // Filter by tool name
+	Where      string // Key=value filter expression
+	Expression string // Advanced expression filter (SQL-like)
 }
 
 // UserMessagesQueryOptions configures RunUserMessagesQuery behaviour.
 type UserMessagesQueryOptions struct {
-	Pipeline pipelinepkg.GlobalOptions // Session/project scope configuration
-	Pattern  string                    // Regex pattern to match message content
-	Context  int                       // Number of turns of context before/after
-	Limit    int                       // Max messages to return (0 = no limit)
-	Offset   int                       // Number of results to skip before returning
-	SortBy   string                    // Sort field (turn_sequence, timestamp, uuid)
-	Reverse  bool                      // Reverse sort order
+	Pattern string // Regex pattern to match message content
+	Context int    // Number of turns of context before/after
+	Limit   int    // Max messages to return (0 = no limit)
+	Offset  int    // Number of results to skip before returning
+	SortBy  string // Sort field (turn_sequence, timestamp, uuid)
+	Reverse bool   // Reverse sort order
 }
 
 // ContextEntry captures contextual turns surrounding a user message.

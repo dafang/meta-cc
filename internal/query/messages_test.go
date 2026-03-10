@@ -1,51 +1,46 @@
 package query
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
-	pipelinepkg "github.com/yaleh/meta-cc/pkg/pipeline"
+	"github.com/yaleh/meta-cc/internal/parser"
 )
 
-func createMessagesTestSession(t *testing.T, sessionID, projectHash string, content string) {
-	t.Helper()
-
-	projectsRoot := os.Getenv("META_CC_PROJECTS_ROOT")
-	if projectsRoot == "" {
-		t.Fatal("META_CC_PROJECTS_ROOT must be set for tests")
-	}
-
-	sessionDir := filepath.Join(projectsRoot, projectHash)
-	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
-		t.Fatalf("failed to create session dir: %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(sessionDir) })
-
-	sessionFile := filepath.Join(sessionDir, sessionID+".jsonl")
-	if err := os.WriteFile(sessionFile, []byte(content), 0o644); err != nil {
-		t.Fatalf("failed to write session fixture: %v", err)
+func makeTextEntry(uuid, role, text, timestamp string) parser.SessionEntry {
+	return parser.SessionEntry{
+		Type:      role,
+		UUID:      uuid,
+		Timestamp: timestamp,
+		Message: &parser.Message{
+			Role:    role,
+			Content: []parser.ContentBlock{{Type: "text", Text: text}},
+		},
 	}
 }
 
 func TestRunUserMessagesQuery_PatternAndContext(t *testing.T) {
-	t.Setenv("META_CC_PROJECTS_ROOT", t.TempDir())
-	sessionID := "test-messages-library"
-	projectHash := "-home-yale-work-test-messages-library"
-	fixture := `{"type":"user","timestamp":"2025-10-02T10:00:00.000Z","uuid":"uuid-1","sessionId":"test","message":{"role":"user","content":"Fix bug in parser"}}
-{"type":"assistant","timestamp":"2025-10-02T10:00:10.000Z","uuid":"uuid-2","sessionId":"test","message":{"role":"assistant","content":[{"type":"text","text":"Sure"}]}}
-{"type":"user","timestamp":"2025-10-02T10:01:00.000Z","uuid":"uuid-3","sessionId":"test","message":{"role":"user","content":"Add new feature"}}
-`
-
-	createMessagesTestSession(t, sessionID, projectHash, fixture)
-
-	opts := UserMessagesQueryOptions{
-		Pipeline: pipelinepkg.GlobalOptions{SessionID: sessionID},
-		Pattern:  "Fix",
-		Context:  1,
+	entries := []parser.SessionEntry{
+		makeTextEntry("uuid-1", "user", "Fix bug in parser", "2025-10-02T10:00:00.000Z"),
+		makeTextEntry("uuid-2", "assistant", "Sure", "2025-10-02T10:00:10.000Z"),
+		makeTextEntry("uuid-3", "user", "Add new feature", "2025-10-02T10:01:00.000Z"),
+	}
+	turnIndex := map[string]int{
+		"uuid-1": 0,
+		"uuid-2": 1,
+		"uuid-3": 2,
 	}
 
-	msgs, err := RunUserMessagesQuery(opts)
+	loader := &mockSessionLoader{
+		entries:   entries,
+		turnIndex: turnIndex,
+	}
+
+	opts := UserMessagesQueryOptions{
+		Pattern: "Fix",
+		Context: 1,
+	}
+
+	msgs, err := RunUserMessagesQuery(loader, opts)
 	if err != nil {
 		t.Fatalf("RunUserMessagesQuery failed: %v", err)
 	}
@@ -64,23 +59,28 @@ func TestRunUserMessagesQuery_PatternAndContext(t *testing.T) {
 }
 
 func TestRunUserMessagesQuery_LimitOffset(t *testing.T) {
-	t.Setenv("META_CC_PROJECTS_ROOT", t.TempDir())
-	sessionID := "test-messages-library-pagination"
-	projectHash := "-home-yale-work-test-messages-library-pagination"
-	fixture := `{"type":"user","timestamp":"2025-10-02T10:00:00.000Z","uuid":"uuid-1","sessionId":"test","message":{"role":"user","content":"Message 1"}}
-{"type":"user","timestamp":"2025-10-02T10:01:00.000Z","uuid":"uuid-2","sessionId":"test","message":{"role":"user","content":"Message 2"}}
-{"type":"user","timestamp":"2025-10-02T10:02:00.000Z","uuid":"uuid-3","sessionId":"test","message":{"role":"user","content":"Message 3"}}
-`
-
-	createMessagesTestSession(t, sessionID, projectHash, fixture)
-
-	opts := UserMessagesQueryOptions{
-		Pipeline: pipelinepkg.GlobalOptions{SessionID: sessionID},
-		Offset:   1,
-		Limit:    1,
+	entries := []parser.SessionEntry{
+		makeTextEntry("uuid-1", "user", "Message 1", "2025-10-02T10:00:00.000Z"),
+		makeTextEntry("uuid-2", "user", "Message 2", "2025-10-02T10:01:00.000Z"),
+		makeTextEntry("uuid-3", "user", "Message 3", "2025-10-02T10:02:00.000Z"),
+	}
+	turnIndex := map[string]int{
+		"uuid-1": 0,
+		"uuid-2": 1,
+		"uuid-3": 2,
 	}
 
-	msgs, err := RunUserMessagesQuery(opts)
+	loader := &mockSessionLoader{
+		entries:   entries,
+		turnIndex: turnIndex,
+	}
+
+	opts := UserMessagesQueryOptions{
+		Offset: 1,
+		Limit:  1,
+	}
+
+	msgs, err := RunUserMessagesQuery(loader, opts)
 	if err != nil {
 		t.Fatalf("RunUserMessagesQuery failed: %v", err)
 	}

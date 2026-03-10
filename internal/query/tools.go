@@ -8,7 +8,6 @@ import (
 
 	"github.com/yaleh/meta-cc/internal/filter"
 	"github.com/yaleh/meta-cc/internal/parser"
-	pipelinepkg "github.com/yaleh/meta-cc/pkg/pipeline"
 )
 
 // Sentinel errors for consistent error handling by callers.
@@ -17,15 +16,10 @@ var (
 	ErrFilterInvalid = errors.New("query: invalid filter")
 )
 
-// RunToolsQuery loads tool calls using the session pipeline, applies filters, sorting,
+// RunToolsQuery loads tool calls using the provided SessionLoader, applies filters, sorting,
 // and pagination according to the provided options, and returns the resulting slice.
-func RunToolsQuery(opts ToolsQueryOptions) ([]parser.ToolCall, error) {
-	pipe := pipelinepkg.NewSessionPipeline(opts.Pipeline)
-	if err := pipe.Load(pipelinepkg.LoadOptions{AutoDetect: true}); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrSessionLoad, err)
-	}
-
-	calls := pipe.ExtractToolCalls()
+func RunToolsQuery(loader SessionLoader, opts ToolsQueryOptions) ([]parser.ToolCall, error) {
+	calls := loader.ExtractToolCalls()
 
 	filtered, err := applyToolFilters(calls, opts)
 	if err != nil {
