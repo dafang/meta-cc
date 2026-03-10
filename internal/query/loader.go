@@ -1,11 +1,7 @@
 package query
 
-import "github.com/yaleh/meta-cc/internal/parser"
+import "github.com/yaleh/meta-cc/internal/types"
 
-// SessionLoader abstracts session data loading so query functions
-// don't depend on a concrete pipeline implementation.
-type SessionLoader interface {
-	Entries() []parser.SessionEntry
-	ExtractToolCalls() []parser.ToolCall
-	BuildTurnIndex() map[string]int
-}
+// SessionLoader is the interface for loading session data.
+// See internal/types.SessionLoader for the canonical definition.
+type SessionLoader = types.SessionLoader
