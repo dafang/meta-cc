@@ -1,6 +1,6 @@
 # Plan 58–59: Architecture Hygiene
 
-**Status**: Draft
+**Status**: Completed 2026-03-10
 **Proposal**: [docs/proposals/proposal-architecture-hygiene.md](../proposals/proposal-architecture-hygiene.md)
 
 ---

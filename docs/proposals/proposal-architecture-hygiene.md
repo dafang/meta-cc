@@ -1,6 +1,6 @@
 # Proposal: Architecture Hygiene — Five Structural Improvements
 
-**Status**: Draft
+**Status**: Implemented (2026-03-10, Phases 58–59)
 **Date**: 2026-03-10
 **Author**: Yale Huang
 
