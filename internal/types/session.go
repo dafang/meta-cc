@@ -1,4 +1,4 @@
-package parser
+package types
 
 import (
 	"encoding/json"
@@ -6,39 +6,37 @@ import (
 	"strings"
 )
 
-// SessionEntry 表示 Claude Code 会话文件中的一个条目
-// 可以是 user 消息、assistant 消息或其他类型（如 file-history-snapshot）
+// SessionEntry represents a single entry in a Claude Code session file.
+// It can be a user message, assistant message, or other type (e.g., file-history-snapshot).
 type SessionEntry struct {
 	Type       string   `json:"type"`       // "user", "assistant", "file-history-snapshot", etc.
-	Timestamp  string   `json:"timestamp"`  // ISO 8601 格式: "2025-10-02T06:07:13.673Z"
-	UUID       string   `json:"uuid"`       // 条目唯一标识
-	ParentUUID string   `json:"parentUuid"` // 父条目 UUID（构建消息链）
-	SessionID  string   `json:"sessionId"`  // 会话 ID
-	CWD        string   `json:"cwd"`        // 工作目录
-	Version    string   `json:"version"`    // Claude Code 版本
-	GitBranch  string   `json:"gitBranch"`  // Git 分支
-	Message    *Message `json:"message"`    // 消息内容（仅 user/assistant 类型有值）
+	Timestamp  string   `json:"timestamp"`  // ISO 8601: "2025-10-02T06:07:13.673Z"
+	UUID       string   `json:"uuid"`       // unique entry identifier
+	ParentUUID string   `json:"parentUuid"` // parent entry UUID (for chain building)
+	SessionID  string   `json:"sessionId"`  // session identifier
+	CWD        string   `json:"cwd"`        // working directory
+	Version    string   `json:"version"`    // Claude Code version
+	GitBranch  string   `json:"gitBranch"`  // git branch
+	Message    *Message `json:"message"`    // message content (only for user/assistant types)
 }
 
-// IsMessage 判断条目是否为消息类型（user 或 assistant）
+// IsMessage reports whether the entry is a message type (user or assistant).
 func (e *SessionEntry) IsMessage() bool {
 	return e.Type == "user" || e.Type == "assistant"
 }
 
-// Message 表示消息的详细内容
+// Message represents message content.
 type Message struct {
-	ID         string                 `json:"id"`          // 消息 ID（assistant 消息有值）
-	Role       string                 `json:"role"`        // "user" 或 "assistant"
-	Model      string                 `json:"model"`       // 模型名称（assistant 消息有值）
-	Content    []ContentBlock         `json:"-"`           // 内容块数组（手动处理）
-	StopReason string                 `json:"stop_reason"` // 停止原因
-	Usage      map[string]interface{} `json:"usage"`       // Token 使用统计
+	ID         string                 `json:"id"`          // message ID (set for assistant messages)
+	Role       string                 `json:"role"`        // "user" or "assistant"
+	Model      string                 `json:"model"`       // model name (set for assistant messages)
+	Content    []ContentBlock         `json:"-"`           // content blocks (custom JSON handling)
+	StopReason string                 `json:"stop_reason"` // stop reason
+	Usage      map[string]interface{} `json:"usage"`       // token usage stats
 }
 
-// UnmarshalJSON 自定义 JSON 反序列化
-// content 字段可以是 string 或 []ContentBlock
+// UnmarshalJSON handles custom deserialization: content can be a string or []ContentBlock.
 func (m *Message) UnmarshalJSON(data []byte) error {
-	// 首先尝试解析到临时结构
 	type Alias Message
 	aux := &struct {
 		ContentRaw json.RawMessage `json:"content"`
@@ -51,30 +49,24 @@ func (m *Message) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// 处理 content 字段
 	if len(aux.ContentRaw) == 0 {
 		return nil
 	}
 
-	// 尝试作为字符串解析
+	// Try as string first
 	var contentStr string
 	if err := json.Unmarshal(aux.ContentRaw, &contentStr); err == nil {
-		// content 是字符串，转换为单个 text ContentBlock
 		m.Content = []ContentBlock{
-			{
-				Type: "text",
-				Text: contentStr,
-			},
+			{Type: "text", Text: contentStr},
 		}
 		return nil
 	}
 
-	// 否则作为数组解析
+	// Otherwise parse as array
 	return json.Unmarshal(aux.ContentRaw, &m.Content)
 }
 
-// MarshalJSON 自定义 JSON 序列化
-// 确保 Content 字段被正确序列化
+// MarshalJSON ensures Content is serialized correctly.
 func (m *Message) MarshalJSON() ([]byte, error) {
 	type Alias Message
 	return json.Marshal(&struct {
@@ -86,33 +78,32 @@ func (m *Message) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// ContentBlock 表示消息中的一个内容块
-// 可以是文本、工具调用或工具结果
+// ContentBlock represents one content block in a message.
+// It can be text, a tool call, or a tool result.
 type ContentBlock struct {
 	Type       string      `json:"type"`
 	Text       string      `json:"text,omitempty"`
-	ToolUse    *ToolUse    `json:"-"` // 手动处理序列化
-	ToolResult *ToolResult `json:"-"` // 手动处理序列化
+	ToolUse    *ToolUse    `json:"-"` // custom serialization
+	ToolResult *ToolResult `json:"-"` // custom serialization
 }
 
-// ToolUse 表示一个工具调用
+// ToolUse represents a tool invocation request.
 type ToolUse struct {
 	ID    string                 `json:"id"`
 	Name  string                 `json:"name"`
 	Input map[string]interface{} `json:"input"`
 }
 
-// ToolResult 表示工具调用的结果
+// ToolResult represents the result of a tool invocation.
 type ToolResult struct {
 	ToolUseID string `json:"tool_use_id"`
-	Content   string `json:"-"`        // 手动处理（可以是 string 或 array）
-	IsError   bool   `json:"is_error"` // 标识是否为错误
+	Content   string `json:"-"` // custom handling (can be string or array)
+	IsError   bool   `json:"is_error"`
 	Status    string `json:"status,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
 
-// UnmarshalJSON 自定义 ToolResult 的反序列化逻辑
-// content 字段可以是 string 或 array
+// UnmarshalJSON handles custom deserialization: content can be a string or array.
 func (tr *ToolResult) UnmarshalJSON(data []byte) error {
 	type Alias ToolResult
 	aux := &struct {
@@ -126,23 +117,21 @@ func (tr *ToolResult) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// 处理 content 字段
 	if len(aux.ContentRaw) == 0 {
 		return nil
 	}
 
-	// 尝试作为字符串解析
+	// Try as string
 	var contentStr string
 	if err := json.Unmarshal(aux.ContentRaw, &contentStr); err == nil {
 		tr.Content = contentStr
-		// 当 is_error=true 时，将 content 也复制到 Error 字段
 		if tr.IsError && tr.Error == "" {
 			tr.Error = contentStr
 		}
 		return nil
 	}
 
-	// 否则作为数组解析（提取文本）
+	// Otherwise parse as array of text blocks
 	var contentBlocks []struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
@@ -151,7 +140,6 @@ func (tr *ToolResult) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("failed to unmarshal tool_result content: %w", err)
 	}
 
-	// 将所有文本块合并
 	var texts []string
 	for _, block := range contentBlocks {
 		if block.Text != "" {
@@ -160,7 +148,6 @@ func (tr *ToolResult) UnmarshalJSON(data []byte) error {
 	}
 	tr.Content = strings.Join(texts, "\n")
 
-	// 当 is_error=true 时，将合并后的 content 也复制到 Error 字段
 	if tr.IsError && tr.Error == "" {
 		tr.Error = tr.Content
 	}
@@ -168,10 +155,8 @@ func (tr *ToolResult) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalJSON 自定义 ContentBlock 的反序列化逻辑
-// 根据 type 字段，解析不同的内容到相应的字段
+// UnmarshalJSON handles custom deserialization for ContentBlock.
 func (cb *ContentBlock) UnmarshalJSON(data []byte) error {
-	// 先解析通用字段
 	type Alias ContentBlock
 	aux := &struct {
 		*Alias
@@ -185,16 +170,11 @@ func (cb *ContentBlock) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("failed to unmarshal ContentBlock: %w", err)
 	}
 
-	// 根据 type 解析特定字段
 	switch cb.Type {
 	case "text":
-		// text 类型已经由默认反序列化处理
+		// already handled by default deserialization
 
 	case "tool_use":
-		// 解析 tool_use 字段
-		var toolUse ToolUse
-		// tool_use 数据直接嵌入在 ContentBlock 中（除了 type）
-		// 需要重新解析整个 data
 		type ToolUseBlock struct {
 			Type  string                 `json:"type"`
 			ID    string                 `json:"id"`
@@ -205,14 +185,13 @@ func (cb *ContentBlock) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(data, &tub); err != nil {
 			return fmt.Errorf("failed to unmarshal tool_use: %w", err)
 		}
-		toolUse.ID = tub.ID
-		toolUse.Name = tub.Name
-		toolUse.Input = tub.Input
-		cb.ToolUse = &toolUse
+		cb.ToolUse = &ToolUse{
+			ID:    tub.ID,
+			Name:  tub.Name,
+			Input: tub.Input,
+		}
 
 	case "tool_result":
-		// 解析 tool_result 字段
-		// 使用 ToolResult 的自定义 UnmarshalJSON 方法
 		var toolResult ToolResult
 		if err := json.Unmarshal(data, &toolResult); err != nil {
 			return fmt.Errorf("failed to unmarshal tool_result: %w", err)
@@ -220,25 +199,20 @@ func (cb *ContentBlock) UnmarshalJSON(data []byte) error {
 		cb.ToolResult = &toolResult
 
 	default:
-		// 未知类型，保留原始数据但不报错
+		// unknown type — retain type field, no error
 	}
 
 	return nil
 }
 
-// MarshalJSON 自定义 ContentBlock 的序列化逻辑
-// 根据 type 字段，序列化不同的内容
-// 使用 value receiver 以支持 []ContentBlock 中的元素序列化
+// MarshalJSON handles custom serialization for ContentBlock.
 func (cb ContentBlock) MarshalJSON() ([]byte, error) {
 	switch cb.Type {
 	case "text":
 		return json.Marshal(struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
-		}{
-			Type: cb.Type,
-			Text: cb.Text,
-		})
+		}{Type: cb.Type, Text: cb.Text})
 
 	case "tool_use":
 		if cb.ToolUse == nil {
@@ -277,11 +251,8 @@ func (cb ContentBlock) MarshalJSON() ([]byte, error) {
 		})
 
 	default:
-		// 未知类型，返回仅包含 type 字段的简单对象（与 UnmarshalJSON 的行为一致）
 		return json.Marshal(struct {
 			Type string `json:"type"`
-		}{
-			Type: cb.Type,
-		})
+		}{Type: cb.Type})
 	}
 }

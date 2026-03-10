@@ -1,4 +1,4 @@
-package parser
+package types
 
 // MaxScannerLineBytes is the maximum line size for bufio.Scanner when reading
 // JSONL session files. Both the session parser and the MCP query executor
