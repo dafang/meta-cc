@@ -1,0 +1,5 @@
+ok  	github.com/yaleh/meta-cc/internal/parser	0.028s	coverage: 82.1% of statements
+ok  	github.com/yaleh/meta-cc/internal/analyzer	0.005s	coverage: 86.9% of statements
+ok  	github.com/yaleh/meta-cc/internal/query	0.007s	coverage: 92.2% of statements
+ok  	github.com/yaleh/meta-cc/internal/mcp	0.009s	coverage: 93.1% of statements
+ok  	github.com/yaleh/meta-cc/cmd/mcp-server	70.765s	coverage: 65.6% of statements

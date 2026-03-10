@@ -1,0 +1,150 @@
+=== RUN   TestBuildContextQuery
+=== RUN   TestBuildContextQuery/find_error_with_window_1
+=== RUN   TestBuildContextQuery/find_error_with_window_0
+=== RUN   TestBuildContextQuery/find_error_with_large_window
+=== RUN   TestBuildContextQuery/non-existent_error
+=== RUN   TestBuildContextQuery/negative_window
+--- PASS: TestBuildContextQuery (0.00s)
+    --- PASS: TestBuildContextQuery/find_error_with_window_1 (0.00s)
+    --- PASS: TestBuildContextQuery/find_error_with_window_0 (0.00s)
+    --- PASS: TestBuildContextQuery/find_error_with_large_window (0.00s)
+    --- PASS: TestBuildContextQuery/non-existent_error (0.00s)
+    --- PASS: TestBuildContextQuery/negative_window (0.00s)
+=== RUN   TestBuildTurnIndex
+--- PASS: TestBuildTurnIndex (0.00s)
+=== RUN   TestTruncateText
+=== RUN   TestTruncateText/short_text
+=== RUN   TestTruncateText/exact_length
+=== RUN   TestTruncateText/long_text
+=== RUN   TestTruncateText/with_leading/trailing_spaces
+--- PASS: TestTruncateText (0.00s)
+    --- PASS: TestTruncateText/short_text (0.00s)
+    --- PASS: TestTruncateText/exact_length (0.00s)
+    --- PASS: TestTruncateText/long_text (0.00s)
+    --- PASS: TestTruncateText/with_leading/trailing_spaces (0.00s)
+=== RUN   TestBuildFileAccessQuery
+=== RUN   TestBuildFileAccessQuery/full_path_match
+=== RUN   TestBuildFileAccessQuery/basename_match
+=== RUN   TestBuildFileAccessQuery/non-existent_file
+=== RUN   TestBuildFileAccessQuery/empty_file_path
+--- PASS: TestBuildFileAccessQuery (0.00s)
+    --- PASS: TestBuildFileAccessQuery/full_path_match (0.00s)
+    --- PASS: TestBuildFileAccessQuery/basename_match (0.00s)
+    --- PASS: TestBuildFileAccessQuery/non-existent_file (0.00s)
+    --- PASS: TestBuildFileAccessQuery/empty_file_path (0.00s)
+=== RUN   TestExtractFileFromToolCall
+=== RUN   TestExtractFileFromToolCall/file_path_parameter
+=== RUN   TestExtractFileFromToolCall/notebook_path_parameter
+=== RUN   TestExtractFileFromToolCall/no_file_parameter
+=== RUN   TestExtractFileFromToolCall/empty_file_path
+--- PASS: TestExtractFileFromToolCall (0.00s)
+    --- PASS: TestExtractFileFromToolCall/file_path_parameter (0.00s)
+    --- PASS: TestExtractFileFromToolCall/notebook_path_parameter (0.00s)
+    --- PASS: TestExtractFileFromToolCall/no_file_parameter (0.00s)
+    --- PASS: TestExtractFileFromToolCall/empty_file_path (0.00s)
+=== RUN   TestMatchesFile
+=== RUN   TestMatchesFile/exact_match
+=== RUN   TestMatchesFile/basename_match
+=== RUN   TestMatchesFile/different_files
+=== RUN   TestMatchesFile/same_basename_different_path
+--- PASS: TestMatchesFile (0.00s)
+    --- PASS: TestMatchesFile/exact_match (0.00s)
+    --- PASS: TestMatchesFile/basename_match (0.00s)
+    --- PASS: TestMatchesFile/different_files (0.00s)
+    --- PASS: TestMatchesFile/same_basename_different_path (0.00s)
+=== RUN   TestGetActionType
+=== RUN   TestGetActionType/Read
+=== RUN   TestGetActionType/Edit
+=== RUN   TestGetActionType/Write
+=== RUN   TestGetActionType/NotebookEdit
+=== RUN   TestGetActionType/Bash
+=== RUN   TestGetActionType/Grep
+--- PASS: TestGetActionType (0.00s)
+    --- PASS: TestGetActionType/Read (0.00s)
+    --- PASS: TestGetActionType/Edit (0.00s)
+    --- PASS: TestGetActionType/Write (0.00s)
+    --- PASS: TestGetActionType/NotebookEdit (0.00s)
+    --- PASS: TestGetActionType/Bash (0.00s)
+    --- PASS: TestGetActionType/Grep (0.00s)
+=== RUN   TestCalculateTimeSpan
+=== RUN   TestCalculateTimeSpan/5_minute_span
+=== RUN   TestCalculateTimeSpan/single_event
+=== RUN   TestCalculateTimeSpan/empty_timeline
+--- PASS: TestCalculateTimeSpan (0.00s)
+    --- PASS: TestCalculateTimeSpan/5_minute_span (0.00s)
+    --- PASS: TestCalculateTimeSpan/single_event (0.00s)
+    --- PASS: TestCalculateTimeSpan/empty_timeline (0.00s)
+=== RUN   TestBuildToolSequenceQuery
+=== RUN   TestBuildToolSequenceQuery/find_specific_pattern
+=== RUN   TestBuildToolSequenceQuery/pattern_with_alternative_arrow
+=== RUN   TestBuildToolSequenceQuery/find_all_sequences
+=== RUN   TestBuildToolSequenceQuery/minimum_5_occurrences
+=== RUN   TestBuildToolSequenceQuery/invalid_min_occurrences
+--- PASS: TestBuildToolSequenceQuery (0.00s)
+    --- PASS: TestBuildToolSequenceQuery/find_specific_pattern (0.00s)
+    --- PASS: TestBuildToolSequenceQuery/pattern_with_alternative_arrow (0.00s)
+    --- PASS: TestBuildToolSequenceQuery/find_all_sequences (0.00s)
+    --- PASS: TestBuildToolSequenceQuery/minimum_5_occurrences (0.00s)
+    --- PASS: TestBuildToolSequenceQuery/invalid_min_occurrences (0.00s)
+=== RUN   TestParsePattern
+=== RUN   TestParsePattern/unicode_arrow
+=== RUN   TestParsePattern/ascii_arrow
+=== RUN   TestParsePattern/with_extra_spaces
+=== RUN   TestParsePattern/single_tool
+=== RUN   TestParsePattern/empty_pattern
+--- PASS: TestParsePattern (0.00s)
+    --- PASS: TestParsePattern/unicode_arrow (0.00s)
+    --- PASS: TestParsePattern/ascii_arrow (0.00s)
+    --- PASS: TestParsePattern/with_extra_spaces (0.00s)
+    --- PASS: TestParsePattern/single_tool (0.00s)
+    --- PASS: TestParsePattern/empty_pattern (0.00s)
+=== RUN   TestMatchesSequence
+=== RUN   TestMatchesSequence/matches_at_start
+=== RUN   TestMatchesSequence/matches_at_middle
+=== RUN   TestMatchesSequence/no_match
+=== RUN   TestMatchesSequence/out_of_bounds
+--- PASS: TestMatchesSequence (0.00s)
+    --- PASS: TestMatchesSequence/matches_at_start (0.00s)
+    --- PASS: TestMatchesSequence/matches_at_middle (0.00s)
+    --- PASS: TestMatchesSequence/no_match (0.00s)
+    --- PASS: TestMatchesSequence/out_of_bounds (0.00s)
+=== RUN   TestExtractToolCallsWithBuiltinFilter
+--- PASS: TestExtractToolCallsWithBuiltinFilter (0.00s)
+=== RUN   TestExtractToolCallsIncludeBuiltin
+--- PASS: TestExtractToolCallsIncludeBuiltin (0.00s)
+=== RUN   TestBuiltinToolsList
+--- PASS: TestBuiltinToolsList (0.00s)
+=== RUN   TestSequencePatternQualityWithFilter
+--- PASS: TestSequencePatternQualityWithFilter (0.00s)
+=== RUN   TestBuildToolSequenceQueryEmptyPatternExcludesBuiltin
+--- PASS: TestBuildToolSequenceQueryEmptyPatternExcludesBuiltin (0.00s)
+=== RUN   TestBuildToolSequenceQueryWithFilter
+=== RUN   TestBuildToolSequenceQueryWithFilter/filter_out_built-in_tools
+=== RUN   TestBuildToolSequenceQueryWithFilter/include_all_tools
+--- PASS: TestBuildToolSequenceQueryWithFilter (0.00s)
+    --- PASS: TestBuildToolSequenceQueryWithFilter/filter_out_built-in_tools (0.00s)
+    --- PASS: TestBuildToolSequenceQueryWithFilter/include_all_tools (0.00s)
+=== RUN   TestCalculateSequenceTimeSpan_EdgeCases
+=== RUN   TestCalculateSequenceTimeSpan_EdgeCases/empty_occurrences
+=== RUN   TestCalculateSequenceTimeSpan_EdgeCases/single_occurrence_same_turn
+=== RUN   TestCalculateSequenceTimeSpan_EdgeCases/single_occurrence_different_turns
+=== RUN   TestCalculateSequenceTimeSpan_EdgeCases/multiple_occurrences_with_time_span
+=== RUN   TestCalculateSequenceTimeSpan_EdgeCases/occurrences_out_of_order
+--- PASS: TestCalculateSequenceTimeSpan_EdgeCases (0.00s)
+    --- PASS: TestCalculateSequenceTimeSpan_EdgeCases/empty_occurrences (0.00s)
+    --- PASS: TestCalculateSequenceTimeSpan_EdgeCases/single_occurrence_same_turn (0.00s)
+    --- PASS: TestCalculateSequenceTimeSpan_EdgeCases/single_occurrence_different_turns (0.00s)
+    --- PASS: TestCalculateSequenceTimeSpan_EdgeCases/multiple_occurrences_with_time_span (0.00s)
+    --- PASS: TestCalculateSequenceTimeSpan_EdgeCases/occurrences_out_of_order (0.00s)
+=== RUN   TestFindMinMaxTimestamps
+=== RUN   TestFindMinMaxTimestamps/empty_slice
+=== RUN   TestFindMinMaxTimestamps/single_timestamp
+=== RUN   TestFindMinMaxTimestamps/multiple_timestamps
+=== RUN   TestFindMinMaxTimestamps/already_sorted
+--- PASS: TestFindMinMaxTimestamps (0.00s)
+    --- PASS: TestFindMinMaxTimestamps/empty_slice (0.00s)
+    --- PASS: TestFindMinMaxTimestamps/single_timestamp (0.00s)
+    --- PASS: TestFindMinMaxTimestamps/multiple_timestamps (0.00s)
+    --- PASS: TestFindMinMaxTimestamps/already_sorted (0.00s)
+PASS
+ok  	github.com/yaleh/meta-cc/internal/query	0.009s

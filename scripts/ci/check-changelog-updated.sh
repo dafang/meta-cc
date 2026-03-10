@@ -23,7 +23,7 @@ echo ""
 CHANGELOG_UPDATED=$(echo "$CHANGED_FILES" | grep -c "^CHANGELOG.md$" || true)
 
 # Check if any code files were changed (excluding docs, tests, experiments)
-CODE_FILES=$(echo "$CHANGED_FILES" | grep -E '\.(go|mod|sum)$' | grep -v '_test\.go$' | grep -v '^docs/' | grep -v '^experiments/' | wc -l)
+CODE_FILES=$(echo "$CHANGED_FILES" | grep -E '\.(go|mod|sum)$' | grep -v '_test\.go$' | grep -v '^docs/' | grep -v '^_experiments/' | wc -l)
 
 # Check if only documentation was changed
 DOCS_ONLY=$(echo "$CHANGED_FILES" | grep -v '^docs/' | grep -v '\.md$' | grep -v '^\.github/' | wc -l)

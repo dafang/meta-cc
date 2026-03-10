@@ -125,16 +125,19 @@ repos:
         name: check yaml
         description: Check YAML file syntax
         files: \.(yaml|yml)$
+        exclude: ^_experiments/
 
       - id: check-json
         name: check json
         description: Check JSON file syntax
         files: \.json$
+        exclude: ^_experiments/
 
       - id: check-added-large-files
         name: check for large files
         description: Prevent committing large files
         args: [--maxkb=1000]
+        exclude: ^_experiments/
 
 # Global settings
 fail_fast: false  # Run all hooks even if one fails

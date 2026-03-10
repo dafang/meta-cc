@@ -1,0 +1,116 @@
+found 3 clones:
+  internal/query/context_test.go:90,96
+  internal/query/context_test.go:97,103
+  internal/query/context_test.go:104,110
+found 4 clones:
+  internal/query/context_test.go:239,241
+  internal/query/file_access_test.go:216,218
+  internal/query/file_access_test.go:322,324
+  internal/query/sequences_test.go:198,200
+found 2 clones:
+  internal/query/sequences_test.go:15,21
+  internal/query/sequences_test.go:433,445
+found 2 clones:
+  internal/query/file_access_test.go:18,51
+  internal/query/file_access_test.go:56,89
+found 3 clones:
+  internal/query/context_test.go:171,171
+  internal/query/context_test.go:172,172
+  internal/query/context_test.go:174,174
+found 3 clones:
+  internal/query/context_test.go:130,133
+  internal/query/file_access_test.go:132,135
+  internal/query/sequences_test.go:73,76
+found 2 clones:
+  internal/query/sequences_test.go:175,186
+  internal/query/sequences_test.go:181,192
+found 3 clones:
+  internal/query/file_access_test.go:92,99
+  internal/query/sequences_test.go:23,30
+  internal/query/types.go:29,36
+found 3 clones:
+  internal/query/sequences_test.go:297,299
+  internal/query/sequences_test.go:312,314
+  internal/query/sequences_test.go:338,340
+found 2 clones:
+  internal/query/sequences_test.go:259,261
+  internal/query/sequences_test.go:263,265
+found 3 clones:
+  internal/query/file_access.go:61,63
+  internal/query/sequences.go:46,48
+  internal/query/sequences.go:171,173
+found 2 clones:
+  internal/query/context.go:126,128
+  internal/query/context.go:131,133
+found 3 clones:
+  internal/query/sequences_test.go:112,116
+  internal/query/sequences_test.go:117,121
+  internal/query/sequences_test.go:122,126
+found 2 clones:
+  internal/query/context.go:179,181
+  internal/query/context.go:184,186
+found 2 clones:
+  internal/query/sequences_test.go:471,476
+  internal/query/sequences_test.go:541,546
+found 4 clones:
+  internal/query/context_test.go:157,159
+  internal/query/context_test.go:160,162
+  internal/query/sequences_test.go:407,409
+  internal/query/sequences_test.go:454,456
+found 2 clones:
+  internal/query/file_access_test.go:145,147
+  internal/query/file_access_test.go:148,150
+found 2 clones:
+  internal/query/file_access_test.go:140,142
+  internal/query/sequences_test.go:89,91
+found 2 clones:
+  internal/query/context_test.go:204,209
+  internal/query/file_access_test.go:224,229
+found 6 clones:
+  internal/query/context_test.go:30,30
+  internal/query/context_test.go:51,51
+  internal/query/context_test.go:70,70
+  internal/query/file_access_test.go:37,37
+  internal/query/file_access_test.go:55,55
+  internal/query/file_access_test.go:75,75
+found 3 clones:
+  internal/query/context_test.go:111,117
+  internal/query/sequences_test.go:47,53
+  internal/query/sequences_test.go:54,60
+found 2 clones:
+  internal/query/file_access_test.go:92,115
+  internal/query/sequences_test.go:23,46
+found 3 clones:
+  internal/query/sequences_test.go:175,180
+  internal/query/sequences_test.go:181,186
+  internal/query/sequences_test.go:187,192
+found 2 clones:
+  internal/query/context_test.go:148,150
+  internal/query/context_test.go:151,153
+found 4 clones:
+  internal/query/file_access_test.go:100,107
+  internal/query/file_access_test.go:108,115
+  internal/query/sequences_test.go:31,38
+  internal/query/sequences_test.go:39,46
+found 2 clones:
+  internal/query/context.go:29,31
+  internal/query/sequences.go:35,37
+found 2 clones:
+  internal/query/sequences_test.go:349,353
+  internal/query/sequences_test.go:365,369
+found 4 clones:
+  internal/query/file_access_test.go:175,183
+  internal/query/file_access_test.go:184,192
+  internal/query/file_access_test.go:193,201
+  internal/query/file_access_test.go:202,210
+found 2 clones:
+  internal/query/sequences_test.go:303,305
+  internal/query/sequences_test.go:416,418
+found 2 clones:
+  internal/query/file_access_test.go:213,220
+  internal/query/file_access_test.go:319,326
+found 2 clones:
+  internal/query/context_test.go:185,187
+  internal/query/sequences_test.go:372,374
+
+Found total 31 clone groups.

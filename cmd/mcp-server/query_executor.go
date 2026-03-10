@@ -12,7 +12,7 @@ import (
 
 	"github.com/itchyny/gojq"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // QueryExecutor executes jq queries on JSONL session data with expression caching
@@ -185,8 +185,8 @@ func (e *QueryExecutor) processFileWithTimeRange(ctx context.Context, filepath s
 	scanner := bufio.NewScanner(file)
 
 	// Increase buffer size for large lines
-	buf := make([]byte, parser.MaxScannerLineBytes)
-	scanner.Buffer(buf, parser.MaxScannerLineBytes)
+	buf := make([]byte, types.MaxScannerLineBytes)
+	scanner.Buffer(buf, types.MaxScannerLineBytes)
 
 	lineNum := 0
 	for scanner.Scan() {
@@ -265,8 +265,8 @@ func (e *QueryExecutor) processFile(ctx context.Context, filepath string, code *
 	scanner := bufio.NewScanner(file)
 
 	// Increase buffer size for large lines
-	buf := make([]byte, parser.MaxScannerLineBytes)
-	scanner.Buffer(buf, parser.MaxScannerLineBytes)
+	buf := make([]byte, types.MaxScannerLineBytes)
+	scanner.Buffer(buf, types.MaxScannerLineBytes)
 
 	lineNum := 0
 	for scanner.Scan() {

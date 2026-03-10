@@ -1,0 +1,20 @@
+go: /home/yale/work/meta-cc/go.mod already exists
+go: /home/yale/work/meta-cc/go.mod already exists
+?   	github.com/yale/meta-cc	[no test files]
+ok  	github.com/yale/meta-cc/cmd	(cached)
+--- FAIL: TestLoadFixture (0.00s)
+    fixtures_test.go:34: Fixture content should contain 'sequence' field
+    fixtures_test.go:38: Fixture content should contain 'role' field
+FAIL
+FAIL	github.com/yale/meta-cc/internal/testutil	0.003s
+FAIL
+/bin/bash: line 1: : command not found
+
+=== Testing Stage 0.1 Deliverables ===
+[Request interrupted by user for tool use]
+Command aborted before execution
+# github.com/yale/meta-cc/cmd
+cmd/root.go:4:2: "fmt" imported and not used
+wc: /home/yale/work/meta-cc/internal/testutil/fixture.go: No such file or directory
+
+=== Code Statistics ===

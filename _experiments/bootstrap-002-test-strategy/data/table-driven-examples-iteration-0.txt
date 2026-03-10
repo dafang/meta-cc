@@ -1,0 +1,21 @@
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go:	tests := []struct {
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-		name  string
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-		block ContentBlock
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-		check func(*testing.T, map[string]interface{})
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-	}{
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-		{
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-			name:  "text block",
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-			block: ContentBlock{Type: "text", Text: "Hello"},
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-			check: func(t *testing.T, result map[string]interface{}) {
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-				if result["type"] != "text" {
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-					t.Errorf("expected type=text, got %v", result["type"])
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-				}
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-				if result["text"] != "Hello" {
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-					t.Errorf("expected text=Hello, got %v", result["text"])
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-				}
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-			},
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-		},
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-		{
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-			name: "tool_use block",
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-			block: ContentBlock{
+/home/yale/work/meta-cc/internal/parser/types_serialization_test.go-				Type: "tool_use",

@@ -1,0 +1,10 @@
+{"tool": "Read", "timestamp": "2025-10-18T10:00:00Z", "status": "success", "duration_ms": 150}
+{"tool": "Edit", "timestamp": "2025-10-18T10:00:05Z", "status": "success", "duration_ms": 320}
+{"tool": "Bash", "timestamp": "2025-10-18T10:00:10Z", "status": "success", "duration_ms": 500}
+{"tool": "Read", "timestamp": "2025-10-18T10:00:15Z", "status": "error", "duration_ms": 100}
+{"tool": "Write", "timestamp": "2025-10-18T10:00:20Z", "status": "success", "duration_ms": 200}
+{"tool": "Bash", "timestamp": "2025-10-18T10:00:25Z", "status": "success", "duration_ms": 450}
+{"tool": "Edit", "timestamp": "2025-10-18T10:00:30Z", "status": "error", "duration_ms": 180}
+{"tool": "Read", "timestamp": "2025-10-18T10:00:35Z", "status": "success", "duration_ms": 120}
+{"tool": "Grep", "timestamp": "2025-10-18T10:00:40Z", "status": "success", "duration_ms": 250}
+{"tool": "Write", "timestamp": "2025-10-18T10:00:45Z", "status": "success", "duration_ms": 300}

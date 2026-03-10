@@ -1,0 +1,10 @@
+===  ===
+	github.com/yaleh/meta-cc		coverage: 0.0% of statements
+===  ===
+	github.com/yaleh/meta-cc		coverage: 0.0% of statements
+===  ===
+	github.com/yaleh/meta-cc		coverage: 0.0% of statements
+===  ===
+	github.com/yaleh/meta-cc		coverage: 0.0% of statements
+===  ===
+	github.com/yaleh/meta-cc		coverage: 0.0% of statements

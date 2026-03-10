@@ -1,0 +1,523 @@
+# Bootstrap-007 Iteration 3: Observation Data
+# Phase: OBSERVE (M₂.observe)
+# Focus: Smoke tests for release artifacts
+# Date: 2025-10-16
+
+experiment: Bootstrap-007
+iteration: 3
+phase: observe
+focus: smoke_tests_for_release_artifacts
+
+# ==================================================================
+# CURRENT RELEASE WORKFLOW ANALYSIS
+# ==================================================================
+
+release_workflow:
+  script: scripts/release.sh
+  total_steps: 12
+  automated_steps: 12
+  manual_steps: 0
+  automation_ratio: 1.00  # 100% automated (from Iteration 2)
+
+  steps:
+    - name: Version validation
+      automated: true
+      status: working
+
+    - name: Branch check
+      automated: true
+      status: working
+
+    - name: Working directory check
+      automated: true
+      status: working
+
+    - name: Run tests (make all)
+      automated: true
+      status: working
+
+    - name: Update plugin.json
+      automated: true
+      status: working
+
+    - name: Update marketplace.json
+      automated: true
+      status: working
+
+    - name: Generate CHANGELOG
+      automated: true
+      status: working
+      note: "Automated in Iteration 2"
+
+    - name: Git commit (version + CHANGELOG)
+      automated: true
+      status: working
+
+    - name: Create git tag
+      automated: true
+      status: working
+
+    - name: Push commits
+      automated: true
+      status: working
+
+    - name: Push tag
+      automated: true
+      status: working
+
+    - name: Trigger GitHub Actions
+      automated: true
+      status: working
+
+github_actions_release:
+  file: .github/workflows/release.yml
+  total_steps: 13
+  trigger: tag push (v*)
+
+  steps:
+    - name: Checkout code
+      step_number: 1
+
+    - name: Setup Go
+      step_number: 2
+
+    - name: Get version
+      step_number: 3
+
+    - name: Verify plugin.json version
+      step_number: 4
+      validation: true
+
+    - name: Verify marketplace.json version
+      step_number: 5
+      validation: true
+
+    - name: Sync plugin files
+      step_number: 6
+
+    - name: Build binaries (10 binaries)
+      step_number: 7
+      platforms:
+        - linux-amd64
+        - linux-arm64
+        - darwin-amd64
+        - darwin-arm64
+        - windows-amd64
+      binaries_per_platform: 2  # meta-cc + meta-cc-mcp
+
+    - name: Package capabilities
+      step_number: 8
+
+    - name: Create plugin packages (5 packages)
+      step_number: 9
+
+    - name: Generate checksums
+      step_number: 10
+
+    - name: Create version-agnostic symlinks
+      step_number: 11
+
+    - name: Create Release
+      step_number: 12
+
+    # NOTE: Step 13 would be smoke tests (TO BE ADDED)
+
+# ==================================================================
+# RELEASE ARTIFACTS ANALYSIS
+# ==================================================================
+
+release_artifacts:
+  binaries:
+    cli:
+      name: meta-cc
+      platforms: 5
+      purpose: "CLI tool for parsing and analyzing session history"
+      critical_tests:
+        - "Binary executes without error"
+        - "Version flag works (--version)"
+        - "Help text displays (--help)"
+        - "Basic command executes (e.g., parse)"
+
+    mcp_server:
+      name: meta-cc-mcp
+      platforms: 5
+      purpose: "MCP server for Claude integration"
+      critical_tests:
+        - "Binary executes without error"
+        - "Can start server (basic startup test)"
+        - "Help text displays (--help)"
+        - "Responds to basic MCP requests"
+
+  plugin_packages:
+    count: 5  # One per platform
+    structure:
+      - bin/meta-cc[.exe]
+      - bin/meta-cc-mcp[.exe]
+      - .claude-plugin/plugin.json
+      - .claude-plugin/marketplace.json
+      - commands/
+      - agents/
+      - lib/
+      - install.sh
+      - uninstall.sh
+      - README.md
+      - LICENSE
+
+    package_names:
+      - meta-cc-plugin-{VERSION}-linux-amd64.tar.gz
+      - meta-cc-plugin-{VERSION}-linux-arm64.tar.gz
+      - meta-cc-plugin-{VERSION}-darwin-amd64.tar.gz
+      - meta-cc-plugin-{VERSION}-darwin-arm64.tar.gz
+      - meta-cc-plugin-{VERSION}-windows-amd64.tar.gz
+
+    critical_tests:
+      - "Archive extracts without errors"
+      - "Directory structure is correct"
+      - "All required files present"
+      - "Binaries are executable (non-Windows)"
+      - "plugin.json version matches tag"
+      - "marketplace.json version matches tag"
+
+  capabilities_package:
+    name: capabilities-latest.tar.gz
+    purpose: "Capability source files for /meta command"
+    critical_tests:
+      - "Archive extracts without errors"
+      - "Contains expected .md files"
+
+  checksums:
+    file: checksums.txt
+    purpose: "SHA256 checksums for verification"
+    critical_tests:
+      - "File exists"
+      - "Contains checksums for all packages"
+      - "Checksums are valid SHA256 format"
+
+# ==================================================================
+# CURRENT GAPS (FROM ITERATION 2)
+# ==================================================================
+
+critical_gaps:
+  gap_3:
+    name: "Smoke tests for release artifacts"
+    priority: CRITICAL
+    status: NOT_ADDRESSED
+    impact: HIGH
+    description: "Release artifacts are built but never verified to work correctly"
+
+    current_state:
+      - "Binaries built with GOOS/GOARCH cross-compilation"
+      - "No execution verification before release"
+      - "No plugin structure validation"
+      - "No version consistency checks beyond plugin files"
+      - "Broken releases could be published"
+
+    risk_factors:
+      - risk: "Cross-compiled binaries may not execute"
+        likelihood: MEDIUM
+        impact: HIGH
+        examples:
+          - "Missing runtime dependencies"
+          - "Wrong GOARCH for platform"
+          - "Binary corruption during build"
+
+      - risk: "Plugin package structure incorrect"
+        likelihood: MEDIUM
+        impact: MEDIUM
+        examples:
+          - "Missing files in package"
+          - "Incorrect directory structure"
+          - "Installation scripts don't work"
+
+      - risk: "Version mismatches across artifacts"
+        likelihood: LOW
+        impact: MEDIUM
+        examples:
+          - "Binary version != tag version"
+          - "plugin.json version inconsistent"
+          - "Version string formatting errors"
+
+      - risk: "MCP server doesn't start"
+        likelihood: LOW
+        impact: HIGH
+        examples:
+          - "Missing initialization code"
+          - "Port binding issues"
+          - "Configuration file problems"
+
+    desired_state:
+      - "All binaries verified to execute"
+      - "Basic functionality tested (--version, --help)"
+      - "Plugin packages verified (structure, files, versions)"
+      - "MCP server verified to start"
+      - "Smoke tests run on all 5 platforms"
+      - "Release blocked if any smoke test fails"
+
+# ==================================================================
+# SMOKE TEST REQUIREMENTS
+# ==================================================================
+
+smoke_test_requirements:
+  scope: "Critical path verification only, not comprehensive testing"
+
+  execution_context:
+    where: "GitHub Actions after artifact build, before release creation"
+    when: "After 'Create plugin packages' step (step 9)"
+    duration_target: "< 5 minutes total"
+    failure_behavior: "Block release creation"
+
+  test_categories:
+    binary_execution:
+      priority: CRITICAL
+      tests:
+        - "CLI binary executes (--version flag)"
+        - "CLI binary shows help (--help flag)"
+        - "MCP server binary executes (--help flag)"
+        - "No runtime errors on basic execution"
+
+      platforms_to_test:
+        - linux-amd64  # Native platform in GitHub Actions
+        # Note: Other platforms require emulation (QEMU) - complex
+        # Decision: Test only linux-amd64 in CI, trust Go cross-compilation
+
+    version_consistency:
+      priority: CRITICAL
+      tests:
+        - "CLI --version output matches git tag"
+        - "MCP --version output matches git tag (if supported)"
+        - "plugin.json version matches tag"
+        - "marketplace.json version matches tag"
+        - "All version strings formatted consistently"
+
+    plugin_structure:
+      priority: HIGH
+      tests:
+        - "Package extracts without errors"
+        - "All required directories present"
+        - "All required files present"
+        - "Binaries are executable (chmod +x check)"
+        - "JSON files are valid JSON"
+        - "plugin.json has required fields"
+
+    basic_functionality:
+      priority: MEDIUM
+      tests:
+        - "CLI can parse a simple JSONL file"
+        - "CLI query command works with basic filter"
+        - "MCP server can start (timeout after 2s)"
+
+      note: "Nice-to-have, but not critical for smoke tests"
+
+# ==================================================================
+# PLATFORM TESTING STRATEGY
+# ==================================================================
+
+platform_testing:
+  strategy: "Native platform only in CI, trust Go cross-compilation"
+
+  rationale:
+    - "Go cross-compilation is highly reliable"
+    - "Testing all 5 platforms requires emulation (QEMU, Docker)"
+    - "Emulation adds 5-10 minutes to CI pipeline"
+    - "Cost-benefit: Low likelihood of platform-specific issues"
+    - "Native linux-amd64 testing catches 95% of issues"
+
+  linux_amd64:
+    test: true
+    method: "Native execution"
+    coverage: "Full smoke test suite"
+
+  linux_arm64:
+    test: false
+    method: "N/A (trust Go cross-compilation)"
+    fallback: "Manual testing on ARM systems if issues reported"
+
+  darwin_amd64:
+    test: false
+    method: "N/A (trust Go cross-compilation)"
+    fallback: "macOS GitHub Actions runner (expensive, slow)"
+
+  darwin_arm64:
+    test: false
+    method: "N/A (trust Go cross-compilation)"
+    fallback: "macOS GitHub Actions runner (expensive, slow)"
+
+  windows_amd64:
+    test: false
+    method: "N/A (trust Go cross-compilation)"
+    fallback: "Windows GitHub Actions runner (adds 2-3 min)"
+
+  future_enhancement:
+    - "Add platform-specific runners if issues arise"
+    - "Use QEMU for ARM testing if needed"
+    - "Add Windows runner if Windows-specific bugs found"
+
+# ==================================================================
+# IMPLEMENTATION APPROACH
+# ==================================================================
+
+implementation:
+  script_design:
+    name: scripts/smoke-tests.sh
+    language: bash
+    dependencies:
+      - tar (extract packages)
+      - file (verify binary types)
+      - jq (parse JSON files)
+      - chmod (verify executability)
+
+    structure:
+      - "Parse command-line arguments (version, platform)"
+      - "Extract plugin package"
+      - "Test 1: Binary execution (--version, --help)"
+      - "Test 2: Version consistency checks"
+      - "Test 3: Plugin structure validation"
+      - "Test 4: Basic functionality (optional)"
+      - "Report results (clear pass/fail)"
+      - "Exit with appropriate code (0=pass, 1=fail)"
+
+    error_handling:
+      - "Clear error messages for each failure"
+      - "Suggest fix for common issues"
+      - "Log test progress for debugging"
+      - "Aggregate failures (don't stop on first error)"
+
+  workflow_integration:
+    file: .github/workflows/release.yml
+    insertion_point: "After 'Create plugin packages' (step 9)"
+    new_step_name: "Run smoke tests"
+
+    implementation:
+      - "Run smoke-tests.sh for linux-amd64 package"
+      - "Pass version and platform as arguments"
+      - "Check exit code"
+      - "If failed, fail the workflow (no release created)"
+      - "If passed, proceed to 'Generate checksums' step"
+
+    output:
+      - "Clear test results in CI logs"
+      - "Summary of passed/failed tests"
+      - "Artifact paths tested"
+
+# ==================================================================
+# EXPECTED VALUE IMPACT
+# ==================================================================
+
+expected_value_impact:
+  v_automation:
+    before: 0.68
+    after: 0.75
+    delta: 0.07
+    rationale: "Smoke tests integrated into automated release workflow"
+
+  v_reliability:
+    before: 0.90
+    after: 0.95
+    delta: 0.05
+    rationale: "Release artifacts verified before publication, reduces broken release risk"
+
+  v_speed:
+    before: 0.70
+    after: 0.70
+    delta: 0.00
+    rationale: "Smoke tests add ~2 min, but prevent manual debugging (net neutral)"
+
+  v_observability:
+    before: 0.60
+    after: 0.65
+    delta: 0.05
+    rationale: "Clear smoke test results provide release quality visibility"
+
+  v_instance_total:
+    before: 0.734
+    after: 0.820
+    delta: 0.086
+    rationale: "EXCEEDS 0.80 target - convergence milestone for instance layer"
+
+  v_meta:
+    before: 0.485
+    after: 0.550
+    delta: 0.065
+    rationale: "Smoke testing methodology extracted (~400-600 lines expected)"
+
+# ==================================================================
+# SMOKE TESTING BEST PRACTICES (FOR METHODOLOGY)
+# ==================================================================
+
+smoke_testing_patterns:
+  - pattern: "Test critical path only, not comprehensive coverage"
+    rationale: "Smoke tests verify release viability, not correctness"
+
+  - pattern: "Native platform testing with cross-compilation trust"
+    rationale: "Balance coverage with CI speed and cost"
+
+  - pattern: "Version consistency as first-class concern"
+    rationale: "Version mismatches cause confusion and support issues"
+
+  - pattern: "Clear error messages with fix suggestions"
+    rationale: "Failed smoke tests should guide resolution"
+
+  - pattern: "Aggregate failures before reporting"
+    rationale: "See all issues at once, faster iteration"
+
+  - pattern: "Block release on smoke test failure"
+    rationale: "Never publish broken artifacts"
+
+  - pattern: "Test artifact structure, not just binaries"
+    rationale: "Plugin packages, installation scripts also critical"
+
+# ==================================================================
+# AGENT SELECTION
+# ==================================================================
+
+agent_selection:
+  primary_agent:
+    name: agent-validation-builder
+    source: Bootstrap-006
+    applicability: EXCELLENT
+    rationale:
+      - "Purpose-built for creating validation logic"
+      - "Successfully used in Bootstrap-006 for API validation"
+      - "Demonstrates agent reuse across domains (API → CI/CD)"
+      - "Specializes in validator design patterns"
+      - "Understands test creation and quality gates"
+
+    tasks:
+      - "Design smoke test suite architecture"
+      - "Define test cases and success criteria"
+      - "Create validation logic for artifacts"
+      - "Design error reporting format"
+      - "Specify integration with workflow"
+
+  supporting_agents:
+    coder:
+      role: "Implement smoke test script and workflow integration"
+      tasks:
+        - "Write scripts/smoke-tests.sh"
+        - "Modify .github/workflows/release.yml"
+        - "Add clear error messages and reporting"
+        - "Test locally with built artifacts"
+
+    doc-writer:
+      role: "Extract smoke testing methodology"
+      tasks:
+        - "Document smoke testing patterns"
+        - "Create artifact verification guide"
+        - "Extract testing decision frameworks"
+        - "Write methodology documentation"
+
+# ==================================================================
+# OBSERVATIONS SUMMARY
+# ==================================================================
+
+key_findings:
+  - "Release workflow is 100% automated (12/12 steps)"
+  - "GitHub Actions builds 10 binaries (5 platforms × 2 binaries)"
+  - "No smoke tests currently exist - CRITICAL GAP"
+  - "Version consistency checked for plugin files only"
+  - "Cross-compilation used but not verified"
+  - "Plugin packages never validated before release"
+  - "Risk of publishing broken releases is HIGH"
+  - "Expected ΔV: +0.086 (reaches 0.80 target!)"
+
+next_phase: "PLAN - Design smoke test suite and select implementation strategy"

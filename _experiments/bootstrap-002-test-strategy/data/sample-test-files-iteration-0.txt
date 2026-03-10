@@ -1,0 +1,10 @@
+./internal/testutil/fixtures_test.go
+./internal/parser/reader_test.go
+./internal/parser/types_serialization_test.go
+./internal/parser/tools_test.go
+./internal/parser/types_test.go
+./internal/validation/naming_test.go
+./internal/validation/ordering_test.go
+./internal/validation/parser_test.go
+./internal/validation/description_test.go
+./internal/mcp/tools_project_test.go

@@ -1,0 +1,1 @@
+-: module requires at least go1.24.0, but Staticcheck was built with go1.23.1 (compile)

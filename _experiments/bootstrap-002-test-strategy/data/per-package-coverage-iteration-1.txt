@@ -1,0 +1,19 @@
+	github.com/yaleh/meta-cc		coverage: 0.0% of statements
+ok  	github.com/yaleh/meta-cc/cmd	63.019s	coverage: 57.9% of statements
+coverage: 70.0% of statements
+	github.com/yaleh/meta-cc/cmd/validate-api		coverage: 0.0% of statements
+	github.com/yaleh/meta-cc/experiments/bootstrap-001-doc-methodology/data		ok  	github.com/yaleh/meta-cc/internal/analyzer	0.016s	coverage: 87.3% of statements
+ok  	github.com/yaleh/meta-cc/internal/config	0.009s	coverage: 98.1% of statements
+ok  	github.com/yaleh/meta-cc/internal/errors	0.018s	coverage: [no statements]
+ok  	github.com/yaleh/meta-cc/internal/filter	0.020s	coverage: 82.1% of statements
+ok  	github.com/yaleh/meta-cc/internal/githelper	4.492s	coverage: 77.2% of statements
+ok  	github.com/yaleh/meta-cc/internal/locator	0.015s	coverage: 81.2% of statements
+ok  	github.com/yaleh/meta-cc/internal/mcp	0.020s	coverage: 93.1% of statements
+ok  	github.com/yaleh/meta-cc/internal/output	0.015s	coverage: 88.1% of statements
+ok  	github.com/yaleh/meta-cc/internal/parser	0.026s	coverage: 82.1% of statements
+ok  	github.com/yaleh/meta-cc/internal/query	0.013s	coverage: 92.2% of statements
+ok  	github.com/yaleh/meta-cc/internal/stats	0.010s	coverage: 93.6% of statements
+ok  	github.com/yaleh/meta-cc/internal/testutil	0.019s	coverage: 81.8% of statements
+ok  	github.com/yaleh/meta-cc/internal/validation	0.014s	coverage: 57.9% of statements
+ok  	github.com/yaleh/meta-cc/pkg/output	0.049s	coverage: 82.7% of statements
+ok  	github.com/yaleh/meta-cc/pkg/pipeline	0.021s	coverage: 92.9% of statements

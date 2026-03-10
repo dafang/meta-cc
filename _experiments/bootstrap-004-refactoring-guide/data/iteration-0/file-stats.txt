@@ -1,0 +1,8 @@
+  244 internal/query/context_test.go
+  215 internal/query/context.go
+  327 internal/query/file_access_test.go
+  259 internal/query/sequences.go
+  155 internal/query/file_access.go
+  553 internal/query/sequences_test.go
+   57 internal/query/types.go
+ 1810 total

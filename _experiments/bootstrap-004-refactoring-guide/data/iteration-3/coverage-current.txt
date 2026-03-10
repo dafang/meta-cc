@@ -1,0 +1,1 @@
+ok  	github.com/yaleh/meta-cc/internal/query	0.006s	coverage: 94.0% of statements

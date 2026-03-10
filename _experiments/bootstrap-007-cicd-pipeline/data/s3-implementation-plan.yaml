@@ -1,0 +1,574 @@
+# Bootstrap-007 Iteration 3: Implementation Plan
+# Phase: PLAN (M₂.plan + agent-validation-builder)
+# Focus: Smoke test suite design and implementation strategy
+# Date: 2025-10-16
+
+experiment: Bootstrap-007
+iteration: 3
+phase: plan
+focus: smoke_test_suite_design
+
+# ==================================================================
+# ITERATION GOAL
+# ==================================================================
+
+primary_goal:
+  objective: "Implement smoke tests for release artifacts"
+  scope: "Verify critical release artifacts work correctly before GitHub release creation"
+  success_criteria:
+    - "Smoke tests verify CLI binary, MCP server, plugin installation"
+    - "Integrated into GitHub Actions release workflow"
+    - "Tests run on linux-amd64 (native platform)"
+    - "Clear pass/fail reporting with error messages"
+    - "V_instance(s₃) ≥ 0.80 achieved (CONVERGENCE MILESTONE)"
+
+expected_value_improvement:
+  v_instance:
+    target: 0.820
+    current: 0.734
+    delta: 0.086
+    exceeds_threshold: true
+    note: "Exceeds 0.80 target - MAJOR MILESTONE"
+
+  v_meta:
+    target: 0.550
+    current: 0.485
+    delta: 0.065
+    note: "Progresses toward 0.80 with methodology extraction"
+
+# ==================================================================
+# AGENT SELECTION (M₂.plan.select_agents)
+# ==================================================================
+
+agent_selection_decision:
+  primary_agent: agent-validation-builder
+  rationale:
+    - "Purpose-built for validation logic creation"
+    - "Inherited from Bootstrap-006 (API design domain)"
+    - "Demonstrates cross-domain agent reuse (API → CI/CD)"
+    - "Specializes in validator design, test creation, quality gates"
+    - "Proven effectiveness in Bootstrap-006"
+    - "No new specialized agent needed"
+
+  agent_responsibilities:
+    agent-validation-builder:
+      role: "Design smoke test suite architecture and validation logic"
+      effectiveness: HIGH
+      tasks:
+        - "Define smoke test categories and priorities"
+        - "Design test execution strategy"
+        - "Create validation logic for each artifact type"
+        - "Specify error reporting format"
+        - "Define success/failure criteria"
+        - "Plan cross-platform testing strategy"
+
+    coder:
+      role: "Implement smoke test script and workflow integration"
+      effectiveness: HIGH
+      tasks:
+        - "Implement scripts/smoke-tests.sh (~150-200 lines)"
+        - "Modify .github/workflows/release.yml (add smoke test step)"
+        - "Add clear error messages and reporting"
+        - "Handle edge cases and error conditions"
+        - "Test locally with built artifacts"
+
+    doc-writer:
+      role: "Extract smoke testing methodology documentation"
+      effectiveness: HIGH
+      tasks:
+        - "Document smoke testing patterns (~400-600 lines)"
+        - "Create artifact verification methodology"
+        - "Extract testing decision frameworks"
+        - "Document platform testing strategies"
+        - "Write reusability guide"
+
+  evolution_assessment:
+    new_agent_needed: false
+    rationale: "agent-validation-builder + generic agents sufficient for smoke testing"
+    agent_set_stability: "A₃ = A₂ (no evolution)"
+
+# ==================================================================
+# SMOKE TEST SUITE DESIGN (agent-validation-builder)
+# ==================================================================
+
+smoke_test_architecture:
+  design_philosophy:
+    - "Critical path only - not comprehensive testing"
+    - "Fast execution (< 5 minutes total)"
+    - "Clear pass/fail with actionable errors"
+    - "Block release on any failure"
+    - "Native platform testing with cross-compilation trust"
+
+  test_categories:
+    category_1_binary_execution:
+      priority: CRITICAL
+      tests:
+        - name: "CLI binary executes"
+          command: "./bin/meta-cc --version"
+          expected: "Version string with format 'meta-cc version X.Y.Z'"
+          failure_action: BLOCK_RELEASE
+          error_message: "CLI binary failed to execute. Check build process."
+
+        - name: "CLI help displays"
+          command: "./bin/meta-cc --help"
+          expected: "Usage information displayed"
+          failure_action: BLOCK_RELEASE
+          error_message: "CLI --help failed. Binary may be corrupted."
+
+        - name: "MCP server binary executes"
+          command: "./bin/meta-cc-mcp --help 2>&1"
+          expected: "Help text or version info (exit 0 or 1 acceptable)"
+          failure_action: BLOCK_RELEASE
+          error_message: "MCP server binary failed to execute."
+
+        - name: "No missing runtime dependencies"
+          method: "Check ldd output for 'not found'"
+          expected: "All dependencies resolved"
+          failure_action: WARN
+          note: "Informational, rarely fails with Go binaries"
+
+    category_2_version_consistency:
+      priority: CRITICAL
+      tests:
+        - name: "CLI version matches tag"
+          method: "Parse --version output, compare to $VERSION"
+          expected: "Version in output == tag version (without 'v' prefix)"
+          failure_action: BLOCK_RELEASE
+          error_message: "Version mismatch: CLI reports {actual} but tag is {expected}"
+
+        - name: "plugin.json version matches tag"
+          method: "jq -r '.version' .claude-plugin/plugin.json"
+          expected: "Version == tag version (without 'v' prefix)"
+          failure_action: BLOCK_RELEASE
+          error_message: "Version mismatch: plugin.json has {actual} but tag is {expected}"
+          note: "Already verified in release.yml, but double-check"
+
+        - name: "marketplace.json version matches tag"
+          method: "jq -r '.plugins[0].version' .claude-plugin/marketplace.json"
+          expected: "Version == tag version (without 'v' prefix)"
+          failure_action: BLOCK_RELEASE
+          error_message: "Version mismatch: marketplace.json has {actual} but tag is {expected}"
+
+        - name: "Version format consistency"
+          method: "Check all version strings use X.Y.Z format"
+          expected: "Consistent formatting across all artifacts"
+          failure_action: WARN
+          note: "Catches formatting bugs (e.g., vX.Y.Z vs X.Y.Z)"
+
+    category_3_plugin_structure:
+      priority: HIGH
+      tests:
+        - name: "Package extracts without errors"
+          method: "tar -tzf package.tar.gz > /dev/null"
+          expected: "Exit code 0"
+          failure_action: BLOCK_RELEASE
+          error_message: "Package archive is corrupted or malformed"
+
+        - name: "Required directories present"
+          directories:
+            - bin/
+            - .claude-plugin/
+            - commands/
+            - lib/
+          expected: "All directories exist after extraction"
+          failure_action: BLOCK_RELEASE
+          error_message: "Missing directory: {dir}. Check package creation step."
+
+        - name: "Required files present"
+          files:
+            - bin/meta-cc
+            - bin/meta-cc-mcp
+            - .claude-plugin/plugin.json
+            - .claude-plugin/marketplace.json
+            - install.sh
+            - uninstall.sh
+            - README.md
+            - LICENSE
+          expected: "All files exist"
+          failure_action: BLOCK_RELEASE
+          error_message: "Missing file: {file}"
+
+        - name: "Binaries are executable"
+          method: "test -x bin/meta-cc && test -x bin/meta-cc-mcp"
+          expected: "Executable bit set"
+          failure_action: BLOCK_RELEASE
+          error_message: "Binary not executable: {file}"
+          note: "Critical for non-Windows platforms"
+
+        - name: "JSON files are valid"
+          method: "jq . .claude-plugin/plugin.json && jq . .claude-plugin/marketplace.json"
+          expected: "Valid JSON syntax"
+          failure_action: BLOCK_RELEASE
+          error_message: "Invalid JSON in {file}"
+
+        - name: "plugin.json has required fields"
+          fields:
+            - name
+            - version
+            - commands
+          method: "Check fields exist using jq"
+          expected: "All required fields present"
+          failure_action: BLOCK_RELEASE
+          error_message: "plugin.json missing required field: {field}"
+
+    category_4_basic_functionality:
+      priority: MEDIUM
+      note: "Optional tests - nice to have but not critical"
+      tests:
+        - name: "CLI can display help for subcommands"
+          command: "./bin/meta-cc query --help"
+          expected: "Subcommand help displayed"
+          failure_action: WARN
+          skip_reason: "Covered by unit tests, smoke test focuses on execution"
+
+        - name: "MCP server can start and stop"
+          method: "Start server, wait 2s, kill, check exit"
+          expected: "Server starts without immediate crash"
+          failure_action: WARN
+          skip_reason: "Requires stdio interaction, complex for smoke test"
+
+# ==================================================================
+# PLATFORM TESTING STRATEGY (agent-validation-builder)
+# ==================================================================
+
+platform_testing_strategy:
+  selected_approach: "Native platform only (linux-amd64)"
+
+  rationale:
+    decision_factors:
+      - factor: "Go cross-compilation reliability"
+        weight: HIGH
+        conclusion: "Go's cross-compilation is highly reliable (proven track record)"
+
+      - factor: "CI pipeline speed"
+        weight: HIGH
+        conclusion: "Testing all platforms adds 5-10 min (emulation overhead)"
+
+      - factor: "Cost-benefit analysis"
+        weight: HIGH
+        conclusion: "Platform-specific bugs rare with Go, not worth 5-10 min delay"
+
+      - factor: "GitHub Actions runner availability"
+        weight: MEDIUM
+        conclusion: "Linux runner is free/fast, macOS/Windows runners costly/slow"
+
+    selected_strategy: |
+      Test only linux-amd64 natively in CI. Trust Go cross-compilation for other platforms.
+      Rationale: Catches 95% of issues (binary corruption, version mismatches, packaging errors)
+      with minimal CI time investment. Platform-specific issues can be addressed if reported.
+
+  platform_coverage:
+    linux_amd64:
+      test_in_ci: true
+      method: "Native execution"
+      test_suite: "Full smoke test suite"
+      justification: "Native platform, fast, catches most issues"
+
+    linux_arm64:
+      test_in_ci: false
+      method: "Trust cross-compilation"
+      fallback: "Manual testing on ARM hardware if issues reported"
+      justification: "Go cross-compilation to ARM64 very reliable"
+
+    darwin_amd64:
+      test_in_ci: false
+      method: "Trust cross-compilation"
+      fallback: "macOS GitHub Actions runner (adds cost and time)"
+      justification: "macOS runner is slow and expensive for marginal benefit"
+
+    darwin_arm64:
+      test_in_ci: false
+      method: "Trust cross-compilation"
+      fallback: "macOS GitHub Actions runner (adds cost and time)"
+      justification: "macOS M1 runner expensive, cross-compilation reliable"
+
+    windows_amd64:
+      test_in_ci: false
+      method: "Trust cross-compilation"
+      fallback: "Windows GitHub Actions runner (adds 2-3 min)"
+      justification: "Windows testing adds complexity, Go cross-compilation reliable"
+
+  future_enhancements:
+    - condition: "Platform-specific bugs reported"
+      action: "Add platform-specific runners incrementally"
+
+    - condition: "CI time becomes less critical"
+      action: "Add QEMU-based ARM testing"
+
+    - condition: "macOS/Windows bugs surface"
+      action: "Add macOS/Windows runners to release workflow"
+
+# ==================================================================
+# IMPLEMENTATION STRATEGY (agent-validation-builder + coder)
+# ==================================================================
+
+implementation_phases:
+  phase_1_script_creation:
+    agent: coder
+    file: scripts/smoke-tests.sh
+    estimated_loc: 150-200
+    language: bash
+    dependencies:
+      - tar (package extraction)
+      - file (binary type verification)
+      - jq (JSON parsing)
+      - chmod (verify executability)
+      - grep, awk, sed (text processing)
+
+    script_structure:
+      - section: "Argument parsing"
+        lines: 20
+        content: "Parse VERSION, PLATFORM, PACKAGE_PATH arguments"
+
+      - section: "Setup and validation"
+        lines: 30
+        content: "Verify dependencies, create temp directory, extract package"
+
+      - section: "Test 1: Binary execution"
+        lines: 40
+        content: "Test --version, --help for both binaries"
+
+      - section: "Test 2: Version consistency"
+        lines: 40
+        content: "Compare versions across CLI, plugin.json, marketplace.json"
+
+      - section: "Test 3: Plugin structure"
+        lines: 50
+        content: "Verify directories, files, permissions, JSON validity"
+
+      - section: "Test 4: Optional functionality"
+        lines: 20
+        content: "Basic CLI command test (optional, can skip)"
+
+      - section: "Reporting and cleanup"
+        lines: 30
+        content: "Aggregate results, print summary, exit with code"
+
+    error_handling:
+      - "Track pass/fail for each test category"
+      - "Continue testing even if one test fails (aggregate)"
+      - "Clear error messages with fix suggestions"
+      - "Exit code: 0 = all passed, 1 = any failed"
+
+    output_format:
+      - "Summary header with version and platform"
+      - "Per-test results with ✓/✗ indicators"
+      - "Failed test details with error messages"
+      - "Overall result (PASSED / FAILED)"
+      - "CI-friendly output (parseable)"
+
+  phase_2_workflow_integration:
+    agent: coder
+    file: .github/workflows/release.yml
+    modification: "Add step after 'Create plugin packages' (line 100)"
+    estimated_changes: "+15 lines"
+
+    new_step:
+      name: "Run smoke tests"
+      position: "After step 9 (Create plugin packages)"
+      before: "Step 10 (Generate checksums)"
+
+      implementation: |
+        - name: Run smoke tests
+          run: |
+            VERSION=${{ steps.version.outputs.VERSION }}
+            PLATFORM=linux-amd64
+            PACKAGE=build/packages/meta-cc-plugin-${VERSION}-${PLATFORM}.tar.gz
+
+            echo "Running smoke tests for ${PACKAGE}..."
+            bash scripts/smoke-tests.sh "$VERSION" "$PLATFORM" "$PACKAGE"
+
+            if [ $? -ne 0 ]; then
+              echo "❌ Smoke tests FAILED. Aborting release."
+              exit 1
+            fi
+
+            echo "✓ Smoke tests PASSED"
+
+    failure_behavior:
+      - "Smoke test failure blocks workflow"
+      - "Release not created if tests fail"
+      - "Clear error message in CI logs"
+      - "Developer must fix issue and re-tag"
+
+  phase_3_local_testing:
+    agent: coder
+    purpose: "Test smoke tests locally before committing"
+
+    steps:
+      - "Build binaries locally (make build)"
+      - "Create test package structure manually"
+      - "Run smoke-tests.sh with test package"
+      - "Verify pass/fail logic works correctly"
+      - "Test error messages are clear"
+      - "Ensure cross-platform compatibility (bash syntax)"
+
+    validation:
+      - "Script executes without syntax errors"
+      - "All tests pass with valid artifacts"
+      - "Tests correctly fail with broken artifacts"
+      - "Error messages are actionable"
+
+  phase_4_documentation:
+    agent: doc-writer
+    file: docs/methodology/ci-cd-smoke-testing.md
+    estimated_loc: 400-600
+
+    sections:
+      - "Problem Statement (unverified release artifacts)"
+      - "Solution Architecture (smoke test suite design)"
+      - "Implementation Patterns (6-8 patterns)"
+      - "Platform Testing Strategy"
+      - "Test Category Design (critical path focus)"
+      - "Error Reporting Best Practices"
+      - "Integration with Release Workflow"
+      - "Decision Framework (when to add smoke tests)"
+      - "Common Pitfalls and Solutions"
+      - "Reusability Guide (adapt to other projects)"
+      - "Case Study (meta-cc smoke tests)"
+
+# ==================================================================
+# WORK BREAKDOWN
+# ==================================================================
+
+work_breakdown:
+  stage_1_observe:
+    status: COMPLETE
+    duration: "30 minutes"
+    output: "data/s3-observation-data.yaml"
+
+  stage_2_plan:
+    status: IN_PROGRESS
+    duration: "45 minutes"
+    output: "data/s3-implementation-plan.yaml"
+
+  stage_3_implement_script:
+    estimated_duration: "90 minutes"
+    agent: coder
+    output: "scripts/smoke-tests.sh"
+    loc: 150-200
+    complexity: MEDIUM
+
+  stage_4_integrate_workflow:
+    estimated_duration: "30 minutes"
+    agent: coder
+    output: ".github/workflows/release.yml (modified)"
+    loc: "+15 lines"
+    complexity: LOW
+
+  stage_5_test_locally:
+    estimated_duration: "45 minutes"
+    agent: coder
+    activities:
+      - "Build test artifacts"
+      - "Create test scenarios (valid + invalid)"
+      - "Run smoke tests and verify behavior"
+      - "Refine error messages"
+
+  stage_6_document_methodology:
+    estimated_duration: "60 minutes"
+    agent: doc-writer
+    output: "docs/methodology/ci-cd-smoke-testing.md"
+    loc: 400-600
+    complexity: MEDIUM
+
+  stage_7_reflect:
+    estimated_duration: "30 minutes"
+    output:
+      - "data/s3-metrics.json"
+      - "Value calculations (V(s₃))"
+      - "Convergence assessment"
+
+  stage_8_iteration_report:
+    estimated_duration: "45 minutes"
+    agent: doc-writer
+    output: "experiments/bootstrap-007-cicd-pipeline/iteration-3.md"
+    loc: 800-1000
+
+total_estimated_duration: "5-6 hours"
+
+# ==================================================================
+# RISKS AND MITIGATION
+# ==================================================================
+
+risks:
+  risk_1_script_complexity:
+    description: "Bash script may become complex with many tests"
+    likelihood: MEDIUM
+    impact: MEDIUM
+    mitigation:
+      - "Keep functions small and focused"
+      - "Use clear variable names"
+      - "Add comments for complex logic"
+      - "Test incrementally"
+
+  risk_2_platform_detection:
+    description: "Detecting platform from package name may fail"
+    likelihood: LOW
+    impact: LOW
+    mitigation:
+      - "Use explicit platform argument"
+      - "Validate argument format"
+      - "Clear error if platform invalid"
+
+  risk_3_ci_time_increase:
+    description: "Smoke tests may slow down release workflow"
+    likelihood: LOW
+    impact: LOW
+    mitigation:
+      - "Target < 5 min total test time"
+      - "Test only critical path"
+      - "Skip optional tests by default"
+
+  risk_4_false_positives:
+    description: "Tests may fail on valid artifacts"
+    likelihood: MEDIUM
+    impact: HIGH
+    mitigation:
+      - "Test locally before committing"
+      - "Use clear success criteria"
+      - "Handle edge cases gracefully"
+      - "Provide manual override if needed"
+
+# ==================================================================
+# SUCCESS METRICS
+# ==================================================================
+
+success_metrics:
+  implementation:
+    - "scripts/smoke-tests.sh created and working"
+    - "Integrated into .github/workflows/release.yml"
+    - "Tests pass on valid artifacts"
+    - "Tests fail on broken artifacts"
+    - "Clear error messages provided"
+
+  value:
+    - "V_instance(s₃) ≥ 0.80 (target: 0.82)"
+    - "V_meta(s₃) ≥ 0.55 (target: 0.55)"
+    - "ΔV_instance ≈ +0.086"
+    - "ΔV_meta ≈ +0.065"
+
+  convergence:
+    - "V_instance threshold MET (0.80+)"
+    - "M₃ = M₂ (stable)"
+    - "A₃ = A₂ (stable)"
+    - "Instance layer convergence ACHIEVED"
+
+# ==================================================================
+# NEXT STEPS
+# ==================================================================
+
+next_steps:
+  immediate:
+    - "Proceed to EXECUTE phase"
+    - "Implement scripts/smoke-tests.sh"
+    - "Test locally with built artifacts"
+    - "Integrate into release workflow"
+
+  after_execution:
+    - "Calculate V(s₃) and check convergence"
+    - "Extract smoke testing methodology"
+    - "Document iteration results"
+    - "Assess if Iteration 4 needed"
+
+expected_outcome: "CONVERGENCE MILESTONE - V_instance ≥ 0.80 achieved"
