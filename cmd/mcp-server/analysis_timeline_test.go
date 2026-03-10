@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/yaleh/meta-cc/internal/analysis"
 )
 
 // TestGetTimelineToolRegistered verifies get_timeline appears in getToolDefinitions()
@@ -34,7 +36,7 @@ func TestGetTimelineToolExecution(t *testing.T) {
 		"working_dir": projectPath,
 	}
 
-	output, err := executeGetTimelineTool(nil, args)
+	output, err := analysis.New().GetTimeline(args)
 	require.NoError(t, err, "executeGetTimelineTool should not return error")
 	require.NotEmpty(t, output, "output should not be empty")
 

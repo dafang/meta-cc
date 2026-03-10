@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/yaleh/meta-cc/internal/analysis"
 )
 
 // TestGetTechDebtToolRegistered verifies get_tech_debt appears in getToolDefinitions()
@@ -34,7 +36,7 @@ func TestGetTechDebtToolExecution(t *testing.T) {
 		"working_dir": projectPath,
 	}
 
-	output, err := executeGetTechDebtTool(nil, args)
+	output, err := analysis.New().GetTechDebt(args)
 	require.NoError(t, err, "executeGetTechDebtTool should not return error")
 	require.NotEmpty(t, output, "output should not be empty")
 

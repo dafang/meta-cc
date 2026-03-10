@@ -10,20 +10,17 @@ import (
 	"os"
 
 	"github.com/yaleh/meta-cc/internal/analyzer"
-	"github.com/yaleh/meta-cc/internal/config"
 	"github.com/yaleh/meta-cc/internal/locator"
 	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // Service encapsulates the analysis pipeline for MCP tool handlers.
-type Service struct {
-	cfg *config.Config
-}
+type Service struct{}
 
 // New creates a new Service.
-func New(cfg *config.Config) *Service {
-	return &Service{cfg: cfg}
+func New() *Service {
+	return &Service{}
 }
 
 // loadData locates session files, parses them, and extracts tool calls.
@@ -168,4 +165,15 @@ func (s *Service) GetTechDebt(args map[string]interface{}) (string, error) {
 		return "", fmt.Errorf("get tech debt failed: %w", err)
 	}
 	return marshalResult(result)
+}
+
+// AnalysisService is the interface implemented by *Service.
+// It allows cmd/mcp-server to use a mock in tests.
+type AnalysisService interface {
+	AnalyzeBugs(args map[string]interface{}) (string, error)
+	AnalyzeErrors(args map[string]interface{}) (string, error)
+	QualityScan(args map[string]interface{}) (string, error)
+	GetWorkPatterns(args map[string]interface{}) (string, error)
+	GetTimeline(args map[string]interface{}) (string, error)
+	GetTechDebt(args map[string]interface{}) (string, error)
 }

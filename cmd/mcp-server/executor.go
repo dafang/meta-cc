@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yaleh/meta-cc/internal/analysis"
 	"github.com/yaleh/meta-cc/internal/config"
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
 	querypkg "github.com/yaleh/meta-cc/internal/query"
@@ -25,7 +26,9 @@ var timestampStatsTools = map[string]bool{
 	"query_summaries":         true,
 }
 
-type ToolExecutor struct{}
+type ToolExecutor struct {
+	analysisSvc analysis.AnalysisService
+}
 
 type toolPipelineConfig struct {
 	jqFilter         string
@@ -60,7 +63,9 @@ func (c toolPipelineConfig) requiresMessageFilters() bool {
 }
 
 func NewToolExecutor() *ToolExecutor {
-	return &ToolExecutor{}
+	return &ToolExecutor{
+		analysisSvc: analysis.New(),
+	}
 }
 
 func determineScope(toolName string, args map[string]interface{}) string {
@@ -148,7 +153,7 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		return string(jsonData), true, nil
 
 	case "analyze_bugs":
-		output, err := executeAnalyzeBugsTool(cfg, args)
+		output, err := e.analysisSvc.AnalyzeBugs(args)
 		if err != nil {
 			errorType := classifyError(err)
 			recordToolFailure(toolName, scope, start, errorType)
@@ -158,7 +163,7 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		return output, true, nil
 
 	case "analyze_errors":
-		output, err := executeAnalyzeErrorsTool(cfg, args)
+		output, err := e.analysisSvc.AnalyzeErrors(args)
 		if err != nil {
 			errorType := classifyError(err)
 			recordToolFailure(toolName, scope, start, errorType)
@@ -168,7 +173,7 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		return output, true, nil
 
 	case "quality_scan":
-		output, err := executeQualityScanTool(cfg, args)
+		output, err := e.analysisSvc.QualityScan(args)
 		if err != nil {
 			errorType := classifyError(err)
 			recordToolFailure(toolName, scope, start, errorType)
@@ -178,7 +183,7 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		return output, true, nil
 
 	case "get_work_patterns":
-		output, err := executeGetWorkPatternsTool(cfg, args)
+		output, err := e.analysisSvc.GetWorkPatterns(args)
 		if err != nil {
 			errorType := classifyError(err)
 			recordToolFailure(toolName, scope, start, errorType)
@@ -205,7 +210,7 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		return string(jsonData), true, nil
 
 	case "get_timeline":
-		output, err := executeGetTimelineTool(cfg, args)
+		output, err := e.analysisSvc.GetTimeline(args)
 		if err != nil {
 			errorType := classifyError(err)
 			recordToolFailure(toolName, scope, start, errorType)
@@ -215,7 +220,7 @@ func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope st
 		return output, true, nil
 
 	case "get_tech_debt":
-		output, err := executeGetTechDebtTool(cfg, args)
+		output, err := e.analysisSvc.GetTechDebt(args)
 		if err != nil {
 			errorType := classifyError(err)
 			recordToolFailure(toolName, scope, start, errorType)

@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/yaleh/meta-cc/internal/analysis"
-	"github.com/yaleh/meta-cc/internal/config"
 )
 
 // setupTestProjectDir creates a fake META_CC_PROJECTS_ROOT with the given JSONL
@@ -44,6 +43,8 @@ func setupTestProjectDir(t *testing.T, sourceJSONL string) string {
 	return projectPath
 }
 
+var _ analysis.AnalysisService = (*analysis.Service)(nil)
+
 func TestService_AnalyzeBugs(t *testing.T) {
 	testJSONL, err := filepath.Abs("../../cmd/mcp-server/test.jsonl")
 	require.NoError(t, err)
@@ -52,7 +53,7 @@ func TestService_AnalyzeBugs(t *testing.T) {
 	}
 
 	projectPath := setupTestProjectDir(t, testJSONL)
-	svc := analysis.New(&config.Config{})
+	svc := analysis.New()
 	out, err := svc.AnalyzeBugs(map[string]interface{}{"working_dir": projectPath})
 	require.NoError(t, err)
 
@@ -70,7 +71,7 @@ func TestService_AnalyzeErrors(t *testing.T) {
 	}
 
 	projectPath := setupTestProjectDir(t, testJSONL)
-	svc := analysis.New(&config.Config{})
+	svc := analysis.New()
 	out, err := svc.AnalyzeErrors(map[string]interface{}{"working_dir": projectPath})
 	require.NoError(t, err)
 
@@ -87,7 +88,7 @@ func TestService_QualityScan(t *testing.T) {
 	}
 
 	projectPath := setupTestProjectDir(t, testJSONL)
-	svc := analysis.New(&config.Config{})
+	svc := analysis.New()
 	out, err := svc.QualityScan(map[string]interface{}{"working_dir": projectPath})
 	require.NoError(t, err)
 
@@ -104,7 +105,7 @@ func TestService_GetWorkPatterns(t *testing.T) {
 	}
 
 	projectPath := setupTestProjectDir(t, testJSONL)
-	svc := analysis.New(&config.Config{})
+	svc := analysis.New()
 	out, err := svc.GetWorkPatterns(map[string]interface{}{"working_dir": projectPath})
 	require.NoError(t, err)
 
@@ -121,7 +122,7 @@ func TestService_GetTimeline(t *testing.T) {
 	}
 
 	projectPath := setupTestProjectDir(t, testJSONL)
-	svc := analysis.New(&config.Config{})
+	svc := analysis.New()
 	out, err := svc.GetTimeline(map[string]interface{}{"working_dir": projectPath})
 	require.NoError(t, err)
 
@@ -138,7 +139,7 @@ func TestService_GetTechDebt(t *testing.T) {
 	}
 
 	projectPath := setupTestProjectDir(t, testJSONL)
-	svc := analysis.New(&config.Config{})
+	svc := analysis.New()
 	out, err := svc.GetTechDebt(map[string]interface{}{"working_dir": projectPath})
 	require.NoError(t, err)
 

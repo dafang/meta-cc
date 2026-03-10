@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/yaleh/meta-cc/internal/analysis"
 )
 
 func TestGetWorkPatternsToolRegistered(t *testing.T) {
@@ -32,7 +34,7 @@ func TestGetWorkPatternsToolExecution(t *testing.T) {
 		"working_dir": projectPath,
 	}
 
-	output, err := executeGetWorkPatternsTool(nil, args)
+	output, err := analysis.New().GetWorkPatterns(args)
 	require.NoError(t, err, "executeGetWorkPatternsTool should not return error")
 	require.NotEmpty(t, output, "output should not be empty")
 

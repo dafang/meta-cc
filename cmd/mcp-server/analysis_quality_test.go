@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/yaleh/meta-cc/internal/analysis"
 )
 
 // TestQualityScanToolRegistered verifies quality_scan appears in getToolDefinitions()
@@ -36,7 +38,7 @@ func TestQualityScanToolExecution(t *testing.T) {
 		"working_dir": projectPath,
 	}
 
-	output, err := executeQualityScanTool(nil, args)
+	output, err := analysis.New().QualityScan(args)
 	require.NoError(t, err, "executeQualityScanTool should not return error")
 	require.NotEmpty(t, output, "output should not be empty")
 

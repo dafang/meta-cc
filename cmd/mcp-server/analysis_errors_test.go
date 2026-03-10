@@ -10,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/yaleh/meta-cc/internal/analysis"
 )
 
 // setupAnalysisTestProjectDir creates a fake META_CC_PROJECTS_ROOT with the given
@@ -77,7 +79,7 @@ func TestAnalyzeErrorsToolExecution(t *testing.T) {
 		"working_dir": projectPath,
 	}
 
-	output, err := executeAnalyzeErrorsTool(nil, args)
+	output, err := analysis.New().AnalyzeErrors(args)
 	require.NoError(t, err, "executeAnalyzeErrorsTool should not return error")
 	require.NotEmpty(t, output, "output should not be empty")
 
@@ -105,7 +107,7 @@ func TestAnalyzeErrorsToolLimit(t *testing.T) {
 		"working_dir": projectPath,
 	}
 
-	output, err := executeAnalyzeErrorsTool(nil, args)
+	output, err := analysis.New().AnalyzeErrors(args)
 	require.NoError(t, err, "executeAnalyzeErrorsTool should not return error with limit=1")
 	require.NotEmpty(t, output, "output should not be empty")
 
