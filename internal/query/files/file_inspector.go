@@ -1,4 +1,4 @@
-package query
+package files
 
 import (
 	"bufio"
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/yaleh/meta-cc/internal/query"
 )
 
 // RecordSample represents a sample record from a session file
@@ -17,12 +19,12 @@ type RecordSample struct {
 
 // FileMetadata contains metadata about a session file
 type FileMetadata struct {
-	Path        string         `json:"path"`
-	SizeBytes   int64          `json:"size_bytes"`
-	LineCount   int            `json:"line_count"`
-	RecordTypes map[string]int `json:"record_types"`
-	TimeRange   TimeRange      `json:"time_range"`
-	Samples     []RecordSample `json:"samples,omitempty"`
+	Path        string          `json:"path"`
+	SizeBytes   int64           `json:"size_bytes"`
+	LineCount   int             `json:"line_count"`
+	RecordTypes map[string]int  `json:"record_types"`
+	TimeRange   query.TimeRange `json:"time_range"`
+	Samples     []RecordSample  `json:"samples,omitempty"`
 }
 
 // InspectionSummary provides aggregate information about inspected files

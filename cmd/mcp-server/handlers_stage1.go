@@ -10,6 +10,7 @@ import (
 
 	"github.com/yaleh/meta-cc/internal/locator"
 	"github.com/yaleh/meta-cc/internal/query"
+	queryfiles "github.com/yaleh/meta-cc/internal/query/files"
 )
 
 // handlers_stage1.go implements Stage 1 tools of the two-stage query architecture
@@ -184,7 +185,7 @@ func handleInspectSessionFiles(ctx context.Context, args map[string]interface{})
 	}
 
 	// Call the file inspector
-	result, err := query.InspectFiles(files, includeSamples)
+	result, err := queryfiles.InspectFiles(files, includeSamples)
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect files: %w", err)
 	}
