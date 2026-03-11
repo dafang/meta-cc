@@ -12,7 +12,7 @@ if [ "$LATEST" != "$MARKET" ] && [ -n "$LATEST" ]; then
 fi
 
 # Also check plugin.json parity if it exists
-PLUGIN_JSON=".claude-plugin/plugin.json"
+PLUGIN_JSON="plugin-src/.claude-plugin/plugin.json"
 if [ -f "$PLUGIN_JSON" ]; then
     PLUGIN_VER=$(jq -r '.version' "$PLUGIN_JSON" 2>/dev/null || echo "")
     if [ -n "$PLUGIN_VER" ] && [ "$MARKET" != "$PLUGIN_VER" ]; then
