@@ -5,6 +5,20 @@ All notable changes to the meta-cc project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.2] - 2026-03-11
+
+
+### Changed
+
+- Refactoring: add internal/query/jq subpackage (Phase 64 reference impl)
+- Refactoring: implement architecture hygiene phase 2 (Phases 60-64)
+- Refactoring: migrate pkg/output and pkg/pipeline to internal/ (Stage 62.1)
+- Documentation: add proposal and plan for architecture hygiene phase 2 (Phases 60-64)
+- Documentation: mark Phase 58-59 as completed
+- Refactoring: remove unused cfg from analysis.Service; add AnalysisService interface (Stages 59.1-59.2)
+- Refactoring: extract file_inspector to internal/query/files subpackage (Stage 58.3)
+- Refactoring: rename experiments/ to _experiments/ to exclude from module graph (Stage 58.2)
+
 ## [3.0.0] - 2026-03-09
 
 ### Breaking Changes
