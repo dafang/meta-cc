@@ -321,8 +321,8 @@ get_mcp_version          # Get MCP server version
 #### How It Works
 
 When MCP queries return large datasets:
-- **Small results (≤8KB)**: Returned inline in the response
-- **Large results (>8KB)**: Written to a temporary JSONL file, metadata returned
+- **Small results (≤32KB)**: Returned inline in the response
+- **Large results (>32KB)**: Written to a temporary JSONL file, metadata returned
 
 **No data truncation occurs** - all results are preserved.
 
@@ -334,7 +334,7 @@ User: "Show me all errors across the entire project"
 
 Claude will:
 1. Call `query_tools(status="error", scope="project")`
-2. Receive file_ref mode response (likely >8KB for full project)
+2. Receive file_ref mode response (likely >32KB for full project)
 3. Analyze the file reference metadata
 4. Use Read or Grep tools to examine specific patterns
 
@@ -372,7 +372,7 @@ Claude will use:
   "name": "query_tools",
   "arguments": {
     "status": "error",
-    "inline_threshold_bytes": 16384  // 16KB threshold instead of default 8KB
+    "inline_threshold_bytes": 16384  // 16KB threshold instead of default 32KB
   }
 }
 ```
@@ -478,12 +478,12 @@ The meta-cc MCP server uses **hybrid output mode** to efficiently handle both sm
 
 ### Understanding Hybrid Output Mode
 
-**Inline Mode (≤8KB results)**:
+**Inline Mode (≤32KB results)**:
 - Data embedded directly in MCP response
 - Immediate access, single-turn analysis
 - Used for quick stats, small queries
 
-**File Reference Mode (>8KB results)**:
+**File Reference Mode (>32KB results)**:
 - Data written to temporary JSONL file
 - Response contains metadata and file path
 - Claude uses Read/Grep tools to analyze
@@ -626,7 +626,7 @@ Show me error patterns with a custom threshold
 
 **Behavior**:
 - Query returns 500 error records (~50KB)
-- Custom threshold set to 4KB (instead of default 8KB)
+- Custom threshold set to 4KB (instead of default 32KB)
 - Data exceeds 4KB, so file_ref mode is selected
 - All 500 records preserved in temp file (no truncation)
 

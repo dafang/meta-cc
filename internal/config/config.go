@@ -53,7 +53,7 @@ type OutputConfig struct {
 	Mode string
 
 	// InlineThreshold sets the byte threshold for switching to file_ref mode.
-	// Default: 8192 (8KB)
+	// Default: 32768 (32KB)
 	InlineThreshold int
 }
 
@@ -145,7 +145,7 @@ func loadLogConfig() LogConfig {
 func loadOutputConfig() OutputConfig {
 	return OutputConfig{
 		Mode:            getEnvOrDefault("META_CC_OUTPUT_MODE", "auto"),
-		InlineThreshold: getEnvInt("META_CC_INLINE_THRESHOLD", 8192),
+		InlineThreshold: getEnvInt("META_CC_INLINE_THRESHOLD", 32768),
 	}
 }
 

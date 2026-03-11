@@ -23,7 +23,7 @@ func getTestConfig() *config.Config {
 			},
 			Output: config.OutputConfig{
 				Mode:            "auto",
-				InlineThreshold: 8192,
+				InlineThreshold: 32768,
 			},
 			Capability: config.CapabilityConfig{
 				Sources: "",
@@ -140,20 +140,20 @@ func TestSelectOutputMode(t *testing.T) {
 			wantMode:     "inline",
 		},
 		{
-			name:         "8KB result (at threshold)",
-			size:         8 * 1024,
+			name:         "32KB result (at threshold)",
+			size:         32 * 1024,
 			explicitMode: "",
 			wantMode:     "inline",
 		},
 		{
-			name:         "8KB + 1 byte (above threshold)",
-			size:         8*1024 + 1,
+			name:         "32KB + 1 byte (above threshold)",
+			size:         32*1024 + 1,
 			explicitMode: "",
 			wantMode:     "file_ref",
 		},
 		{
-			name:         "9KB result (above threshold)",
-			size:         9 * 1024,
+			name:         "40KB result (above threshold)",
+			size:         40 * 1024,
 			explicitMode: "",
 			wantMode:     "file_ref",
 		},
@@ -203,7 +203,7 @@ func TestOutputModeOverride(t *testing.T) {
 		},
 		{
 			name:         "invalid mode falls back to auto-select (large)",
-			size:         10 * 1024,
+			size:         40 * 1024,
 			explicitMode: "invalid",
 			wantMode:     "file_ref",
 		},
@@ -229,8 +229,8 @@ func TestOutputModeOverride(t *testing.T) {
 func TestOutputModeConfig(t *testing.T) {
 	config := DefaultOutputModeConfig()
 
-	if config.InlineThresholdBytes != 8*1024 {
-		t.Errorf("DefaultOutputModeConfig().InlineThresholdBytes = %d, want %d", config.InlineThresholdBytes, 8*1024)
+	if config.InlineThresholdBytes != 32*1024 {
+		t.Errorf("DefaultOutputModeConfig().InlineThresholdBytes = %d, want %d", config.InlineThresholdBytes, 32*1024)
 	}
 }
 
@@ -284,8 +284,8 @@ func TestGetOutputModeConfigDefault(t *testing.T) {
 
 	config := getOutputModeConfig(testCfg, params)
 
-	if config.InlineThresholdBytes != 8*1024 {
-		t.Errorf("getOutputModeConfig() default threshold = %d, want %d", config.InlineThresholdBytes, 8*1024)
+	if config.InlineThresholdBytes != 32*1024 {
+		t.Errorf("getOutputModeConfig() default threshold = %d, want %d", config.InlineThresholdBytes, 32*1024)
 	}
 }
 
@@ -351,17 +351,17 @@ func TestGetOutputModeConfigEnvironment(t *testing.T) {
 		{
 			name:      "invalid env var (non-numeric)",
 			envValue:  "invalid",
-			wantBytes: 8192, // Falls back to default
+			wantBytes: 32768, // Falls back to default
 		},
 		{
 			name:      "invalid env var (negative)",
 			envValue:  "-1000",
-			wantBytes: 8192, // Falls back to default
+			wantBytes: 32768, // Falls back to default
 		},
 		{
 			name:      "invalid env var (zero)",
 			envValue:  "0",
-			wantBytes: 8192, // Falls back to default
+			wantBytes: 32768, // Falls back to default
 		},
 	}
 

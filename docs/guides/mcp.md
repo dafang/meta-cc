@@ -952,7 +952,7 @@ All query tools (1-13) support these parameters:
 | `jq_filter` | string | ".[]" | jq expression for filtering and transforming results |
 | `stats_only` | boolean | false | Return only statistics, no detailed records |
 | `stats_first` | boolean | false | Return statistics first, then details (separated by `---`) |
-| `inline_threshold_bytes` | number | 8192 | Threshold for inline vs file_ref mode (8KB default) |
+| `inline_threshold_bytes` | number | 32768 | Threshold for inline vs file_ref mode (32KB default) |
 | `output_format` | string | "jsonl" | Output format: "jsonl" or "tsv" |
 
 ---
@@ -963,16 +963,16 @@ All query tools (1-13) support these parameters:
 
 The MCP server automatically selects output mode based on result size:
 
-- **Inline Mode** (≤8KB): Data embedded directly in response
-- **File Reference Mode** (>8KB): Data written to temp file, metadata returned
+- **Inline Mode** (≤32KB): Data embedded directly in response
+- **File Reference Mode** (>32KB): Data written to temp file, metadata returned
 
 **Threshold Configuration**:
 
 | Method | Priority | Example |
 |--------|----------|---------|
-| Parameter | Highest | `"inline_threshold_bytes": 16384` (16KB) |
-| Environment | Medium | `export META_CC_INLINE_THRESHOLD=16384` |
-| Default | Lowest | 8192 bytes (8KB) |
+| Parameter | Highest | `"inline_threshold_bytes": 65536` (64KB) |
+| Environment | Medium | `export META_CC_INLINE_THRESHOLD=65536` |
+| Default | Lowest | 32768 bytes (32KB) |
 
 **Inline Mode Response**:
 ```json
@@ -1018,8 +1018,8 @@ The MCP server automatically selects output mode based on result size:
 ### Query Limit Strategy
 
 By default, MCP tools **do not limit** the number of results:
-- Small results automatically use inline mode (≤8KB)
-- Large results automatically use file_ref mode (>8KB)
+- Small results automatically use inline mode (≤32KB)
+- Large results automatically use file_ref mode (>32KB)
 
 **When to explicitly use `limit` parameter**:
 
@@ -1165,8 +1165,8 @@ Claude: [Automatically calls]
 
 ### 3. Leverage Hybrid Output Mode
 
-- **Quick queries**: Inline mode is automatic (≤8KB)
-- **Large queries**: File_ref mode handles size (>8KB)
+- **Quick queries**: Inline mode is automatic (≤32KB)
+- **Large queries**: File_ref mode handles size (>32KB)
 - **Custom threshold**: Adjust via `inline_threshold_bytes`
 
 ### 4. Combine Tools for Complex Analysis

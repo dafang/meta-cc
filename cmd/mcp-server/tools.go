@@ -46,7 +46,7 @@ func StandardToolParameters() map[string]Property {
 		},
 		"inline_threshold_bytes": {
 			Type:        "number",
-			Description: "Threshold for inline vs file_ref mode in bytes (default: 8192). Can also set META_CC_INLINE_THRESHOLD env var",
+			Description: "Threshold for inline vs file_ref mode in bytes (default: 32768). Can also set META_CC_INLINE_THRESHOLD env var",
 		},
 		"output_format": {
 			Type:        "string",

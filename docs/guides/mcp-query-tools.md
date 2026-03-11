@@ -30,7 +30,7 @@ The MCP v2.0 query interface provides a unified, composable approach to querying
 **Key Features**:
 - **Unified Interface**: Single `query` tool replaces 6 specialized tools
 - **jq Integration**: Native jq filtering for maximum flexibility
-- **Hybrid Output**: Automatic inline (<8KB) or file_ref (≥8KB) output
+- **Hybrid Output**: Automatic inline (<32KB) or file_ref (≥32KB) output
 - **No Limits by Default**: Returns all results, relies on hybrid mode
 - **Scope Support**: Query current session or entire project
 - **Standard Parameters**: Consistent interface across all tools
@@ -91,7 +91,7 @@ All query tools operate on three core resources:
 - `scope` (string): `project` or `session` (default: `project`)
 - `stats_only` (boolean): Return only statistics (default: false)
 - `stats_first` (boolean): Return stats first, then details (default: false)
-- `inline_threshold_bytes` (number): Threshold for inline vs file_ref (default: 8192)
+- `inline_threshold_bytes` (number): Threshold for inline vs file_ref (default: 32768)
 - `output_format` (string): Output format - `jsonl` or `tsv` (default: `jsonl`)
 
 **Examples**:
@@ -169,7 +169,7 @@ query({
 - `scope` (string): `project` or `session` (default: `project`)
 - `stats_only` (boolean): Return only statistics (default: false)
 - `stats_first` (boolean): Return stats first, then details (default: false)
-- `inline_threshold_bytes` (number): Threshold for inline vs file_ref (default: 8192)
+- `inline_threshold_bytes` (number): Threshold for inline vs file_ref (default: 32768)
 - `output_format` (string): Output format - `jsonl` or `tsv` (default: `jsonl`)
 
 **Examples**:
@@ -865,7 +865,7 @@ query({
 ```
 
 ### `inline_threshold_bytes` (number)
-Threshold for inline vs file_ref mode in bytes (default: 8192)
+Threshold for inline vs file_ref mode in bytes (default: 32768)
 
 **How it works**:
 - Results < threshold: Return inline in MCP response
@@ -873,7 +873,7 @@ Threshold for inline vs file_ref mode in bytes (default: 8192)
 
 **Common values**:
 - `1024` (1KB): Force file_ref for most queries
-- `8192` (8KB): Default, balanced for typical queries
+- `32768` (32KB): Default, covers most MCP query results inline (~8K tokens)
 - `65536` (64KB): Allow large inline results
 
 **Example**:
@@ -1013,7 +1013,7 @@ The MCP v2.0 query interface uses hybrid output mode to handle large result sets
 ### How It Works
 
 1. **Query Execution**: Tool executes query and collects results
-2. **Size Check**: If result size < `inline_threshold_bytes` (default: 8192)
+2. **Size Check**: If result size < `inline_threshold_bytes` (default: 32768)
    - **Inline Mode**: Return results directly in MCP response
 3. **Size Check**: If result size ≥ `inline_threshold_bytes`
    - **File Ref Mode**: Save results to temp file, return file_ref

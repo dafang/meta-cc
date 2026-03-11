@@ -371,7 +371,7 @@ func TestExecuteTool_InlineThresholdParameter(t *testing.T) {
 	}
 
 	// Test parameter extraction
-	thresholdBytes := getIntParam(args, "inline_threshold_bytes", 8192)
+	thresholdBytes := getIntParam(args, "inline_threshold_bytes", 32768)
 	if thresholdBytes != 4096 {
 		t.Errorf("expected inline_threshold_bytes=4096, got %d", thresholdBytes)
 	}

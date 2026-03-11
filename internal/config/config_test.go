@@ -65,8 +65,8 @@ func TestLoadDefaults(t *testing.T) {
 		t.Errorf("default output mode should be auto, got %s", cfg.Output.Mode)
 	}
 
-	if cfg.Output.InlineThreshold != 8192 {
-		t.Errorf("default inline threshold should be 8192, got %d", cfg.Output.InlineThreshold)
+	if cfg.Output.InlineThreshold != 32768 {
+		t.Errorf("default inline threshold should be 32768, got %d", cfg.Output.InlineThreshold)
 	}
 }
 

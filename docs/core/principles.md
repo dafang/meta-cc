@@ -231,7 +231,7 @@ if err := flagSet.Set("output", "json"); err != nil {
 **meta-cc-mcp**（MCP Server 层）：
 - ✅ 职责：接收 MCP 请求，调用 CLI，使用 gojq 过滤/聚合
 - ✅ 处理流程：CLI 获取数据 → gojq 过滤 → 统计聚合 → 混合输出模式
-- ✅ 混合输出：输出 ≤ 阈值(8KB) → inline；输出 > 阈值 → file_ref
+- ✅ 混合输出：输出 ≤ 阈值(32KB) → inline；输出 > 阈值 → file_ref
 
 ### 查询范围与输出控制（快速参考）
 
@@ -244,7 +244,7 @@ if err := flagSet.Set("output", "json"); err != nil {
 - ✅ 显式限制：`limit: N` （仅在明确需要时使用）
 
 **混合输出模式**：
-- ✅ 自动选择：≤8KB → inline；>8KB → file_ref
+- ✅ 自动选择：≤32KB → inline；>32KB → file_ref
 - ✅ 阈值配置：`inline_threshold_bytes` 或 `META_CC_INLINE_THRESHOLD`
 
 ---

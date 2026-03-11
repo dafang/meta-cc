@@ -23,7 +23,7 @@
 - ✅ 3 个 Subagents 可用
 - ✅ MCP Server 独立可执行文件（`meta-cc-mcp`，16 个工具，支持混合输出模式）
 - ✅ MCP 输出压缩率 80%+（10.7k → ~1-2k tokens）
-- ✅ 混合输出模式：自动处理大数据（≤8KB inline，>8KB file_ref，无截断）
+- ✅ 混合输出模式：自动处理大数据（≤32KB inline，>32KB file_ref，无截断）
 - ✅ 开源基础设施完成：LICENSE, CI/CD, 发布自动化
 - ✅ 消息查询完整：user messages + assistant messages + conversation turns
 - ✅ 插件打包：多平台包（5 平台）+ 自动安装脚本
@@ -108,7 +108,7 @@ card "Phase 16" as P16 #lightgreen {
   - 混合输出模式
   - 文件引用机制
   - 临时文件管理
-  - 8KB 阈值切换
+  - 32KB 阈值切换
   [详细文档](../guides/mcp.md)
 }
 

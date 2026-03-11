@@ -264,7 +264,7 @@ func BenchmarkHybridOutput(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			data, _ := json.Marshal(smallResult)
-			_ = len(data) < 8192 // Inline threshold check
+			_ = len(data) < 32768 // Inline threshold check
 		}
 	})
 
@@ -273,7 +273,7 @@ func BenchmarkHybridOutput(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			data, _ := json.Marshal(largeResult)
-			if len(data) >= 8192 {
+			if len(data) >= 32768 {
 				// Simulate file write
 				tmpFile := filepath.Join(tmpDir, fmt.Sprintf("output-%d.jsonl", i))
 				_ = os.WriteFile(tmpFile, data, 0644)

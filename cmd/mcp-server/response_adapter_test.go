@@ -42,11 +42,11 @@ func TestAdaptInlineResponse(t *testing.T) {
 
 // TestAdaptFileRefResponse tests file reference mode formatting for large results
 func TestAdaptFileRefResponse(t *testing.T) {
-	// Generate large dataset (>8KB)
-	// Each record is ~200 bytes, need 50+ records to exceed 8KB
-	data := make([]interface{}, 0, 100)
-	longString := strings.Repeat("x", 150) // 150 chars to ensure >8KB total
-	for i := 0; i < 100; i++ {
+	// Generate large dataset (>32KB)
+	// Each record is ~220 bytes, need 200+ records to exceed 32KB
+	data := make([]interface{}, 0, 200)
+	longString := strings.Repeat("x", 150) // 150 chars to ensure >32KB total
+	for i := 0; i < 200; i++ {
 		data = append(data, map[string]interface{}{
 			"Timestamp": "2025-10-06T10:00:00Z",
 			"ToolName":  "Bash",

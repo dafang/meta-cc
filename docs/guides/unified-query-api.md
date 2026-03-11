@@ -555,8 +555,8 @@ const errorRates = errors.map(e => ({
 
 The unified query automatically uses hybrid output mode:
 
-- **Inline mode** (≤8KB): Results embedded in response
-- **File reference mode** (>8KB): Results written to temp file
+- **Inline mode** (≤32KB): Results embedded in response
+- **File reference mode** (>32KB): Results written to temp file
 
 **Configuration**:
 ```javascript

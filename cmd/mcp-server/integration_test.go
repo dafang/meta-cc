@@ -536,9 +536,9 @@ func TestNoTruncationLargeData(t *testing.T) {
 // TestConfigurableThresholdParameter tests inline_threshold_bytes parameter
 func TestConfigurableThresholdParameter(t *testing.T) {
 	cfg, _ := config.Load()
-	// Generate dataset around 10KB (small enough for 20KB threshold, too large for 8KB)
-	data := make([]interface{}, 100)
-	for i := 0; i < 100; i++ {
+	// Generate dataset around 40KB (small enough for 50KB threshold, too large for 32KB)
+	data := make([]interface{}, 300)
+	for i := 0; i < 300; i++ {
 		data[i] = map[string]interface{}{
 			"Timestamp": "2025-10-06T10:00:00Z",
 			"ToolName":  "Bash",
@@ -548,7 +548,7 @@ func TestConfigurableThresholdParameter(t *testing.T) {
 		}
 	}
 
-	// Test 1: Default threshold (8KB) - should use file_ref
+	// Test 1: Default threshold (32KB) - should use file_ref
 	t.Run("default_threshold", func(t *testing.T) {
 		params := map[string]interface{}{}
 		response, err := adaptResponse(cfg, data, params, "query_tools")
@@ -574,10 +574,10 @@ func TestConfigurableThresholdParameter(t *testing.T) {
 		}
 	})
 
-	// Test 2: Custom threshold (20KB) - should use inline
+	// Test 2: Custom threshold (50KB) - should use inline
 	t.Run("custom_threshold_inline", func(t *testing.T) {
 		params := map[string]interface{}{
-			"inline_threshold_bytes": 20 * 1024, // 20KB
+			"inline_threshold_bytes": 50 * 1024, // 50KB
 		}
 		response, err := adaptResponse(cfg, data, params, "query_tools")
 		if err != nil {
@@ -591,7 +591,7 @@ func TestConfigurableThresholdParameter(t *testing.T) {
 
 		mode, ok := respMap["mode"].(string)
 		if !ok || mode != "inline" {
-			t.Errorf("expected inline mode with 20KB threshold, got %v", mode)
+			t.Errorf("expected inline mode with 50KB threshold, got %v", mode)
 		}
 	})
 
@@ -748,9 +748,9 @@ func TestJSONLOutputFormatE2E(t *testing.T) {
 
 	// Test Case 1: Verify file_ref output is multi-line JSONL (not single-line JSON array)
 	t.Run("file_ref_multiline_jsonl", func(t *testing.T) {
-		// Generate large dataset to trigger file_ref mode
-		data := make([]interface{}, 200)
-		for i := 0; i < 200; i++ {
+		// Generate large dataset to trigger file_ref mode (>32KB)
+		data := make([]interface{}, 500)
+		for i := 0; i < 500; i++ {
 			data[i] = map[string]interface{}{
 				"type":      "user",
 				"id":        i,
@@ -798,15 +798,15 @@ func TestJSONLOutputFormatE2E(t *testing.T) {
 		// CRITICAL: Verify file is multi-line JSONL, not single-line JSON array
 		lines := strings.Split(strings.TrimSpace(string(content)), "\n")
 
-		// Should have 200 lines (one per record), not 1 line (JSON array)
+		// Should have 500 lines (one per record), not 1 line (JSON array)
 		if len(lines) == 1 {
 			t.Errorf("FAIL: Output is single-line JSON array, should be multi-line JSONL")
-			t.Errorf("Expected 200 lines, got 1 line")
+			t.Errorf("Expected 500 lines, got 1 line")
 			t.Errorf("This indicates the JSONL format fix is not working")
 		}
 
-		if len(lines) != 200 {
-			t.Errorf("expected 200 lines (multi-line JSONL), got %d", len(lines))
+		if len(lines) != 500 {
+			t.Errorf("expected 500 lines (multi-line JSONL), got %d", len(lines))
 		}
 
 		// Verify each line is valid JSON (not part of array)

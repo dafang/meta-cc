@@ -7,8 +7,10 @@ import (
 )
 
 const (
-	// DefaultInlineThresholdBytes is the size threshold for inline vs file_ref mode
-	DefaultInlineThresholdBytes = 8 * 1024 // 8KB
+	// DefaultInlineThresholdBytes is the size threshold for inline vs file_ref mode.
+	// 32KB (~8K tokens) covers most MCP query results inline while staying within
+	// ~5% of the 200K token context window.
+	DefaultInlineThresholdBytes = 32 * 1024 // 32KB
 
 	// Output mode constants
 	OutputModeInline  = "inline"
@@ -67,13 +69,13 @@ func calculateOutputSize(data []interface{}) int {
 //   - explicitMode: Explicit mode override ("inline", "file_ref", or "" for auto-select)
 //
 // Returns:
-//   - "inline" for data ≤8KB or explicit inline mode
-//   - "file_ref" for data >8KB or explicit file_ref mode
+//   - "inline" for data ≤32KB or explicit inline mode
+//   - "file_ref" for data >32KB or explicit file_ref mode
 //
 // Mode Selection Logic:
 //  1. If explicitMode is "inline" or "file_ref" → use it (override)
 //  2. If explicitMode is invalid/empty → auto-select based on size
-//  3. Auto-select: size ≤ 8192 bytes → inline, otherwise → file_ref
+//  3. Auto-select: size ≤ 32768 bytes → inline, otherwise → file_ref
 //
 // Override Examples:
 //   - selectOutputMode(100*1024, "inline") → "inline" (force inline for large data)
@@ -111,7 +113,7 @@ func selectOutputModeWithConfig(size int, explicitMode string, config *OutputMod
 }
 
 // getOutputModeConfig returns output mode configuration from centralized config and parameters.
-// Priority: parameter > centralized config (from environment) > default (8192 bytes)
+// Priority: parameter > centralized config (from environment) > default (32768 bytes)
 //
 // Parameters:
 //   - globalCfg: Centralized configuration (loaded at startup)
@@ -123,7 +125,7 @@ func selectOutputModeWithConfig(size int, explicitMode string, config *OutputMod
 // Configuration Sources:
 //  1. Parameter: inline_threshold_bytes (highest priority - per-request override)
 //  2. Centralized Config: cfg.Output.InlineThreshold (from META_CC_INLINE_THRESHOLD)
-//  3. Default: 8192 bytes (8KB, applied in config.Load())
+//  3. Default: 32768 bytes (32KB, applied in config.Load())
 func getOutputModeConfig(globalCfg *config.Config, params map[string]interface{}) *OutputModeConfig {
 	config := DefaultOutputModeConfig()
 
