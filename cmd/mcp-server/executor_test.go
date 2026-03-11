@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/yaleh/meta-cc/internal/config"
+	pipelinepkg "github.com/yaleh/meta-cc/internal/mcp/pipeline"
 )
 
 const testSessionID = "test-session"
@@ -565,9 +566,8 @@ func TestParseJSONL(t *testing.T) {
 	}
 }
 
-// Test dataToJSONL function
+// Test DataToJSONL function (now in pipeline package)
 func TestDataToJSONL(t *testing.T) {
-	executor := NewToolExecutor()
 	tests := []struct {
 		name      string
 		data      []interface{}
@@ -611,7 +611,7 @@ func TestDataToJSONL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := executor.dataToJSONL(tt.data)
+			result, err := pipelinepkg.DataToJSONL(tt.data)
 
 			if tt.expectErr {
 				if err == nil {
@@ -791,11 +791,9 @@ func TestGetSessionHash(t *testing.T) {
 // All query tools now use internal/query library directly. See executor_no_cli_test.go for
 // tests verifying that tools don't attempt CLI execution.
 
-// TestStatsDispatch verifies that buildStatsOnlyResponse uses timestamp-based stats for
+// TestStatsDispatch verifies that BuildStatsOnlyResponse uses timestamp-based stats for
 // user-message tools and tool-name stats for tool-record tools (Phase 49).
 func TestStatsDispatch(t *testing.T) {
-	executor := NewToolExecutor()
-
 	// User message records (no tool field, have timestamp + sessionId)
 	userRecords := []interface{}{
 		map[string]interface{}{
@@ -829,7 +827,7 @@ func TestStatsDispatch(t *testing.T) {
 	// User-message tools should use timestamp stats (output should have "hour" key)
 	for _, toolName := range []string{"query_user_messages", "query_conversation_flow", "query_timestamps", "query_summaries"} {
 		t.Run(toolName+"_uses_timestamp_stats", func(t *testing.T) {
-			output, err := executor.buildStatsOnlyResponse(userRecords, toolName, "turn")
+			output, err := pipelinepkg.BuildStatsOnlyResponse(userRecords, toolName, "turn")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -845,7 +843,7 @@ func TestStatsDispatch(t *testing.T) {
 	// Tool-record tools should use tool-name stats (output should have "key" field, not "hour")
 	for _, toolName := range []string{"query_tools", "query_tool_errors"} {
 		t.Run(toolName+"_uses_tool_stats", func(t *testing.T) {
-			output, err := executor.buildStatsOnlyResponse(toolRecords, toolName, "turn")
+			output, err := pipelinepkg.BuildStatsOnlyResponse(toolRecords, toolName, "turn")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

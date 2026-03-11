@@ -39,3 +39,10 @@ type UserMessage struct {
 	ContextBefore []ContextEntry `json:"context_before,omitempty"`
 	ContextAfter  []ContextEntry `json:"context_after,omitempty"`
 }
+
+// TimeRange specifies an optional inclusive time window for timestamp filtering.
+// Both fields use ISO8601/RFC3339 string format to preserve JSON round-trip fidelity.
+type TimeRange struct {
+	Start string `json:"start,omitempty"` // ISO8601 timestamp, inclusive lower bound
+	End   string `json:"end,omitempty"`   // ISO8601 timestamp, inclusive upper bound
+}

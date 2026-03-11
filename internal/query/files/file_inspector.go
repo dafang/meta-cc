@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/yaleh/meta-cc/internal/query"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // RecordSample represents a sample record from a session file
@@ -23,7 +23,7 @@ type FileMetadata struct {
 	SizeBytes   int64           `json:"size_bytes"`
 	LineCount   int             `json:"line_count"`
 	RecordTypes map[string]int  `json:"record_types"`
-	TimeRange   query.TimeRange `json:"time_range"`
+	TimeRange   types.TimeRange `json:"time_range"`
 	Samples     []RecordSample  `json:"samples,omitempty"`
 }
 

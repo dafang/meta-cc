@@ -5,26 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/yaleh/meta-cc/internal/analysis"
 	"github.com/yaleh/meta-cc/internal/config"
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
+	filterspkg "github.com/yaleh/meta-cc/internal/mcp/filters"
+	"github.com/yaleh/meta-cc/internal/mcp/metrics"
+	pipelinepkg "github.com/yaleh/meta-cc/internal/mcp/pipeline"
+	schemapkg "github.com/yaleh/meta-cc/internal/mcp/schema"
 	querypkg "github.com/yaleh/meta-cc/internal/query"
 )
-
-// timestampStatsTools is the set of tool names that should use GenerateTimestampStats
-// instead of GenerateStats when producing stats_only or stats_first output.
-// These tools return records that lack a tool/ToolName field but have timestamp data,
-// so time-bucketed stats are more meaningful than the meaningless "unknown" key.
-var timestampStatsTools = map[string]bool{
-	"query_user_messages":     true,
-	"query_conversation_flow": true,
-	"query_timestamps":        true,
-	"query_summaries":         true,
-}
 
 type ToolExecutor struct {
 	analysisSvc analysis.AnalysisService
@@ -78,15 +70,15 @@ func determineScope(toolName string, args map[string]interface{}) string {
 
 func recordToolSuccess(toolName, scope string, start time.Time) {
 	elapsed := time.Since(start)
-	RecordToolCall(toolName, scope, "success")
-	RecordToolExecutionDuration(toolName, scope, elapsed)
+	metrics.RecordToolCall(toolName, scope, "success")
+	metrics.RecordToolExecutionDuration(toolName, scope, elapsed)
 }
 
 func recordToolFailure(toolName, scope string, start time.Time, errorType string) {
 	elapsed := time.Since(start)
-	RecordToolCall(toolName, scope, "error")
-	RecordToolExecutionDuration(toolName, scope, elapsed)
-	RecordError(toolName, errorType, GetErrorSeverity(errorType))
+	metrics.RecordToolCall(toolName, scope, "error")
+	metrics.RecordToolExecutionDuration(toolName, scope, elapsed)
+	metrics.RecordError(toolName, errorType, metrics.GetErrorSeverity(errorType))
 }
 
 func (e *ToolExecutor) executeSpecialTool(cfg *config.Config, toolName, scope string, args map[string]interface{}, start time.Time) (string, bool, error) {
@@ -257,7 +249,7 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 	}
 
 	// Validate that all provided argument keys are declared in the tool schema
-	if validationErr := validateArgKeys(args, schema); validationErr != nil {
+	if validationErr := schemapkg.ValidateArgKeys(args, schema); validationErr != nil {
 		recordToolFailure(toolName, scope, start, "validation_error")
 		return "", validationErr
 	}
@@ -341,11 +333,11 @@ func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, arg
 
 	if pipeline.statsOnly {
 		// stats_only: compute stats from raw data (camelCase sessionId preserved)
-		output, err = e.buildStatsOnlyResponse(rawData, toolName, pipeline.statsLevel)
+		output, err = pipelinepkg.BuildStatsOnlyResponse(rawData, toolName, pipeline.statsLevel)
 		if err != nil {
 			return "", err
 		}
-		return injectWarnings(output, result.Warnings)
+		return pipelinepkg.InjectWarnings(output, result.Warnings)
 	}
 
 	// Apply message filters for detail rendering AFTER stats path
@@ -376,10 +368,17 @@ func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, arg
 		parsedData = querypkg.GroupBySession(parsedData)
 	}
 
+	adaptFn := func(data []interface{}, params map[string]interface{}, toolName string) (interface{}, error) {
+		return adaptResponse(cfg, data, params, toolName)
+	}
+	serializeFn := func(response interface{}) (string, error) {
+		return serializeResponse(response)
+	}
+
 	if pipeline.statsFirst {
-		output, err = e.buildStatsFirstResponse(cfg, rawData, parsedData, args, toolName, pipeline.statsLevel)
+		output, err = pipelinepkg.BuildStatsFirstResponse(rawData, parsedData, args, toolName, pipeline.statsLevel, adaptFn, serializeFn)
 	} else {
-		output, err = e.buildStandardResponse(cfg, parsedData, args, toolName)
+		output, err = pipelinepkg.BuildStandardResponse(parsedData, args, toolName, adaptFn, serializeFn)
 	}
 
 	if err != nil {
@@ -387,130 +386,7 @@ func (e *ToolExecutor) buildResponse(cfg *config.Config, result QueryResult, arg
 	}
 
 	// Inject warnings into the JSON response
-	return injectWarnings(output, result.Warnings)
-}
-
-// injectWarnings adds a "warnings" field to a JSON response string.
-// If the output is valid JSON object, it adds the field. Otherwise returns as-is.
-func injectWarnings(output string, warnings []string) (string, error) {
-	if warnings == nil {
-		warnings = []string{}
-	}
-
-	// Try to parse as JSON object
-	var parsed map[string]interface{}
-	if err := json.Unmarshal([]byte(output), &parsed); err != nil {
-		// Not a JSON object (e.g., stats_only plain text) — skip injection
-		return output, nil
-	}
-
-	parsed["warnings"] = warnings
-
-	result, err := json.Marshal(parsed)
-	if err != nil {
-		return "", fmt.Errorf("failed to re-serialize response with warnings: %w", err)
-	}
-	return string(result), nil
-}
-
-func (e *ToolExecutor) buildStatsOnlyResponse(parsedData []interface{}, toolName string, statsLevel string) (string, error) {
-	jsonlData, err := e.dataToJSONL(parsedData)
-	if err != nil {
-		slog.Error("dataToJSONL conversion failed (stats_only)",
-			"tool_name", toolName,
-			"error", err.Error(),
-			"error_type", "parse_error",
-		)
-		return "", err
-	}
-
-	var output string
-	if statsLevel == "session" && toolName == "query_user_messages" {
-		output, err = querypkg.GenerateSessionStats(jsonlData)
-	} else if timestampStatsTools[toolName] {
-		output, err = querypkg.GenerateTimestampStats(jsonlData)
-	} else {
-		output, err = querypkg.GenerateStats(jsonlData)
-	}
-	if err != nil {
-		slog.Error("stats generation failed",
-			"tool_name", toolName,
-			"error", err.Error(),
-			"error_type", "execution_error",
-		)
-		return "", err
-	}
-
-	return output, nil
-}
-
-func (e *ToolExecutor) buildStatsFirstResponse(cfg *config.Config, rawData []interface{}, parsedData []interface{}, args map[string]interface{}, toolName string, statsLevel string) (string, error) {
-	// Use rawData for stats (sessionId field preserved, not renamed by content_summary)
-	jsonlData, err := e.dataToJSONL(rawData)
-	if err != nil {
-		slog.Error("dataToJSONL conversion failed (stats_first)",
-			"tool_name", toolName,
-			"error", err.Error(),
-			"error_type", "parse_error",
-		)
-		return "", err
-	}
-
-	var stats string
-	if statsLevel == "session" && toolName == "query_user_messages" {
-		stats, _ = querypkg.GenerateSessionStats(jsonlData)
-	} else if timestampStatsTools[toolName] {
-		stats, _ = querypkg.GenerateTimestampStats(jsonlData)
-	} else {
-		stats, _ = querypkg.GenerateStats(jsonlData)
-	}
-
-	// Use parsedData for detail rendering (may have content_summary applied)
-	response, err := adaptResponse(cfg, parsedData, args, toolName)
-	if err != nil {
-		slog.Error("response adaptation failed (stats_first)",
-			"tool_name", toolName,
-			"error", err.Error(),
-			"error_type", "execution_error",
-		)
-		return "", err
-	}
-
-	serialized, err := serializeResponse(response)
-	if err != nil {
-		slog.Error("response serialization failed (stats_first)",
-			"tool_name", toolName,
-			"error", err.Error(),
-			"error_type", "parse_error",
-		)
-		return "", err
-	}
-
-	return stats + "\n---\n" + serialized, nil
-}
-
-func (e *ToolExecutor) buildStandardResponse(cfg *config.Config, parsedData []interface{}, args map[string]interface{}, toolName string) (string, error) {
-	response, err := adaptResponse(cfg, parsedData, args, toolName)
-	if err != nil {
-		slog.Error("response adaptation failed",
-			"tool_name", toolName,
-			"error", err.Error(),
-			"error_type", "execution_error",
-		)
-		return "", fmt.Errorf("response adaptation error for tool %s: %w", toolName, err)
-	}
-
-	output, err := serializeResponse(response)
-	if err != nil {
-		slog.Error("response serialization failed",
-			"tool_name", toolName,
-			"error", err.Error(),
-			"error_type", "parse_error",
-		)
-		return "", err
-	}
-
-	return output, nil
+	return pipelinepkg.InjectWarnings(output, result.Warnings)
 }
 
 // parseJSONL parses JSONL string into array of interfaces
@@ -553,31 +429,9 @@ func (e *ToolExecutor) parseJSONL(jsonlData string) ([]interface{}, error) {
 	return data, nil
 }
 
-// dataToJSONL converts array of interfaces to JSONL string
-func (e *ToolExecutor) dataToJSONL(data []interface{}) (string, error) {
-	var output strings.Builder
-	for i, record := range data {
-		jsonBytes, err := json.Marshal(record)
-		if err != nil {
-			slog.Error("failed to marshal record to JSON",
-				"record_index", i,
-				"error", err.Error(),
-				"error_type", "parse_error",
-			)
-			return "", err
-		}
-		output.Write(jsonBytes)
-		output.WriteString("\n")
-	}
-	return output.String(), nil
-}
-
 // applyMessageFiltersToData applies content truncation or summary mode to user messages (data array)
 func (e *ToolExecutor) applyMessageFiltersToData(messages []interface{}, maxMessageLength int, contentSummary bool, previewLength int) []interface{} {
-	if contentSummary {
-		return ApplyContentSummary(messages, previewLength)
-	}
-	return TruncateMessageContent(messages, maxMessageLength)
+	return filterspkg.ApplyMessageFiltersToData(messages, maxMessageLength, contentSummary, previewLength)
 }
 
 // expandContextTurns takes rawData (matched entries) and expands each matched turn
@@ -585,135 +439,7 @@ func (e *ToolExecutor) applyMessageFiltersToData(messages []interface{}, maxMess
 // Matched turns are marked with "context":false; surrounding context turns with "context":true.
 // Overlapping windows are merged (no duplicates). Order is chronological within each session.
 func (e *ToolExecutor) expandContextTurns(rawData []interface{}, N int, baseDir string) ([]interface{}, error) {
-	if N <= 0 || len(rawData) == 0 {
-		return rawData, nil
-	}
-
-	// 1. Build set of matched UUIDs and collect distinct sessionIds (preserving order)
-	matchedUUIDs := make(map[string]bool)
-	var sessionOrder []string
-	sessionSeen := make(map[string]bool)
-
-	for _, entry := range rawData {
-		obj, ok := entry.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		uuid, _ := obj["uuid"].(string)
-		if uuid != "" {
-			matchedUUIDs[uuid] = true
-		}
-		// Raw data uses camelCase sessionId
-		sessionID, _ := obj["sessionId"].(string)
-		if sessionID == "" {
-			// Fallback to snake_case
-			sessionID, _ = obj["session_id"].(string)
-		}
-		if sessionID != "" && !sessionSeen[sessionID] {
-			sessionOrder = append(sessionOrder, sessionID)
-			sessionSeen[sessionID] = true
-		}
-	}
-
-	// 2. For each distinct sessionId, load all turns for that session
-	sessionTurns := make(map[string][]interface{})
-	for _, sessionID := range sessionOrder {
-		turns, err := loadTurnsForSession(baseDir, sessionID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load turns for session %s: %w", sessionID, err)
-		}
-		sessionTurns[sessionID] = turns
-	}
-
-	// 3. For each session, find windows around matched turns and mark context field
-	// Use seen-uuid map to deduplicate across overlapping windows
-	seenUUIDs := make(map[string]bool)
-	var result []interface{}
-
-	for _, sessionID := range sessionOrder {
-		turns := sessionTurns[sessionID]
-		if len(turns) == 0 {
-			continue
-		}
-
-		// Build UUID→index map for this session
-		uuidToIndex := make(map[string]int, len(turns))
-		for i, turn := range turns {
-			obj, ok := turn.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			uuid, _ := obj["uuid"].(string)
-			if uuid != "" {
-				uuidToIndex[uuid] = i
-			}
-		}
-
-		// Collect all window indices for matched turns in this session
-		// Process in index order for chronological output
-		windowSet := make(map[int]bool)
-		for _, entry := range rawData {
-			obj, ok := entry.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			entrySessionID, _ := obj["sessionId"].(string)
-			if entrySessionID == "" {
-				entrySessionID, _ = obj["session_id"].(string)
-			}
-			if entrySessionID != sessionID {
-				continue
-			}
-			uuid, _ := obj["uuid"].(string)
-			idx, exists := uuidToIndex[uuid]
-			if !exists {
-				continue
-			}
-			lo := idx - N
-			if lo < 0 {
-				lo = 0
-			}
-			hi := idx + N
-			if hi >= len(turns) {
-				hi = len(turns) - 1
-			}
-			for i := lo; i <= hi; i++ {
-				windowSet[i] = true
-			}
-		}
-
-		// Emit turns in index order, skipping duplicates
-		for i := 0; i < len(turns); i++ {
-			if !windowSet[i] {
-				continue
-			}
-			turnObj, ok := turns[i].(map[string]interface{})
-			if !ok {
-				continue
-			}
-			uuid, _ := turnObj["uuid"].(string)
-			if uuid != "" && seenUUIDs[uuid] {
-				continue
-			}
-			if uuid != "" {
-				seenUUIDs[uuid] = true
-			}
-
-			// Copy the object and add the "context" field
-			newObj := make(map[string]interface{}, len(turnObj)+1)
-			for k, v := range turnObj {
-				newObj[k] = v
-			}
-			if matchedUUIDs[uuid] {
-				newObj["context"] = false
-			} else {
-				newObj["context"] = true
-			}
-			result = append(result, newObj)
-		}
-	}
-
-	return result, nil
+	return filterspkg.ExpandContextTurns(rawData, N, baseDir)
 }
 
 // Helper functions
@@ -746,36 +472,4 @@ func getFloatParam(args map[string]interface{}, key string, defaultVal float64) 
 		return v
 	}
 	return defaultVal
-}
-
-// validateArgKeys checks that all keys in args are declared in the tool schema.
-// Returns an error listing unknown keys and the valid options.
-func validateArgKeys(args map[string]interface{}, schema ToolSchema) error {
-	if len(args) == 0 {
-		return nil
-	}
-
-	var unknown []string
-	for key := range args {
-		if _, ok := schema.Properties[key]; !ok {
-			unknown = append(unknown, key)
-		}
-	}
-
-	if len(unknown) == 0 {
-		return nil
-	}
-
-	// Sort for deterministic error messages
-	sort.Strings(unknown)
-
-	var valid []string
-	for key := range schema.Properties {
-		valid = append(valid, key)
-	}
-	sort.Strings(valid)
-
-	return fmt.Errorf("unknown parameter(s): %s; valid parameters are: %s",
-		strings.Join(unknown, ", "),
-		strings.Join(valid, ", "))
 }

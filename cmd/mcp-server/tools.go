@@ -4,7 +4,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/yaleh/meta-cc/internal/mcp/schema"
 )
+
+// Type aliases so existing code in this package compiles unchanged.
+type Tool = schema.Tool
+type ToolSchema = schema.ToolSchema
+type Property = schema.Property
 
 // Tool Description Template:
 // Format: "<action> <object>. Default scope: <project/session>."
@@ -450,24 +457,6 @@ func getToolDefinitions() []Tool {
 	}
 }
 
-type Tool struct {
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	InputSchema ToolSchema `json:"inputSchema"`
-}
-
-type ToolSchema struct {
-	Type       string              `json:"type"`
-	Properties map[string]Property `json:"properties"`
-	Required   []string            `json:"required,omitempty"`
-}
-
-type Property struct {
-	Type        string    `json:"type"`
-	Description string    `json:"description"`
-	Items       *Property `json:"items,omitempty"` // For array types
-}
-
 // toolSchemaIndex caches the mapping from tool name to ToolSchema.
 var toolSchemaIndex map[string]ToolSchema
 
@@ -476,20 +465,11 @@ func buildToolSchemaIndex() map[string]ToolSchema {
 	if toolSchemaIndex != nil {
 		return toolSchemaIndex
 	}
-	defs := getToolDefinitions()
-	toolSchemaIndex = make(map[string]ToolSchema, len(defs))
-	for _, t := range defs {
-		toolSchemaIndex[t.Name] = t.InputSchema
-	}
+	toolSchemaIndex = schema.BuildSchemaIndex(getToolDefinitions())
 	return toolSchemaIndex
 }
 
 // getToolSchemaByName returns the ToolSchema for the named tool, or an error if not found.
 func getToolSchemaByName(name string) (ToolSchema, error) {
-	index := buildToolSchemaIndex()
-	schema, ok := index[name]
-	if !ok {
-		return ToolSchema{}, fmt.Errorf("unknown tool %s: no schema found", name)
-	}
-	return schema, nil
+	return schema.GetByName(buildToolSchemaIndex(), name)
 }

@@ -1,11 +1,13 @@
 package main
 
+import filterspkg "github.com/yaleh/meta-cc/internal/mcp/filters"
+
 const (
 	// DefaultMaxMessageLength is the default for max_message_length parameter.
 	// Set to 0 to disable truncation (use hybrid output mode for large results).
-	DefaultMaxMessageLength = 0
+	DefaultMaxMessageLength = filterspkg.DefaultMaxMessageLength
 
-	DefaultPreviewLength = 100
+	DefaultPreviewLength = filterspkg.DefaultPreviewLength
 )
 
 // TruncateMessageContent truncates the 'content' field in user messages
@@ -24,53 +26,7 @@ const (
 //   - content_truncated: true
 //   - original_length: original content length
 func TruncateMessageContent(messages []interface{}, maxLen int) []interface{} {
-	if maxLen <= 0 {
-		return messages
-	}
-
-	truncated := make([]interface{}, len(messages))
-
-	for i, msg := range messages {
-		// Convert to map for manipulation
-		msgMap, ok := msg.(map[string]interface{})
-		if !ok {
-			// Not a map, return as-is
-			truncated[i] = msg
-			continue
-		}
-
-		// Create shallow copy to avoid mutating original
-		newMap := make(map[string]interface{})
-		for k, v := range msgMap {
-			newMap[k] = v
-		}
-
-		// Try nested message.content first
-		if msgObj, ok := newMap["message"].(map[string]interface{}); ok {
-			if content, ok := msgObj["content"].(string); ok && len(content) > maxLen {
-				// Deep copy the message map to avoid mutating original
-				newMsg := make(map[string]interface{})
-				for k, v := range msgObj {
-					newMsg[k] = v
-				}
-				newMsg["content"] = content[:maxLen] + "... [TRUNCATED]"
-				newMap["message"] = newMsg
-				newMap["content_truncated"] = true
-				newMap["original_length"] = len(content)
-			}
-		} else if content, ok := newMap["content"].(string); ok {
-			// Fallback: flat content
-			if len(content) > maxLen {
-				newMap["content"] = content[:maxLen] + "... [TRUNCATED]"
-				newMap["content_truncated"] = true
-				newMap["original_length"] = len(content)
-			}
-		}
-
-		truncated[i] = newMap
-	}
-
-	return truncated
+	return filterspkg.TruncateMessageContent(messages, maxLen)
 }
 
 // ApplyContentSummary returns only message metadata (no full content).
@@ -90,57 +46,5 @@ func TruncateMessageContent(messages []interface{}, maxLen int) []interface{} {
 //
 // All other fields are removed to reduce output size.
 func ApplyContentSummary(messages []interface{}, previewLength int) []interface{} {
-	if previewLength <= 0 {
-		previewLength = DefaultPreviewLength
-	}
-
-	summary := make([]interface{}, len(messages))
-
-	for i, msg := range messages {
-		msgMap, ok := msg.(map[string]interface{})
-		if !ok {
-			// Not a map, return as-is
-			summary[i] = msg
-			continue
-		}
-
-		// Extract preview from nested or flat content using rune-safe truncation
-		preview := ""
-		content := extractContentString(msgMap)
-		if content != "" {
-			runes := []rune(content)
-			if len(runes) > previewLength {
-				preview = string(runes[:previewLength]) + "..."
-			} else {
-				preview = content
-			}
-		}
-
-		// Create summary object
-		summary[i] = map[string]interface{}{
-			"session_id":      msgMap["sessionId"],
-			"turn_sequence":   i,
-			"uuid":            msgMap["uuid"],
-			"timestamp":       msgMap["timestamp"],
-			"content_preview": preview,
-		}
-	}
-
-	return summary
-}
-
-// extractContentString extracts content string from a message map.
-// Handles both nested (message.content) and flat (content) structures.
-func extractContentString(msgMap map[string]interface{}) string {
-	// Try nested: message.content
-	if msg, ok := msgMap["message"].(map[string]interface{}); ok {
-		if content, ok := msg["content"].(string); ok {
-			return content
-		}
-	}
-	// Fallback: flat content
-	if content, ok := msgMap["content"].(string); ok {
-		return content
-	}
-	return ""
+	return filterspkg.ApplyContentSummary(messages, previewLength)
 }

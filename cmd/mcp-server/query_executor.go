@@ -141,7 +141,7 @@ func (e *QueryExecutor) streamFiles(ctx context.Context, files []string, code *g
 }
 
 // streamFilesWithTimeRange is like streamFiles but applies TimeRange filtering before jq execution.
-func (e *QueryExecutor) streamFilesWithTimeRange(ctx context.Context, files []string, code *gojq.Code, limit int, tr TimeRange) QueryResult {
+func (e *QueryExecutor) streamFilesWithTimeRange(ctx context.Context, files []string, code *gojq.Code, limit int, tr parsedTimeRange) QueryResult {
 	var result QueryResult
 
 	for _, file := range files {
@@ -174,7 +174,7 @@ func (e *QueryExecutor) streamFilesWithTimeRange(ctx context.Context, files []st
 
 // processFileWithTimeRange is like processFile but filters each entry by its timestamp field
 // before running the jq expression. Entries with unparseable or missing timestamps are included.
-func (e *QueryExecutor) processFileWithTimeRange(ctx context.Context, filepath string, code *gojq.Code, tr TimeRange) ([]interface{}, error) {
+func (e *QueryExecutor) processFileWithTimeRange(ctx context.Context, filepath string, code *gojq.Code, tr parsedTimeRange) ([]interface{}, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", filepath, err)

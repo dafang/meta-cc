@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/yaleh/meta-cc/internal/config"
+	"github.com/yaleh/meta-cc/internal/mcp/metrics"
 )
 
 // Global configuration (loaded at startup)
@@ -45,7 +46,7 @@ func main() {
 	}
 
 	// Start resource monitoring (USE metrics)
-	StartResourceMonitoring(10 * time.Second)
+	metrics.StartResourceMonitoring(10 * time.Second)
 
 	// Setup cleanup on exit
 	defer func() {

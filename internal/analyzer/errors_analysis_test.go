@@ -100,13 +100,13 @@ func TestAnalyzeErrors_TimeRange(t *testing.T) {
 		t.Fatalf("AnalyzeErrors returned error: %v", err)
 	}
 
-	if result.TimeRange.Start.IsZero() {
+	if result.TimeRange.Start == "" {
 		t.Error("Expected TimeRange.Start to be set")
 	}
-	if result.TimeRange.End.IsZero() {
+	if result.TimeRange.End == "" {
 		t.Error("Expected TimeRange.End to be set")
 	}
-	if !result.TimeRange.End.After(result.TimeRange.Start) {
+	if result.TimeRange.End <= result.TimeRange.Start {
 		t.Error("Expected TimeRange.End to be after TimeRange.Start")
 	}
 }

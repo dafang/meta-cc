@@ -403,23 +403,23 @@ func TestExecuteQueryTimeFilter(t *testing.T) {
 
 	// since=T-1.5h → T-1h and T+0 (2 results)
 	tMinus1h30m := now.Add(-90 * time.Minute)
-	tr1 := TimeRange{Since: &tMinus1h30m}
+	tr1 := parsedTimeRange{Since: &tMinus1h30m}
 	result1 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr1)
 	assert.Len(t, result1.Entries, 2, "since=T-1.5h should return 2 results")
 
 	// until=T-0.5h → T-2h and T-1h (2 results)
 	tMinus30m := now.Add(-30 * time.Minute)
-	tr2 := TimeRange{Until: &tMinus30m}
+	tr2 := parsedTimeRange{Until: &tMinus30m}
 	result2 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr2)
 	assert.Len(t, result2.Entries, 2, "until=T-0.5h should return 2 results")
 
 	// since=T-1.5h, until=T-0.5h → T-1h only (1 result)
-	tr3 := TimeRange{Since: &tMinus1h30m, Until: &tMinus30m}
+	tr3 := parsedTimeRange{Since: &tMinus1h30m, Until: &tMinus30m}
 	result3 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr3)
 	assert.Len(t, result3.Entries, 1, "since=T-1.5h,until=T-0.5h should return 1 result")
 
 	// zero TimeRange → all 3 results
-	tr4 := TimeRange{}
+	tr4 := parsedTimeRange{}
 	result4 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr4)
 	assert.Len(t, result4.Entries, 3, "zero TimeRange should return all 3 results")
 }

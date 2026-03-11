@@ -5,13 +5,8 @@ import (
 	"time"
 
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
-
-// TimeRange represents the start and end of a time window
-type TimeRange struct {
-	Start time.Time `json:"start"`
-	End   time.Time `json:"end"`
-}
 
 // ToolErrorGroup groups errors by tool name
 type ToolErrorGroup struct {
@@ -29,7 +24,7 @@ type ErrorTypeGroup struct {
 
 // ErrorAnalysisResult holds the full error analysis output
 type ErrorAnalysisResult struct {
-	TimeRange   TimeRange        `json:"time_range"`
+	TimeRange   types.TimeRange  `json:"time_range"`
 	TotalErrors int              `json:"total_errors"`
 	ByTool      []ToolErrorGroup `json:"by_tool"`
 	ByType      []ErrorTypeGroup `json:"by_type"`
@@ -40,7 +35,9 @@ type ErrorAnalysisResult struct {
 func AnalyzeErrors(entries []parser.SessionEntry, toolCalls []parser.ToolCall, limit int) (*ErrorAnalysisResult, error) {
 	result := &ErrorAnalysisResult{}
 
-	// Calculate TimeRange from entries
+	// Calculate TimeRange from entries using internal time.Time for comparison,
+	// then store as RFC3339 strings in the result.
+	var minTime, maxTime time.Time
 	for _, e := range entries {
 		t, err := time.Parse("2006-01-02T15:04:05.000Z", e.Timestamp)
 		if err != nil {
@@ -50,12 +47,16 @@ func AnalyzeErrors(entries []parser.SessionEntry, toolCalls []parser.ToolCall, l
 				continue
 			}
 		}
-		if result.TimeRange.Start.IsZero() || t.Before(result.TimeRange.Start) {
-			result.TimeRange.Start = t
+		if minTime.IsZero() || t.Before(minTime) {
+			minTime = t
 		}
-		if result.TimeRange.End.IsZero() || t.After(result.TimeRange.End) {
-			result.TimeRange.End = t
+		if maxTime.IsZero() || t.After(maxTime) {
+			maxTime = t
 		}
+	}
+	if !minTime.IsZero() {
+		result.TimeRange.Start = minTime.Format(time.RFC3339)
+		result.TimeRange.End = maxTime.Format(time.RFC3339)
 	}
 
 	// Filter errors

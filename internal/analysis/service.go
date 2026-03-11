@@ -15,12 +15,50 @@ import (
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
-// Service encapsulates the analysis pipeline for MCP tool handlers.
-type Service struct{}
+// Analyzers holds the injected analyzer interfaces used by Service.
+// Zero-value fields are replaced with DefaultAnalyzer instances at construction time.
+type Analyzers struct {
+	BugAnalyzer    analyzer.BugAnalyzer
+	ErrorAnalyzer  analyzer.ErrorAnalyzer
+	QualityScanner analyzer.QualityScanner
+	WorkPatterns   analyzer.WorkPatternsAnalyzer
+	Timeline       analyzer.TimelineAnalyzer
+	TechDebt       analyzer.TechDebtAnalyzer
+}
 
-// New creates a new Service.
+// Service encapsulates the analysis pipeline for MCP tool handlers.
+type Service struct {
+	analyzers Analyzers
+}
+
+// New creates a new Service backed by the default (real) analyzer implementations.
 func New() *Service {
-	return &Service{}
+	return NewWithAnalyzers(Analyzers{})
+}
+
+// NewWithAnalyzers creates a new Service with the provided analyzer interfaces.
+// Any nil field is replaced with the corresponding DefaultAnalyzer method.
+func NewWithAnalyzers(a Analyzers) *Service {
+	d := &analyzer.DefaultAnalyzer{}
+	if a.BugAnalyzer == nil {
+		a.BugAnalyzer = d
+	}
+	if a.ErrorAnalyzer == nil {
+		a.ErrorAnalyzer = d
+	}
+	if a.QualityScanner == nil {
+		a.QualityScanner = d
+	}
+	if a.WorkPatterns == nil {
+		a.WorkPatterns = d
+	}
+	if a.Timeline == nil {
+		a.Timeline = d
+	}
+	if a.TechDebt == nil {
+		a.TechDebt = d
+	}
+	return &Service{analyzers: a}
 }
 
 // loadData locates session files, parses them, and extracts tool calls.
@@ -95,7 +133,7 @@ func (s *Service) AnalyzeBugs(args map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load session data: %w", err)
 	}
-	result, err := analyzer.AnalyzeBugs(entries, toolCalls, intArg(args, "limit"))
+	result, err := s.analyzers.BugAnalyzer.AnalyzeBugs(entries, toolCalls, intArg(args, "limit"))
 	if err != nil {
 		return "", fmt.Errorf("analyze bugs failed: %w", err)
 	}
@@ -108,7 +146,7 @@ func (s *Service) AnalyzeErrors(args map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load session data: %w", err)
 	}
-	result, err := analyzer.AnalyzeErrors(entries, toolCalls, intArg(args, "limit"))
+	result, err := s.analyzers.ErrorAnalyzer.AnalyzeErrors(entries, toolCalls, intArg(args, "limit"))
 	if err != nil {
 		return "", fmt.Errorf("failed to analyze errors: %w", err)
 	}
@@ -121,7 +159,7 @@ func (s *Service) QualityScan(args map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load session data: %w", err)
 	}
-	result, err := analyzer.QualityScan(entries, toolCalls)
+	result, err := s.analyzers.QualityScanner.QualityScan(entries, toolCalls)
 	if err != nil {
 		return "", fmt.Errorf("quality scan failed: %w", err)
 	}
@@ -134,7 +172,7 @@ func (s *Service) GetWorkPatterns(args map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load session data: %w", err)
 	}
-	result, err := analyzer.GetWorkPatterns(entries, toolCalls)
+	result, err := s.analyzers.WorkPatterns.GetWorkPatterns(entries, toolCalls)
 	if err != nil {
 		return "", fmt.Errorf("get work patterns failed: %w", err)
 	}
@@ -147,7 +185,7 @@ func (s *Service) GetTimeline(args map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load session data: %w", err)
 	}
-	result, err := analyzer.GetTimeline(entries, intArg(args, "limit"))
+	result, err := s.analyzers.Timeline.GetTimeline(entries, intArg(args, "limit"))
 	if err != nil {
 		return "", fmt.Errorf("get timeline failed: %w", err)
 	}
@@ -160,7 +198,7 @@ func (s *Service) GetTechDebt(args map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load session data: %w", err)
 	}
-	result, err := analyzer.GetTechDebt(entries, toolCalls)
+	result, err := s.analyzers.TechDebt.GetTechDebt(entries, toolCalls)
 	if err != nil {
 		return "", fmt.Errorf("get tech debt failed: %w", err)
 	}

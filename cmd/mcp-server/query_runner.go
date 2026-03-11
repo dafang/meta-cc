@@ -6,7 +6,7 @@ import "context"
 // It is implemented by QueryExecutor and can be mocked in tests.
 type JQRunner interface {
 	RunQuery(ctx context.Context, files []string, filter, transform string, limit int) (QueryResult, error)
-	RunQueryWithTimeRange(ctx context.Context, files []string, filter, transform string, limit int, tr TimeRange) (QueryResult, error)
+	RunQueryWithTimeRange(ctx context.Context, files []string, filter, transform string, limit int, tr parsedTimeRange) (QueryResult, error)
 }
 
 // Ensure QueryExecutor implements JQRunner at compile time.
@@ -26,7 +26,7 @@ func (e *QueryExecutor) RunQuery(ctx context.Context, files []string, filter, tr
 
 // RunQueryWithTimeRange is like RunQuery but applies time range filtering before jq execution.
 // tr.Since and tr.Until are optional (nil = no bound).
-func (e *QueryExecutor) RunQueryWithTimeRange(ctx context.Context, files []string, filter, transform string, limit int, tr TimeRange) (QueryResult, error) {
+func (e *QueryExecutor) RunQueryWithTimeRange(ctx context.Context, files []string, filter, transform string, limit int, tr parsedTimeRange) (QueryResult, error) {
 	expr := e.buildExpression(filter, transform)
 	code, err := e.compileExpression(expr)
 	if err != nil {

@@ -1,5 +1,7 @@
 package query
 
+import "github.com/yaleh/meta-cc/internal/types"
+
 // QueryParams represents unified query parameters
 type QueryParams struct {
 	// Tier 1: Resource Selection
@@ -45,11 +47,8 @@ type FilterSpec struct {
 	HasError   *bool  `json:"has_error,omitempty"`   // Filter by error presence
 }
 
-// TimeRange represents a time range filter
-type TimeRange struct {
-	Start string `json:"start,omitempty"` // ISO8601 timestamp
-	End   string `json:"end,omitempty"`   // ISO8601 timestamp
-}
+// TimeRange is an alias for types.TimeRange for backward compatibility.
+type TimeRange = types.TimeRange
 
 // TransformSpec represents transformation operations
 type TransformSpec struct {

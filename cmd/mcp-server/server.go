@@ -11,6 +11,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/yaleh/meta-cc/internal/mcp/metrics"
 )
 
 type JSONRPCRequest struct {
@@ -54,7 +56,7 @@ func handleRequest(req JSONRPCRequest) {
 	}
 
 	// Track request queue depth (arrival)
-	RecordRequestQueueInc()
+	metrics.RecordRequestQueueInc()
 
 	traceID := GetTraceID(ctx)
 	spanID := GetSpanID(ctx)
@@ -67,16 +69,16 @@ func handleRequest(req JSONRPCRequest) {
 	)
 
 	// Track concurrent requests (processing starts)
-	RecordRequestQueueDec()
-	RecordConcurrentRequestInc()
-	defer RecordConcurrentRequestDec()
+	metrics.RecordRequestQueueDec()
+	metrics.RecordConcurrentRequestInc()
+	defer metrics.RecordConcurrentRequestDec()
 
 	switch req.Method {
 	case "initialize":
 		handleInitialize(ctx, req)
 	case "tools/list":
 		// Record tools/list request (no tool name)
-		RecordRequest("list", "tools/list", "success")
+		metrics.RecordRequest("list", "tools/list", "success")
 		handleToolsList(ctx, req)
 	case "tools/call":
 		handleToolsCall(ctx, req)
@@ -88,8 +90,8 @@ func handleRequest(req JSONRPCRequest) {
 			"span_id", spanID,
 		)
 		// Record unknown method as error
-		RecordRequest("unknown", req.Method, "invalid")
-		RecordError("server", "validation_error", "error")
+		metrics.RecordRequest("unknown", req.Method, "invalid")
+		metrics.RecordError("server", "validation_error", "error")
 		if span != nil {
 			span.SetStatus(codes.Error, "Method not found")
 			span.RecordError(nil)
@@ -142,8 +144,8 @@ func handleToolsCall(ctx context.Context, req JSONRPCRequest) {
 			"trace_id", traceID,
 		)
 		// Record validation error
-		RecordRequest("unknown", "tools/call", "invalid")
-		RecordError("server", "validation_error", "error")
+		metrics.RecordRequest("unknown", "tools/call", "invalid")
+		metrics.RecordError("server", "validation_error", "error")
 		writeError(req.ID, -32602, "Invalid params: missing tool name")
 		return
 	}
@@ -208,20 +210,20 @@ func handleToolsCall(ctx context.Context, req JSONRPCRequest) {
 		}
 
 		// Record error metrics
-		RecordRequest(toolName, "tools/call", "error")
-		RecordError(toolName, errorType, GetErrorSeverity(errorType))
-		RecordRequestDuration(toolName, "error", elapsed)
+		metrics.RecordRequest(toolName, "tools/call", "error")
+		metrics.RecordError(toolName, errorType, metrics.GetErrorSeverity(errorType))
+		metrics.RecordRequestDuration(toolName, "error", elapsed)
 
 		// Record USE error metrics (resource errors, timeout errors)
-		if resourceType := ClassifyResourceError(err); resourceType != "" {
-			RecordResourceError(resourceType)
+		if resourceType := metrics.ClassifyResourceError(err); resourceType != "" {
+			metrics.RecordResourceError(resourceType)
 			logger.Debug("resource error detected",
 				"resource_type", resourceType,
 				"trace_id", traceID,
 			)
 		}
-		if contextType := ClassifyTimeoutError(err); contextType != "" {
-			RecordTimeoutError(contextType)
+		if contextType := metrics.ClassifyTimeoutError(err); contextType != "" {
+			metrics.RecordTimeoutError(contextType)
 			logger.Debug("timeout error detected",
 				"context_type", contextType,
 				"trace_id", traceID,
@@ -250,8 +252,8 @@ func handleToolsCall(ctx context.Context, req JSONRPCRequest) {
 	}
 
 	// Record success metrics
-	RecordRequest(toolName, "tools/call", "success")
-	RecordRequestDuration(toolName, "success", elapsed)
+	metrics.RecordRequest(toolName, "tools/call", "success")
+	metrics.RecordRequestDuration(toolName, "success", elapsed)
 
 	// Return result
 	result := map[string]interface{}{

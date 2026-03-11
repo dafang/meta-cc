@@ -13,28 +13,28 @@ import (
 	"github.com/yaleh/meta-cc/internal/locator"
 )
 
-// TimeRange specifies optional lower and upper bounds for timestamp filtering.
+// parsedTimeRange specifies optional lower and upper bounds for timestamp filtering.
 // A nil pointer means "no bound" (open-ended).
-type TimeRange struct {
+type parsedTimeRange struct {
 	Since *time.Time
 	Until *time.Time
 }
 
 // parseTimeRange parses since/until strings (RFC3339) into a TimeRange.
 // Empty string means no bound. Non-RFC3339 values return an error.
-func parseTimeRange(sinceStr, untilStr string) (TimeRange, error) {
-	var tr TimeRange
+func parseTimeRange(sinceStr, untilStr string) (parsedTimeRange, error) {
+	var tr parsedTimeRange
 	if sinceStr != "" {
 		t, err := time.Parse(time.RFC3339, sinceStr)
 		if err != nil {
-			return TimeRange{}, fmt.Errorf("invalid since value %q: must be RFC3339 (e.g. 2026-03-07T00:00:00Z)", sinceStr)
+			return parsedTimeRange{}, fmt.Errorf("invalid since value %q: must be RFC3339 (e.g. 2026-03-07T00:00:00Z)", sinceStr)
 		}
 		tr.Since = &t
 	}
 	if untilStr != "" {
 		t, err := time.Parse(time.RFC3339, untilStr)
 		if err != nil {
-			return TimeRange{}, fmt.Errorf("invalid until value %q: must be RFC3339 (e.g. 2026-03-09T00:00:00Z)", untilStr)
+			return parsedTimeRange{}, fmt.Errorf("invalid until value %q: must be RFC3339 (e.g. 2026-03-09T00:00:00Z)", untilStr)
 		}
 		tr.Until = &t
 	}
@@ -51,12 +51,12 @@ func parseTimeRange(sinceStr, untilStr string) (TimeRange, error) {
 // workingDir specifies the project directory for session lookup;
 // empty string ("") means use os.Getwd() as fallback (backward compatible).
 func (e *ToolExecutor) executeQuery(scope string, jqFilter string, limit int, workingDir string) (QueryResult, error) {
-	return e.executeQueryWithTimeRange(scope, jqFilter, limit, workingDir, TimeRange{})
+	return e.executeQueryWithTimeRange(scope, jqFilter, limit, workingDir, parsedTimeRange{})
 }
 
 // executeQueryWithTimeRange is like executeQuery but applies time-range filtering before jq execution.
 // tr.Since and tr.Until are optional (nil = no bound).
-func (e *ToolExecutor) executeQueryWithTimeRange(scope string, jqFilter string, limit int, workingDir string, tr TimeRange) (QueryResult, error) {
+func (e *ToolExecutor) executeQueryWithTimeRange(scope string, jqFilter string, limit int, workingDir string, tr parsedTimeRange) (QueryResult, error) {
 	// Get base directory using pipeline infrastructure
 	baseDir, err := getQueryBaseDir(scope, workingDir)
 	if err != nil {

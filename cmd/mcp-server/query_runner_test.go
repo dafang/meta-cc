@@ -17,7 +17,7 @@ func (m *mockJQRunner) RunQuery(_ context.Context, _ []string, _, _ string, _ in
 	return m.results, m.err
 }
 
-func (m *mockJQRunner) RunQueryWithTimeRange(_ context.Context, _ []string, _, _ string, _ int, _ TimeRange) (QueryResult, error) {
+func (m *mockJQRunner) RunQueryWithTimeRange(_ context.Context, _ []string, _, _ string, _ int, _ parsedTimeRange) (QueryResult, error) {
 	return m.results, m.err
 }
 
@@ -49,7 +49,7 @@ func TestMockJQRunner_WithTimeRange(t *testing.T) {
 		results: QueryResult{Entries: []any{"entry1", "entry2"}},
 	}
 
-	result, err := mock.RunQueryWithTimeRange(context.Background(), nil, ".", "", 0, TimeRange{})
+	result, err := mock.RunQueryWithTimeRange(context.Background(), nil, ".", "", 0, parsedTimeRange{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
