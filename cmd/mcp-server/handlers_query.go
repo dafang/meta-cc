@@ -122,7 +122,6 @@ func getQueryBaseDir(scope, workingDir string) (string, error) {
 	}
 
 	// Project scope: use SessionLocator to find all session files
-	// This matches the behavior of buildPipelineOptions + SessionPipeline.Load
 
 	// AllSessionsFromProject returns the list of session files
 	// We need to return the directory containing those files
