@@ -1,6 +1,9 @@
 package parser
 
 import (
+	"bytes"
+	"encoding/base64"
+	"fmt"
 	"testing"
 
 	"github.com/yaleh/meta-cc/internal/testutil"
@@ -254,5 +257,40 @@ func TestParseEntriesFromContent_FilterNonMessageTypes(t *testing.T) {
 		if !entry.IsMessage() {
 			t.Errorf("Expected only message types, got '%s'", entry.Type)
 		}
+	}
+}
+
+func TestParseEntries_LargeImageLine_NotSkipped(t *testing.T) {
+	// Build a ~4MB+ base64 image line (exceeds MaxScannerLineBytes=4MB) followed by a normal entry
+	rawData := bytes.Repeat([]byte{0xDE, 0xAD, 0xBE, 0xEF}, 768*1024) // 3MB binary → ~4MB base64
+	b64data := base64.StdEncoding.EncodeToString(rawData)
+
+	imageLine := fmt.Sprintf(
+		`{"type":"user","uuid":"image-entry-uuid","message":{"role":"user","content":[{"type":"tool_result","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"%s"}}]}]}}`,
+		b64data,
+	)
+	normalLine := `{"type":"user","uuid":"normal-entry-uuid","message":{"role":"user","content":[{"type":"text","text":"hello after image"}]}}`
+
+	content := imageLine + "\n" + normalLine + "\n"
+	tmpFile := testutil.TempSessionFile(t, content)
+
+	p := NewSessionParser(tmpFile)
+	entries, err := p.ParseEntries()
+	if err != nil {
+		t.Fatalf("ParseEntries should not fail on large image line, got: %v", err)
+	}
+
+	// Both lines are user messages; the image line has its data stripped but is still valid
+	found := false
+	for _, e := range entries {
+		if e.UUID == "normal-entry-uuid" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("Expected normal entry after image line to be present")
+	}
+	if len(entries) < 2 {
+		t.Errorf("Expected at least 2 entries (image + normal), got %d", len(entries))
 	}
 }

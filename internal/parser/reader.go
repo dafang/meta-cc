@@ -2,8 +2,10 @@ package parser
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -35,37 +37,37 @@ func (p *SessionParser) ParseEntries() ([]SessionEntry, error) {
 	defer file.Close()
 
 	var entries []SessionEntry
-	scanner := bufio.NewScanner(file)
-
-	// Increase buffer size for large lines (Claude Code sessions can have very long lines)
-	buf := make([]byte, MaxScannerLineBytes)
-	scanner.Buffer(buf, MaxScannerLineBytes)
-
+	r := bufio.NewReader(file)
 	lineNum := 0
 
-	for scanner.Scan() {
-		lineNum++
-		line := scanner.Text()
-
-		// 跳过空行和仅包含空白的行
-		if strings.TrimSpace(line) == "" {
+	for {
+		line, skipped, err := ReadLineFiltered(r, StrategyDefault)
+		if skipped || len(bytes.TrimSpace(line)) == 0 {
+			if err == io.EOF {
+				break
+			}
 			continue
 		}
 
+		lineNum++
+
 		// 解析 JSON 为 SessionEntry
 		var entry SessionEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			return nil, fmt.Errorf("failed to parse line %d: %w", lineNum, err)
+		if jsonErr := json.Unmarshal(bytes.TrimRight(line, "\n"), &entry); jsonErr != nil {
+			return nil, fmt.Errorf("failed to parse line %d: %w", lineNum, jsonErr)
 		}
 
 		// 仅保留消息类型
 		if entry.IsMessage() {
 			entries = append(entries, entry)
 		}
-	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading session file: %w", err)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error reading session file: %w", err)
+		}
 	}
 
 	return entries, nil
