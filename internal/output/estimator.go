@@ -3,7 +3,7 @@ package output
 import (
 	"encoding/json"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // SizeEstimate represents estimated output size
@@ -16,7 +16,7 @@ type SizeEstimate struct {
 
 // EstimateToolCallsSize estimates the output size for ToolCall slice
 // Achieves ≥95% accuracy by sampling actual JSON serialization
-func EstimateToolCallsSize(tools []parser.ToolCall, format string) (SizeEstimate, error) {
+func EstimateToolCallsSize(tools []types.ToolCall, format string) (SizeEstimate, error) {
 	var sizeBytes int
 
 	switch format {

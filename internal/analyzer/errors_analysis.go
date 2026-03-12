@@ -4,7 +4,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
@@ -32,7 +31,7 @@ type ErrorAnalysisResult struct {
 
 // AnalyzeErrors analyzes tool call errors and groups them by tool and error type.
 // limit controls the maximum number of example messages per group (0 = no limit).
-func AnalyzeErrors(entries []parser.SessionEntry, toolCalls []parser.ToolCall, limit int) (*ErrorAnalysisResult, error) {
+func AnalyzeErrors(entries []types.SessionEntry, toolCalls []types.ToolCall, limit int) (*ErrorAnalysisResult, error) {
 	result := &ErrorAnalysisResult{}
 
 	// Calculate TimeRange from entries using internal time.Time for comparison,

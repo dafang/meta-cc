@@ -3,7 +3,7 @@ package stats
 import (
 	"sort"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // FileStats represents file-level operation statistics
@@ -18,7 +18,7 @@ type FileStats struct {
 }
 
 // AnalyzeFileStats analyzes file-level statistics from tool calls
-func AnalyzeFileStats(toolCalls []parser.ToolCall) []FileStats {
+func AnalyzeFileStats(toolCalls []types.ToolCall) []FileStats {
 	fileMap := make(map[string]*FileStats)
 
 	for _, tc := range toolCalls {
@@ -75,7 +75,7 @@ func AnalyzeFileStats(toolCalls []parser.ToolCall) []FileStats {
 }
 
 // extractFilePath extracts file path from ToolCall input
-func extractFilePath(tc parser.ToolCall) string {
+func extractFilePath(tc types.ToolCall) string {
 	// Try common field names
 	if filePath, ok := tc.Input["file_path"].(string); ok {
 		return filePath

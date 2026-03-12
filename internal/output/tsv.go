@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // FormatTSV formats data as TSV (Tab-Separated Values)
@@ -18,13 +18,13 @@ import (
 // - No JSON structure overhead
 //
 // Supported types:
-// - []parser.ToolCall (optimized)
+// - []types.ToolCall (optimized)
 // - Any struct (vertical format: key\tvalue)
 // - Any []struct (table format with headers)
 func FormatTSV(data interface{}) (string, error) {
 	// Type switch for optimized formatting
 	switch v := data.(type) {
-	case []parser.ToolCall:
+	case []types.ToolCall:
 		// Optimized path for ToolCall (most common case)
 		return formatToolCallsTSV(v), nil
 	default:
@@ -34,7 +34,7 @@ func FormatTSV(data interface{}) (string, error) {
 }
 
 // formatToolCallsTSV formats ToolCall slice as TSV (optimized)
-func formatToolCallsTSV(tools []parser.ToolCall) string {
+func formatToolCallsTSV(tools []types.ToolCall) string {
 	if len(tools) == 0 {
 		return ""
 	}

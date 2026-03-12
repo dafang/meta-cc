@@ -3,18 +3,18 @@ package analyzer
 import (
 	"sort"
 
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // DetectIdlePeriods detects idle periods in the session
-func DetectIdlePeriods(entries []parser.SessionEntry, thresholdMin int) IdlePeriodAnalysis {
+func DetectIdlePeriods(entries []types.SessionEntry, thresholdMin int) IdlePeriodAnalysis {
 	// Build turn index
 	turnIdx := turnindex.BuildTurnIndex(entries)
 
 	// Extract all entries with timestamps (both user and assistant)
 	type entryWithTurn struct {
-		entry parser.SessionEntry
+		entry types.SessionEntry
 		turn  int
 	}
 
@@ -72,7 +72,7 @@ func DetectIdlePeriods(entries []parser.SessionEntry, thresholdMin int) IdlePeri
 	}
 }
 
-func extractTurnContext(entry parser.SessionEntry, turn int) *TurnContext {
+func extractTurnContext(entry types.SessionEntry, turn int) *TurnContext {
 	ctx := &TurnContext{
 		Turn: turn,
 		Role: entry.Type,

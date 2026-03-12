@@ -1,6 +1,6 @@
 package filter
 
-import "github.com/yaleh/meta-cc/internal/parser"
+import "github.com/yaleh/meta-cc/internal/types"
 
 // PaginationConfig defines pagination parameters
 type PaginationConfig struct {
@@ -18,7 +18,7 @@ type PaginationMetadata struct {
 }
 
 // ApplyPagination applies pagination to ToolCall slice
-func ApplyPagination(tools []parser.ToolCall, config PaginationConfig) []parser.ToolCall {
+func ApplyPagination(tools []types.ToolCall, config PaginationConfig) []types.ToolCall {
 	// Handle negative offset
 	if config.Offset < 0 {
 		config.Offset = 0
@@ -26,7 +26,7 @@ func ApplyPagination(tools []parser.ToolCall, config PaginationConfig) []parser.
 
 	// Handle offset beyond length
 	if config.Offset >= len(tools) {
-		return []parser.ToolCall{}
+		return []types.ToolCall{}
 	}
 
 	start := config.Offset

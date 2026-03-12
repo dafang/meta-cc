@@ -10,7 +10,6 @@ import (
 	"time"
 
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
 	"github.com/yaleh/meta-cc/internal/types"
 )
@@ -56,7 +55,7 @@ type assistantMessageRaw struct {
 }
 
 // BuildAssistantMessages builds a filtered and sorted list of assistant messages.
-func BuildAssistantMessages(entries []parser.SessionEntry, opts AssistantMessagesOptions) ([]AssistantMessage, error) {
+func BuildAssistantMessages(entries []types.SessionEntry, opts AssistantMessagesOptions) ([]AssistantMessage, error) {
 	turnIndex := turnindex.BuildTurnIndex(entries)
 	raw := extractAssistantMessages(entries, turnIndex)
 
@@ -89,7 +88,7 @@ func BuildAssistantMessages(entries []parser.SessionEntry, opts AssistantMessage
 	return messages, nil
 }
 
-func extractAssistantMessages(entries []parser.SessionEntry, turnIndex map[string]int) []assistantMessageRaw {
+func extractAssistantMessages(entries []types.SessionEntry, turnIndex map[string]int) []assistantMessageRaw {
 	var messages []assistantMessageRaw
 
 	for _, entry := range entries {
@@ -142,7 +141,7 @@ func extractAssistantMessages(entries []parser.SessionEntry, turnIndex map[strin
 	return messages
 }
 
-func extractTokenUsage(entry parser.SessionEntry) (int, int) {
+func extractTokenUsage(entry types.SessionEntry) (int, int) {
 	input := 0
 	output := 0
 	if entry.Message != nil && entry.Message.Usage != nil {
@@ -287,7 +286,7 @@ type ConversationTurn struct {
 }
 
 // BuildConversationTurns builds a filtered and sorted list of conversation turns.
-func BuildConversationTurns(entries []parser.SessionEntry, opts ConversationOptions) ([]ConversationTurn, error) {
+func BuildConversationTurns(entries []types.SessionEntry, opts ConversationOptions) ([]ConversationTurn, error) {
 	turnIndex := turnindex.BuildTurnIndex(entries)
 	turns := buildConversationTurnList(entries, turnIndex)
 
@@ -324,7 +323,7 @@ func BuildConversationTurns(entries []parser.SessionEntry, opts ConversationOpti
 	return turns, nil
 }
 
-func buildConversationTurnList(entries []parser.SessionEntry, turnIndex map[string]int) []ConversationTurn {
+func buildConversationTurnList(entries []types.SessionEntry, turnIndex map[string]int) []ConversationTurn {
 	userByTurn, timestampByTurn := conversationUserMessages(entries, turnIndex)
 	assistantByTurn := conversationAssistantMessages(entries, turnIndex)
 
@@ -354,7 +353,7 @@ func buildConversationTurnList(entries []parser.SessionEntry, turnIndex map[stri
 	return turns
 }
 
-func conversationUserMessages(entries []parser.SessionEntry, turnIndex map[string]int) (map[int]*types.UserMessage, map[int]string) {
+func conversationUserMessages(entries []types.SessionEntry, turnIndex map[string]int) (map[int]*types.UserMessage, map[int]string) {
 	userByTurn := make(map[int]*types.UserMessage)
 	turnTimestamps := make(map[int]string)
 
@@ -380,7 +379,7 @@ func conversationUserMessages(entries []parser.SessionEntry, turnIndex map[strin
 	return userByTurn, turnTimestamps
 }
 
-func aggregateUserContent(blocks []parser.ContentBlock) string {
+func aggregateUserContent(blocks []types.ContentBlock) string {
 	var content strings.Builder
 	for _, block := range blocks {
 		if block.Type == "text" {
@@ -390,7 +389,7 @@ func aggregateUserContent(blocks []parser.ContentBlock) string {
 	return content.String()
 }
 
-func conversationAssistantMessages(entries []parser.SessionEntry, turnIndex map[string]int) map[int]*AssistantMessage {
+func conversationAssistantMessages(entries []types.SessionEntry, turnIndex map[string]int) map[int]*AssistantMessage {
 	assistantByTurn := make(map[int]*AssistantMessage)
 
 	for _, entry := range entries {

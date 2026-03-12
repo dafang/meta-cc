@@ -6,13 +6,12 @@ import (
 	"strings"
 
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // BuildFileAccessQuery builds a file access history query
-func BuildFileAccessQuery(entries []parser.SessionEntry, filePath string) (*FileAccessQuery, error) {
+func BuildFileAccessQuery(entries []types.SessionEntry, filePath string) (*FileAccessQuery, error) {
 	if filePath == "" {
 		return nil, fmt.Errorf("file path required for query_file_access: %w", mcerrors.ErrMissingParameter)
 	}
@@ -21,7 +20,7 @@ func BuildFileAccessQuery(entries []parser.SessionEntry, filePath string) (*File
 	turnIndex := turnindex.BuildTurnIndex(entries)
 
 	// Extract all tool calls
-	toolCalls := parser.ExtractToolCalls(entries)
+	toolCalls := types.ExtractToolCalls(entries)
 
 	// Collect file access events
 	var timeline []FileAccessEvent
@@ -77,7 +76,7 @@ func BuildFileAccessQuery(entries []parser.SessionEntry, filePath string) (*File
 }
 
 // extractFileFromToolCall extracts file path from tool call input
-func extractFileFromToolCall(tc parser.ToolCall) string {
+func extractFileFromToolCall(tc types.ToolCall) string {
 	// Check common file parameter names
 	fileParams := []string{"file_path", "notebook_path", "path"}
 

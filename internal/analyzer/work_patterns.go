@@ -4,8 +4,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // ToolCount represents tool usage count
@@ -23,7 +23,7 @@ type WorkPatternsResult struct {
 }
 
 // GetWorkPatterns analyzes work patterns from session entries and tool calls
-func GetWorkPatterns(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*WorkPatternsResult, error) {
+func GetWorkPatterns(entries []types.SessionEntry, toolCalls []types.ToolCall) (*WorkPatternsResult, error) {
 	result := &WorkPatternsResult{}
 
 	// 1. Count tool frequency

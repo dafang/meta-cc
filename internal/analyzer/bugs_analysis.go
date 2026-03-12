@@ -3,7 +3,7 @@ package analyzer
 import (
 	"sort"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // BugPattern represents a recurring error+fix pattern
@@ -23,7 +23,7 @@ type BugAnalysisResult struct {
 // AnalyzeBugs scans toolCalls for error→success fix pairs, groups them by
 // error signature, and returns results sorted by recurrence descending.
 // limit controls the max number of example strings stored per pattern (0 = unlimited).
-func AnalyzeBugs(entries []parser.SessionEntry, toolCalls []parser.ToolCall, limit int) (*BugAnalysisResult, error) {
+func AnalyzeBugs(entries []types.SessionEntry, toolCalls []types.ToolCall, limit int) (*BugAnalysisResult, error) {
 	// Map from error signature to accumulated data
 	type patternData struct {
 		fixCount    int

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // ChunkMetadata contains metadata for a single chunk
@@ -27,12 +27,12 @@ type ChunkManifest struct {
 }
 
 // SplitIntoChunks splits a slice of ToolCalls into chunks of specified size
-func SplitIntoChunks(tools []parser.ToolCall, chunkSize int) [][]parser.ToolCall {
+func SplitIntoChunks(tools []types.ToolCall, chunkSize int) [][]types.ToolCall {
 	if chunkSize <= 0 {
-		return [][]parser.ToolCall{tools}
+		return [][]types.ToolCall{tools}
 	}
 
-	var chunks [][]parser.ToolCall
+	var chunks [][]types.ToolCall
 	for i := 0; i < len(tools); i += chunkSize {
 		end := i + chunkSize
 		if end > len(tools) {
@@ -45,7 +45,7 @@ func SplitIntoChunks(tools []parser.ToolCall, chunkSize int) [][]parser.ToolCall
 }
 
 // WriteChunk writes a chunk to a file in the specified format
-func WriteChunk(chunk []parser.ToolCall, format, outputPath string) error {
+func WriteChunk(chunk []types.ToolCall, format, outputPath string) error {
 	var data []byte
 	var err error
 
@@ -124,7 +124,7 @@ func GenerateManifest(metadata []ChunkMetadata, manifestPath string) error {
 
 // ChunkToolCalls splits ToolCalls into chunks and writes them to files
 // Returns metadata for all chunks created
-func ChunkToolCalls(tools []parser.ToolCall, chunkSize int, outputDir, format string) ([]ChunkMetadata, error) {
+func ChunkToolCalls(tools []types.ToolCall, chunkSize int, outputDir, format string) ([]ChunkMetadata, error) {
 	if chunkSize <= 0 {
 		return nil, fmt.Errorf("chunk size must be > 0")
 	}

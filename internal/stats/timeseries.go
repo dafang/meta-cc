@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // TimeSeriesConfig defines time series analysis parameters
@@ -20,7 +20,7 @@ type TimeSeriesPoint struct {
 }
 
 // AnalyzeTimeSeries generates time series data from tool calls
-func AnalyzeTimeSeries(tools []parser.ToolCall, config TimeSeriesConfig) ([]TimeSeriesPoint, error) {
+func AnalyzeTimeSeries(tools []types.ToolCall, config TimeSeriesConfig) ([]TimeSeriesPoint, error) {
 	if len(tools) == 0 {
 		return nil, nil
 	}
@@ -51,7 +51,7 @@ func AnalyzeTimeSeries(tools []parser.ToolCall, config TimeSeriesConfig) ([]Time
 	buckets := createTimeBuckets(minTime, maxTime, config.Interval)
 
 	// Group tools into buckets
-	bucketData := make(map[time.Time][]parser.ToolCall)
+	bucketData := make(map[time.Time][]types.ToolCall)
 	for i, tool := range tools {
 		bucket := findBucket(times[i], buckets, config.Interval)
 		bucketData[bucket] = append(bucketData[bucket], tool)
@@ -134,7 +134,7 @@ func findBucket(t time.Time, buckets []time.Time, interval string) time.Time {
 }
 
 // calculateTimeSeriesMetric calculates the metric value for a bucket
-func calculateTimeSeriesMetric(tools []parser.ToolCall, metric string) float64 {
+func calculateTimeSeriesMetric(tools []types.ToolCall, metric string) float64 {
 	if len(tools) == 0 {
 		return 0.0
 	}

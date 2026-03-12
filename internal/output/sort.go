@@ -3,7 +3,7 @@ package output
 import (
 	"sort"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // ErrorEntry represents a tool error with timestamp
@@ -19,10 +19,10 @@ type ErrorEntry struct {
 
 // SortByTimestamp sorts data by timestamp field (ascending order).
 // Uses stable sort to preserve relative order for equal timestamps.
-// Supports: []parser.ToolCall, []ErrorEntry, and command-specific types.
+// Supports: []types.ToolCall, []ErrorEntry, and command-specific types.
 func SortByTimestamp(data interface{}) {
 	switch v := data.(type) {
-	case []parser.ToolCall:
+	case []types.ToolCall:
 		sort.SliceStable(v, func(i, j int) bool {
 			return v[i].Timestamp < v[j].Timestamp
 		})
@@ -51,7 +51,7 @@ func SortByTurnSequence(data interface{}) {
 // Useful for debug/fallback sorting when timestamp is unavailable.
 func SortByUUID(data interface{}) {
 	switch v := data.(type) {
-	case []parser.ToolCall:
+	case []types.ToolCall:
 		sort.SliceStable(v, func(i, j int) bool {
 			return v[i].UUID < v[j].UUID
 		})

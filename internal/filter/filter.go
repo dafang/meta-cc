@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // Valid filter fields for different data types
@@ -54,16 +54,16 @@ func ParseFilter(filterStr string) (*Filter, error) {
 }
 
 // ApplyFilter applies filter to data
-// Supports []parser.ToolCall and []parser.SessionEntry
+// Supports []types.ToolCall and []types.SessionEntry
 func ApplyFilter(data interface{}, filter *Filter) interface{} {
 	if filter == nil || len(filter.Conditions) == 0 {
 		return data
 	}
 
 	switch v := data.(type) {
-	case []parser.ToolCall:
+	case []types.ToolCall:
 		return filterToolCalls(v, filter)
-	case []parser.SessionEntry:
+	case []types.SessionEntry:
 		return filterSessionEntries(v, filter)
 	default:
 		// Unsupported type, return original data
@@ -71,8 +71,8 @@ func ApplyFilter(data interface{}, filter *Filter) interface{} {
 	}
 }
 
-func filterToolCalls(toolCalls []parser.ToolCall, filter *Filter) []parser.ToolCall {
-	var result []parser.ToolCall
+func filterToolCalls(toolCalls []types.ToolCall, filter *Filter) []types.ToolCall {
+	var result []types.ToolCall
 
 	for _, tc := range toolCalls {
 		if matchesToolCall(tc, filter) {
@@ -83,7 +83,7 @@ func filterToolCalls(toolCalls []parser.ToolCall, filter *Filter) []parser.ToolC
 	return result
 }
 
-func matchesToolCall(tc parser.ToolCall, filter *Filter) bool {
+func matchesToolCall(tc types.ToolCall, filter *Filter) bool {
 	for _, cond := range filter.Conditions {
 		switch cond.Field {
 		case "status":
@@ -104,8 +104,8 @@ func matchesToolCall(tc parser.ToolCall, filter *Filter) bool {
 	return true
 }
 
-func filterSessionEntries(entries []parser.SessionEntry, filter *Filter) []parser.SessionEntry {
-	var result []parser.SessionEntry
+func filterSessionEntries(entries []types.SessionEntry, filter *Filter) []types.SessionEntry {
+	var result []types.SessionEntry
 
 	for _, entry := range entries {
 		if matchesSessionEntry(entry, filter) {
@@ -116,7 +116,7 @@ func filterSessionEntries(entries []parser.SessionEntry, filter *Filter) []parse
 	return result
 }
 
-func matchesSessionEntry(entry parser.SessionEntry, filter *Filter) bool {
+func matchesSessionEntry(entry types.SessionEntry, filter *Filter) bool {
 	for _, cond := range filter.Conditions {
 		switch cond.Field {
 		case "type":

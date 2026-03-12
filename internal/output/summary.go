@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // SummaryOutput contains summary and detailed records
@@ -16,7 +16,7 @@ type SummaryOutput struct {
 }
 
 // GenerateSummary generates a compact summary of tool calls
-func GenerateSummary(tools []parser.ToolCall) string {
+func GenerateSummary(tools []types.ToolCall) string {
 	var sb strings.Builder
 
 	sb.WriteString("=== Session Summary ===\n")
@@ -72,7 +72,7 @@ func GenerateSummary(tools []parser.ToolCall) string {
 }
 
 // FormatSummaryFirst outputs summary first, then top N detailed records
-func FormatSummaryFirst(tools []parser.ToolCall, topN int, detailFormat string) (SummaryOutput, error) {
+func FormatSummaryFirst(tools []types.ToolCall, topN int, detailFormat string) (SummaryOutput, error) {
 	// Generate summary
 	summary := GenerateSummary(tools)
 

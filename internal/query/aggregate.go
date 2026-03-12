@@ -1,7 +1,7 @@
 package query
 
 import (
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // ApplyAggregate applies aggregation operations to resources
@@ -15,7 +15,7 @@ func ApplyAggregate(resources interface{}, aggregate AggregateSpec) interface{} 
 	// Convert resources to slice for aggregation
 	var items []interface{}
 	switch r := resources.(type) {
-	case []parser.SessionEntry:
+	case []types.SessionEntry:
 		for _, item := range r {
 			items = append(items, item)
 		}
@@ -23,7 +23,7 @@ func ApplyAggregate(resources interface{}, aggregate AggregateSpec) interface{} 
 		for _, item := range r {
 			items = append(items, item)
 		}
-	case []parser.ToolCall:
+	case []types.ToolCall:
 		for _, item := range r {
 			items = append(items, item)
 		}
@@ -96,11 +96,11 @@ func aggregateGroup(items []interface{}, field string) []map[string]interface{} 
 func extractFieldValue(resource interface{}, field string) string {
 	switch field {
 	case "tool_name":
-		if tool, ok := resource.(parser.ToolCall); ok {
+		if tool, ok := resource.(types.ToolCall); ok {
 			return tool.ToolName
 		}
 	case "status":
-		if tool, ok := resource.(parser.ToolCall); ok {
+		if tool, ok := resource.(types.ToolCall); ok {
 			return tool.Status
 		}
 	case "role":
@@ -108,18 +108,18 @@ func extractFieldValue(resource interface{}, field string) string {
 			return msg.Role
 		}
 	case "type":
-		if entry, ok := resource.(parser.SessionEntry); ok {
+		if entry, ok := resource.(types.SessionEntry); ok {
 			return entry.Type
 		}
 	case "session_id":
-		if entry, ok := resource.(parser.SessionEntry); ok {
+		if entry, ok := resource.(types.SessionEntry); ok {
 			return entry.SessionID
 		}
 		if msg, ok := resource.(MessageView); ok {
 			return msg.SessionID
 		}
 	case "git_branch":
-		if entry, ok := resource.(parser.SessionEntry); ok {
+		if entry, ok := resource.(types.SessionEntry); ok {
 			return entry.GitBranch
 		}
 		if msg, ok := resource.(MessageView); ok {

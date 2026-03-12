@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 type SuccessfulPromptsResult struct {
@@ -41,7 +41,7 @@ type PatternFeatures struct {
 	HasContext            bool `json:"has_context"`
 }
 
-func BuildSuccessfulPrompts(entries []parser.SessionEntry, minQuality float64, limit int) *SuccessfulPromptsResult {
+func BuildSuccessfulPrompts(entries []types.SessionEntry, minQuality float64, limit int) *SuccessfulPromptsResult {
 	turnIndex := turnindex.BuildTurnIndex(entries)
 	var prompts []SuccessfulPrompt
 
@@ -86,7 +86,7 @@ func BuildSuccessfulPrompts(entries []parser.SessionEntry, minQuality float64, l
 	return &SuccessfulPromptsResult{Prompts: prompts}
 }
 
-func analyzePromptOutcome(entries []parser.SessionEntry, index int, turnIndex map[string]int) (PromptOutcome, int) {
+func analyzePromptOutcome(entries []types.SessionEntry, index int, turnIndex map[string]int) (PromptOutcome, int) {
 	delivered := make(map[string]struct{})
 	errorCount := 0
 	turns := 0

@@ -1,3 +1,4 @@
+// Deprecated: Import internal/types directly. This package will be removed in a future release.
 package parser
 
 import "github.com/yaleh/meta-cc/internal/types"

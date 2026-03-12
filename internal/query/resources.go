@@ -3,27 +3,27 @@ package query
 import (
 	"fmt"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // MessageView represents a flattened message view
 type MessageView struct {
-	UUID          string                `json:"uuid"`
-	SessionID     string                `json:"session_id"`
-	ParentUUID    string                `json:"parent_uuid"`
-	Timestamp     string                `json:"timestamp"`
-	Role          string                `json:"role"`
-	Content       string                `json:"content,omitempty"` // Simplified text content
-	ContentBlocks []parser.ContentBlock `json:"content_blocks"`    // Full content blocks
-	GitBranch     string                `json:"git_branch,omitempty"`
+	UUID          string               `json:"uuid"`
+	SessionID     string               `json:"session_id"`
+	ParentUUID    string               `json:"parent_uuid"`
+	Timestamp     string               `json:"timestamp"`
+	Role          string               `json:"role"`
+	Content       string               `json:"content,omitempty"` // Simplified text content
+	ContentBlocks []types.ContentBlock `json:"content_blocks"`    // Full content blocks
+	GitBranch     string               `json:"git_branch,omitempty"`
 }
 
 // SelectResource selects the appropriate resource view based on resource type
 // Returns interface{} slice where each element is of the appropriate type:
-// - "entries": []parser.SessionEntry
+// - "entries": []types.SessionEntry
 // - "messages": []MessageView
-// - "tools": []parser.ToolCall
-func SelectResource(entries []parser.SessionEntry, resource string) (interface{}, error) {
+// - "tools": []types.ToolCall
+func SelectResource(entries []types.SessionEntry, resource string) (interface{}, error) {
 	switch resource {
 	case "entries":
 		return entries, nil
@@ -37,7 +37,7 @@ func SelectResource(entries []parser.SessionEntry, resource string) (interface{}
 }
 
 // extractMessages extracts all messages (user/assistant entries) and returns MessageView slice
-func extractMessages(entries []parser.SessionEntry) []MessageView {
+func extractMessages(entries []types.SessionEntry) []MessageView {
 	var messages []MessageView
 
 	for _, entry := range entries {
@@ -71,7 +71,7 @@ func extractMessages(entries []parser.SessionEntry) []MessageView {
 }
 
 // extractTextContent extracts text from content blocks
-func extractTextContent(blocks []parser.ContentBlock) string {
+func extractTextContent(blocks []types.ContentBlock) string {
 	var text string
 	for _, block := range blocks {
 		if block.Type == "text" && block.Text != "" {
@@ -84,7 +84,7 @@ func extractTextContent(blocks []parser.ContentBlock) string {
 	return text
 }
 
-// extractToolExecutions extracts all tool executions using the existing parser.ExtractToolCalls
-func extractToolExecutions(entries []parser.SessionEntry) []parser.ToolCall {
-	return parser.ExtractToolCalls(entries)
+// extractToolExecutions extracts all tool executions using the existing types.ExtractToolCalls
+func extractToolExecutions(entries []types.SessionEntry) []types.ToolCall {
+	return types.ExtractToolCalls(entries)
 }

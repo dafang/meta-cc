@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"sort"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 var markerPattern = regexp.MustCompile(`\b(TODO|FIXME|HACK|XXX)\b`)
@@ -39,7 +39,7 @@ var scannerToolNames = map[string]bool{
 // GetTechDebt scans toolCalls for TODO/FIXME/HACK/XXX markers in outputs and
 // detects unresolved errors (tool calls with status "error" that have no
 // subsequent success call with the same tool name).
-func GetTechDebt(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*TechDebtResult, error) {
+func GetTechDebt(entries []types.SessionEntry, toolCalls []types.ToolCall) (*TechDebtResult, error) {
 	labelCounts := make(map[string]int)
 	fileCounts := make(map[string]int)
 

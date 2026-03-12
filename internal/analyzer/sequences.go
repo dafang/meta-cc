@@ -4,7 +4,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
 	"github.com/yaleh/meta-cc/internal/types"
 )
@@ -18,7 +17,7 @@ type toolCallWithTurn struct {
 }
 
 // DetectToolSequences detects repeated tool call sequences
-func DetectToolSequences(entries []parser.SessionEntry, minLength, minOccurrences int) SequenceAnalysis {
+func DetectToolSequences(entries []types.SessionEntry, minLength, minOccurrences int) SequenceAnalysis {
 	// Build turn index
 	turnIdx := turnindex.BuildTurnIndex(entries)
 
@@ -38,10 +37,10 @@ func DetectToolSequences(entries []parser.SessionEntry, minLength, minOccurrence
 	}
 }
 
-func extractToolCallsWithTurns(entries []parser.SessionEntry, turnIdx map[string]int) []toolCallWithTurn {
+func extractToolCallsWithTurns(entries []types.SessionEntry, turnIdx map[string]int) []toolCallWithTurn {
 	var result []toolCallWithTurn
 
-	toolCalls := parser.ExtractToolCalls(entries)
+	toolCalls := types.ExtractToolCalls(entries)
 	for _, tc := range toolCalls {
 		if turn, ok := turnIdx[tc.UUID]; ok {
 			result = append(result, toolCallWithTurn{
@@ -57,7 +56,7 @@ func extractToolCallsWithTurns(entries []parser.SessionEntry, turnIdx map[string
 	return result
 }
 
-func findAllSequences(toolCalls []toolCallWithTurn, minLength, minOccurrences int, entries []parser.SessionEntry) []types.SequencePattern {
+func findAllSequences(toolCalls []toolCallWithTurn, minLength, minOccurrences int, entries []types.SessionEntry) []types.SequencePattern {
 	sequenceMap := make(map[string][]types.SequenceOccurrence)
 
 	// Try sequences of different lengths
@@ -130,7 +129,7 @@ func findAllSequences(toolCalls []toolCallWithTurn, minLength, minOccurrences in
 	return result
 }
 
-func extractFileFromToolCall(tc parser.ToolCall) string {
+func extractFileFromToolCall(tc types.ToolCall) string {
 	fileParams := []string{"file_path", "notebook_path", "path"}
 
 	for _, param := range fileParams {
@@ -144,7 +143,7 @@ func extractFileFromToolCall(tc parser.ToolCall) string {
 	return ""
 }
 
-func extractCommandFromToolCall(tc parser.ToolCall) string {
+func extractCommandFromToolCall(tc types.ToolCall) string {
 	if tc.ToolName == "Bash" {
 		if val, ok := tc.Input["command"]; ok {
 			if cmd, ok := val.(string); ok {
@@ -159,7 +158,7 @@ func extractCommandFromToolCall(tc parser.ToolCall) string {
 	return ""
 }
 
-func calculateSequenceTimeSpan(occurrences []types.SequenceOccurrence, entries []parser.SessionEntry) int {
+func calculateSequenceTimeSpan(occurrences []types.SequenceOccurrence, entries []types.SessionEntry) int {
 	if len(occurrences) == 0 {
 		return 0
 	}

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // TimelineEvent represents a single event in the session timeline.
@@ -67,7 +67,7 @@ func formatSpan(d time.Duration) string {
 }
 
 // GetTimeline converts session entries to a sorted, merged timeline.
-func GetTimeline(entries []parser.SessionEntry, limit int) (*TimelineResult, error) {
+func GetTimeline(entries []types.SessionEntry, limit int) (*TimelineResult, error) {
 	if len(entries) == 0 {
 		return &TimelineResult{Events: []TimelineEvent{}, TotalSpan: "0s"}, nil
 	}

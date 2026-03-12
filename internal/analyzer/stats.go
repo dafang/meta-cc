@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // SessionStats represents statistical information about a session
@@ -27,7 +27,7 @@ type ToolFreq struct {
 }
 
 // CalculateStats calculates session statistics
-func CalculateStats(entries []parser.SessionEntry, toolCalls []parser.ToolCall) SessionStats {
+func CalculateStats(entries []types.SessionEntry, toolCalls []types.ToolCall) SessionStats {
 	stats := SessionStats{
 		ToolFrequency: make(map[string]int),
 	}

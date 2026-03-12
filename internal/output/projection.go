@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // ProjectionConfig defines which fields to include in output
@@ -20,7 +20,7 @@ type ProjectedToolCall map[string]interface{}
 
 // ProjectToolCalls applies field projection to ToolCall slice
 // Returns a slice of maps containing only the specified fields
-func ProjectToolCalls(tools []parser.ToolCall, config ProjectionConfig) ([]ProjectedToolCall, error) {
+func ProjectToolCalls(tools []types.ToolCall, config ProjectionConfig) ([]ProjectedToolCall, error) {
 	if len(config.Fields) == 0 {
 		// No projection - return full objects as maps
 		return convertToMaps(tools), nil
@@ -89,7 +89,7 @@ func ParseProjectionConfig(fieldsStr, ifErrorIncludeStr string) ProjectionConfig
 
 // toolCallToMap converts a ToolCall struct to a map for field access
 // Uses JSON marshaling/unmarshaling to handle struct-to-map conversion
-func toolCallToMap(tool parser.ToolCall) map[string]interface{} {
+func toolCallToMap(tool types.ToolCall) map[string]interface{} {
 	// Use JSON round-trip for accurate conversion
 	data, err := json.Marshal(tool)
 	if err != nil {
@@ -105,7 +105,7 @@ func toolCallToMap(tool parser.ToolCall) map[string]interface{} {
 }
 
 // convertToMaps converts ToolCall slice to ProjectedToolCall slice (no projection)
-func convertToMaps(tools []parser.ToolCall) []ProjectedToolCall {
+func convertToMaps(tools []types.ToolCall) []ProjectedToolCall {
 	result := make([]ProjectedToolCall, len(tools))
 	for i, tool := range tools {
 		result[i] = toolCallToMap(tool)

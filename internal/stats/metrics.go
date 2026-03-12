@@ -3,11 +3,11 @@ package stats
 import (
 	"fmt"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // calculateMetric calculates a specific metric for a group of tools
-func calculateMetric(tools []parser.ToolCall, metric string) (interface{}, error) {
+func calculateMetric(tools []types.ToolCall, metric string) (interface{}, error) {
 	switch metric {
 	case "count":
 		return len(tools), nil
@@ -30,7 +30,7 @@ func calculateMetric(tools []parser.ToolCall, metric string) (interface{}, error
 }
 
 // getFieldValue extracts field value from ToolCall
-func getFieldValue(tool parser.ToolCall, field string) string {
+func getFieldValue(tool types.ToolCall, field string) string {
 	switch field {
 	case "tool":
 		return tool.ToolName

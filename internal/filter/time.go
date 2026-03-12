@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // TimeFilter represents time-based filtering options
@@ -18,7 +18,7 @@ type TimeFilter struct {
 }
 
 // Apply applies the time filter to session entries
-func (f *TimeFilter) Apply(entries []parser.SessionEntry) ([]parser.SessionEntry, error) {
+func (f *TimeFilter) Apply(entries []types.SessionEntry) ([]types.SessionEntry, error) {
 	// No filter, return all
 	if f.Since == "" && f.LastNTurns == 0 && f.FromTs == 0 && f.ToTs == 0 {
 		return entries, nil
@@ -43,7 +43,7 @@ func (f *TimeFilter) Apply(entries []parser.SessionEntry) ([]parser.SessionEntry
 	}
 
 	// Filter by timestamp
-	var result []parser.SessionEntry
+	var result []types.SessionEntry
 	for _, entry := range entries {
 		entryTime, err := time.Parse(time.RFC3339Nano, entry.Timestamp)
 		if err != nil {

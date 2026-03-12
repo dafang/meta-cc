@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
@@ -49,7 +48,7 @@ func RunUserMessagesQuery(loader types.SessionLoader, opts types.UserMessagesQue
 	return messages, nil
 }
 
-func extractUserMessages(entries []parser.SessionEntry, turnIndex map[string]int) []types.UserMessage {
+func extractUserMessages(entries []types.SessionEntry, turnIndex map[string]int) []types.UserMessage {
 	var messages []types.UserMessage
 
 	for _, entry := range entries {
@@ -82,12 +81,12 @@ func extractUserMessages(entries []parser.SessionEntry, turnIndex map[string]int
 	return messages
 }
 
-func addContextToMessages(messages []types.UserMessage, entries []parser.SessionEntry, turnIndex map[string]int, window int) []types.UserMessage {
+func addContextToMessages(messages []types.UserMessage, entries []types.SessionEntry, turnIndex map[string]int, window int) []types.UserMessage {
 	if window <= 0 {
 		return messages
 	}
 
-	entryByTurn := map[int]parser.SessionEntry{}
+	entryByTurn := map[int]types.SessionEntry{}
 	for _, entry := range entries {
 		if !entry.IsMessage() {
 			continue
@@ -106,7 +105,7 @@ func addContextToMessages(messages []types.UserMessage, entries []parser.Session
 	return messages
 }
 
-func collectContextEntries(entryByTurn map[int]parser.SessionEntry, start, end int) []types.ContextEntry {
+func collectContextEntries(entryByTurn map[int]types.SessionEntry, start, end int) []types.ContextEntry {
 	var context []types.ContextEntry
 
 	for turn := start; turn <= end; turn++ {
@@ -129,7 +128,7 @@ func collectContextEntries(entryByTurn map[int]parser.SessionEntry, start, end i
 	return context
 }
 
-func summarizeContent(blocks []parser.ContentBlock) string {
+func summarizeContent(blocks []types.ContentBlock) string {
 	var builder strings.Builder
 
 	for _, block := range blocks {
@@ -145,7 +144,7 @@ func summarizeContent(blocks []parser.ContentBlock) string {
 	return summary
 }
 
-func collectToolCalls(blocks []parser.ContentBlock) []string {
+func collectToolCalls(blocks []types.ContentBlock) []string {
 	var tools []string
 	for _, block := range blocks {
 		if block.Type == "tool_use" && block.ToolUse != nil {

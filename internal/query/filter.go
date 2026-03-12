@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // ApplyFilter applies filter conditions to resources
@@ -17,11 +17,11 @@ func ApplyFilter(resources interface{}, filter FilterSpec) interface{} {
 
 	// Handle different resource types
 	switch r := resources.(type) {
-	case []parser.SessionEntry:
+	case []types.SessionEntry:
 		return filterEntries(r, filter)
 	case []MessageView:
 		return filterMessages(r, filter)
-	case []parser.ToolCall:
+	case []types.ToolCall:
 		return filterTools(r, filter)
 	default:
 		// Unknown type, return as is
@@ -30,8 +30,8 @@ func ApplyFilter(resources interface{}, filter FilterSpec) interface{} {
 }
 
 // filterEntries filters SessionEntry slice
-func filterEntries(entries []parser.SessionEntry, filter FilterSpec) []parser.SessionEntry {
-	var result []parser.SessionEntry
+func filterEntries(entries []types.SessionEntry, filter FilterSpec) []types.SessionEntry {
+	var result []types.SessionEntry
 	for _, entry := range entries {
 		if matchesFilter(entry, filter) {
 			result = append(result, entry)
@@ -52,8 +52,8 @@ func filterMessages(messages []MessageView, filter FilterSpec) []MessageView {
 }
 
 // filterTools filters ToolCall slice
-func filterTools(tools []parser.ToolCall, filter FilterSpec) []parser.ToolCall {
-	var result []parser.ToolCall
+func filterTools(tools []types.ToolCall, filter FilterSpec) []types.ToolCall {
+	var result []types.ToolCall
 	for _, tool := range tools {
 		if matchesFilter(tool, filter) {
 			result = append(result, tool)
@@ -67,7 +67,7 @@ func filterTools(tools []parser.ToolCall, filter FilterSpec) []parser.ToolCall {
 func matchesFilter(resource interface{}, filter FilterSpec) bool {
 	// Entry-level filters
 	if filter.Type != "" {
-		if entry, ok := resource.(parser.SessionEntry); ok {
+		if entry, ok := resource.(types.SessionEntry); ok {
 			if entry.Type != filter.Type {
 				return false
 			}
@@ -118,7 +118,7 @@ func matchesFilter(resource interface{}, filter FilterSpec) bool {
 			}
 		}
 		// Also check entries with messages
-		if entry, ok := resource.(parser.SessionEntry); ok {
+		if entry, ok := resource.(types.SessionEntry); ok {
 			if entry.Message != nil && entry.Message.Role != filter.Role {
 				return false
 			}
@@ -134,7 +134,7 @@ func matchesFilter(resource interface{}, filter FilterSpec) bool {
 
 	// Tool-level filters
 	if filter.ToolName != "" {
-		if tool, ok := resource.(parser.ToolCall); ok {
+		if tool, ok := resource.(types.ToolCall); ok {
 			if !matchesPattern(tool.ToolName, filter.ToolName) {
 				return false
 			}
@@ -142,7 +142,7 @@ func matchesFilter(resource interface{}, filter FilterSpec) bool {
 	}
 
 	if filter.ToolStatus != "" {
-		if tool, ok := resource.(parser.ToolCall); ok {
+		if tool, ok := resource.(types.ToolCall); ok {
 			if tool.Status != filter.ToolStatus {
 				return false
 			}
@@ -150,7 +150,7 @@ func matchesFilter(resource interface{}, filter FilterSpec) bool {
 	}
 
 	if filter.HasError != nil {
-		if tool, ok := resource.(parser.ToolCall); ok {
+		if tool, ok := resource.(types.ToolCall); ok {
 			hasError := tool.Error != ""
 			if hasError != *filter.HasError {
 				return false
@@ -165,11 +165,11 @@ func matchesFilter(resource interface{}, filter FilterSpec) bool {
 
 func extractUUID(resource interface{}) string {
 	switch r := resource.(type) {
-	case parser.SessionEntry:
+	case types.SessionEntry:
 		return r.UUID
 	case MessageView:
 		return r.UUID
-	case parser.ToolCall:
+	case types.ToolCall:
 		return r.UUID
 	}
 	return ""
@@ -177,7 +177,7 @@ func extractUUID(resource interface{}) string {
 
 func extractSessionID(resource interface{}) string {
 	switch r := resource.(type) {
-	case parser.SessionEntry:
+	case types.SessionEntry:
 		return r.SessionID
 	case MessageView:
 		return r.SessionID
@@ -187,7 +187,7 @@ func extractSessionID(resource interface{}) string {
 
 func extractParentUUID(resource interface{}) string {
 	switch r := resource.(type) {
-	case parser.SessionEntry:
+	case types.SessionEntry:
 		return r.ParentUUID
 	case MessageView:
 		return r.ParentUUID
@@ -197,7 +197,7 @@ func extractParentUUID(resource interface{}) string {
 
 func extractGitBranch(resource interface{}) string {
 	switch r := resource.(type) {
-	case parser.SessionEntry:
+	case types.SessionEntry:
 		return r.GitBranch
 	case MessageView:
 		return r.GitBranch
@@ -207,11 +207,11 @@ func extractGitBranch(resource interface{}) string {
 
 func extractTimestamp(resource interface{}) string {
 	switch r := resource.(type) {
-	case parser.SessionEntry:
+	case types.SessionEntry:
 		return r.Timestamp
 	case MessageView:
 		return r.Timestamp
-	case parser.ToolCall:
+	case types.ToolCall:
 		return r.Timestamp
 	}
 	return ""
@@ -221,7 +221,7 @@ func extractContent(resource interface{}) string {
 	switch r := resource.(type) {
 	case MessageView:
 		return r.Content
-	case parser.SessionEntry:
+	case types.SessionEntry:
 		if r.Message != nil {
 			var content strings.Builder
 			for _, block := range r.Message.Content {

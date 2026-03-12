@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 type ProjectState struct {
@@ -35,7 +35,7 @@ type ProjectStateOptions struct {
 	IncludeIncomplete bool
 }
 
-func BuildProjectState(entries []parser.SessionEntry, opts ProjectStateOptions) *ProjectState {
+func BuildProjectState(entries []types.SessionEntry, opts ProjectStateOptions) *ProjectState {
 	sessionID := ""
 	if len(entries) > 0 {
 		sessionID = entries[0].SessionID
@@ -63,7 +63,7 @@ func BuildProjectState(entries []parser.SessionEntry, opts ProjectStateOptions) 
 	}
 }
 
-func extractRecentFiles(entries []parser.SessionEntry, turnIndex map[string]int) []FileActivity {
+func extractRecentFiles(entries []types.SessionEntry, turnIndex map[string]int) []FileActivity {
 	fileMap := make(map[string]*FileActivity)
 
 	for _, entry := range entries {
@@ -124,7 +124,7 @@ func extractRecentFiles(entries []parser.SessionEntry, turnIndex map[string]int)
 	return result
 }
 
-func extractIncompleteTasks(entries []parser.SessionEntry, turnIndex map[string]int) []IncompleteTask {
+func extractIncompleteTasks(entries []types.SessionEntry, turnIndex map[string]int) []IncompleteTask {
 	var tasks []IncompleteTask
 
 	for _, entry := range entries {
@@ -148,7 +148,7 @@ func extractIncompleteTasks(entries []parser.SessionEntry, turnIndex map[string]
 	return tasks
 }
 
-func determineCurrentFocus(entries []parser.SessionEntry, turnIndex map[string]int) string {
+func determineCurrentFocus(entries []types.SessionEntry, turnIndex map[string]int) string {
 	for i := len(entries) - 1; i >= 0; i-- {
 		entry := entries[i]
 		if entry.Message == nil || entry.Message.Role != "assistant" {
@@ -163,7 +163,7 @@ func determineCurrentFocus(entries []parser.SessionEntry, turnIndex map[string]i
 	return ""
 }
 
-func calculateErrorFreeTurns(entries []parser.SessionEntry, turnIndex map[string]int) int {
+func calculateErrorFreeTurns(entries []types.SessionEntry, turnIndex map[string]int) int {
 	count := 0
 	for i := len(entries) - 1; i >= 0; i-- {
 		entry := entries[i]
@@ -185,7 +185,7 @@ func calculateErrorFreeTurns(entries []parser.SessionEntry, turnIndex map[string
 	return count
 }
 
-func extractRecentAchievements(entries []parser.SessionEntry, turnIndex map[string]int) []string {
+func extractRecentAchievements(entries []types.SessionEntry, turnIndex map[string]int) []string {
 	var achievements []string
 	for i := len(entries) - 1; i >= 0; i-- {
 		entry := entries[i]

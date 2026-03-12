@@ -6,8 +6,8 @@ import (
 
 	"github.com/yaleh/meta-cc/internal/analyzer"
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 )
 
 // BuildContextQuery builds a context query for a specific error signature
-func BuildContextQuery(entries []parser.SessionEntry, errorSignature string, window int) (*ContextQuery, error) {
+func BuildContextQuery(entries []types.SessionEntry, errorSignature string, window int) (*ContextQuery, error) {
 	if window < 0 {
 		return nil, fmt.Errorf("window size must be non-negative for query_context (got: %d): %w", window, mcerrors.ErrInvalidInput)
 	}
@@ -37,10 +37,10 @@ func BuildContextQuery(entries []parser.SessionEntry, errorSignature string, win
 }
 
 // findErrorOccurrences finds all occurrences of the error signature
-func findErrorOccurrences(entries []parser.SessionEntry, errorSig string, window int, turnIndex map[string]int) []ContextOccurrence {
+func findErrorOccurrences(entries []types.SessionEntry, errorSig string, window int, turnIndex map[string]int) []ContextOccurrence {
 	var occurrences []ContextOccurrence
 
-	toolCalls := parser.ExtractToolCalls(entries)
+	toolCalls := types.ExtractToolCalls(entries)
 
 	for _, tc := range toolCalls {
 		// Check if this tool call has an error
@@ -75,7 +75,7 @@ func findErrorOccurrences(entries []parser.SessionEntry, errorSig string, window
 }
 
 // buildContextWindow builds context in specified direction from error turn
-func buildContextWindow(entries []parser.SessionEntry, errorTurn, window int, turnIndex map[string]int, direction string) []TurnPreview {
+func buildContextWindow(entries []types.SessionEntry, errorTurn, window int, turnIndex map[string]int, direction string) []TurnPreview {
 	var previews []TurnPreview
 
 	for _, entry := range entries {
@@ -104,17 +104,17 @@ func buildContextWindow(entries []parser.SessionEntry, errorTurn, window int, tu
 }
 
 // buildContextBefore builds context before the error turn
-func buildContextBefore(entries []parser.SessionEntry, errorTurn, window int, turnIndex map[string]int) []TurnPreview {
+func buildContextBefore(entries []types.SessionEntry, errorTurn, window int, turnIndex map[string]int) []TurnPreview {
 	return buildContextWindow(entries, errorTurn, window, turnIndex, "before")
 }
 
 // buildContextAfter builds context after the error turn
-func buildContextAfter(entries []parser.SessionEntry, errorTurn, window int, turnIndex map[string]int) []TurnPreview {
+func buildContextAfter(entries []types.SessionEntry, errorTurn, window int, turnIndex map[string]int) []TurnPreview {
 	return buildContextWindow(entries, errorTurn, window, turnIndex, "after")
 }
 
 // buildTurnPreview builds a preview of a turn
-func buildTurnPreview(entry parser.SessionEntry, turn int) TurnPreview {
+func buildTurnPreview(entry types.SessionEntry, turn int) TurnPreview {
 	preview := TurnPreview{
 		Turn:      turn,
 		Role:      "",
@@ -148,7 +148,7 @@ func buildTurnPreview(entry parser.SessionEntry, turn int) TurnPreview {
 }
 
 // buildErrorDetail builds error detail from a tool call
-func buildErrorDetail(tc parser.ToolCall, turn int, entries []parser.SessionEntry) ErrorDetail {
+func buildErrorDetail(tc types.ToolCall, turn int, entries []types.SessionEntry) ErrorDetail {
 	detail := ErrorDetail{
 		Turn:      turn,
 		Tool:      tc.ToolName,

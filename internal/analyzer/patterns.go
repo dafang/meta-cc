@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // ErrorPattern 表示检测到的错误模式
@@ -29,7 +29,7 @@ type PatternContext struct {
 
 // DetectErrorPatterns 检测错误模式
 // 返回在会话中重复出现的错误（出现次数 >= 3）
-func DetectErrorPatterns(entries []parser.SessionEntry, toolCalls []parser.ToolCall) []ErrorPattern {
+func DetectErrorPatterns(entries []types.SessionEntry, toolCalls []types.ToolCall) []ErrorPattern {
 	// 构建 UUID -> 索引映射
 	uuidToIndex := make(map[string]int)
 	for i, entry := range entries {
@@ -43,7 +43,7 @@ func DetectErrorPatterns(entries []parser.SessionEntry, toolCalls []parser.ToolC
 	}
 
 	// 按签名分组错误
-	errorGroups := make(map[string][]parser.ToolCall)
+	errorGroups := make(map[string][]types.ToolCall)
 
 	for _, tc := range toolCalls {
 		// 仅处理错误状态的工具调用
@@ -97,7 +97,7 @@ func DetectErrorPatterns(entries []parser.SessionEntry, toolCalls []parser.ToolC
 }
 
 // buildPatternContext 构建模式上下文
-func buildPatternContext(toolCalls []parser.ToolCall, uuidToIndex map[string]int, uuidToTimestamp map[string]string) PatternContext {
+func buildPatternContext(toolCalls []types.ToolCall, uuidToIndex map[string]int, uuidToTimestamp map[string]string) PatternContext {
 	context := PatternContext{
 		TurnUUIDs:   make([]string, 0, len(toolCalls)),
 		TurnIndices: make([]int, 0, len(toolCalls)),
@@ -114,7 +114,7 @@ func buildPatternContext(toolCalls []parser.ToolCall, uuidToIndex map[string]int
 }
 
 // extractTimestamps 提取时间戳并排序
-func extractTimestamps(toolCalls []parser.ToolCall, uuidToTimestamp map[string]string) []string {
+func extractTimestamps(toolCalls []types.ToolCall, uuidToTimestamp map[string]string) []string {
 	timestamps := make([]string, 0, len(toolCalls))
 
 	for _, tc := range toolCalls {

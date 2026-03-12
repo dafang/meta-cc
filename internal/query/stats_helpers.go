@@ -5,17 +5,17 @@ import (
 
 	"github.com/yaleh/meta-cc/internal/analyzer"
 	"github.com/yaleh/meta-cc/internal/filter"
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/stats"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // BuildSessionStats returns aggregated session statistics using analyzer package.
-func BuildSessionStats(entries []parser.SessionEntry, toolCalls []parser.ToolCall) analyzer.SessionStats {
+func BuildSessionStats(entries []types.SessionEntry, toolCalls []types.ToolCall) analyzer.SessionStats {
 	return analyzer.CalculateStats(entries, toolCalls)
 }
 
 // AnalyzeTimeSeries applies optional expression filtering and returns time series points.
-func AnalyzeTimeSeries(toolCalls []parser.ToolCall, metric, interval, filterExpr string) ([]stats.TimeSeriesPoint, error) {
+func AnalyzeTimeSeries(toolCalls []types.ToolCall, metric, interval, filterExpr string) ([]stats.TimeSeriesPoint, error) {
 	filtered := toolCalls
 
 	if filterExpr != "" {
@@ -24,7 +24,7 @@ func AnalyzeTimeSeries(toolCalls []parser.ToolCall, metric, interval, filterExpr
 			return nil, fmt.Errorf("%w: %v", ErrFilterInvalid, err)
 		}
 
-		var evalCalls []parser.ToolCall
+		var evalCalls []types.ToolCall
 		for _, tc := range toolCalls {
 			record := map[string]interface{}{
 				"tool":   tc.ToolName,

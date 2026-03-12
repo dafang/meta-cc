@@ -3,12 +3,12 @@ package query
 import (
 	"fmt"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // Query executes a unified query on session entries
 // This is the main entry point for the unified query interface
-func Query(entries []parser.SessionEntry, params QueryParams) (interface{}, error) {
+func Query(entries []types.SessionEntry, params QueryParams) (interface{}, error) {
 	// 1. Validate and apply defaults
 	params = ApplyDefaults(params)
 	if err := ValidateQueryParams(params); err != nil {

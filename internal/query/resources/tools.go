@@ -6,13 +6,12 @@ import (
 	"strings"
 
 	"github.com/yaleh/meta-cc/internal/filter"
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // RunToolsQuery loads tool calls using the provided SessionLoader, applies filters, sorting,
 // and pagination according to the provided options, and returns the resulting slice.
-func RunToolsQuery(loader types.SessionLoader, opts types.ToolsQueryOptions) ([]parser.ToolCall, error) {
+func RunToolsQuery(loader types.SessionLoader, opts types.ToolsQueryOptions) ([]types.ToolCall, error) {
 	calls := loader.ExtractToolCalls()
 
 	filtered, err := applyToolFilters(calls, opts)
@@ -25,7 +24,7 @@ func RunToolsQuery(loader types.SessionLoader, opts types.ToolsQueryOptions) ([]
 	return applyToolPagination(filtered, opts.Limit, opts.Offset), nil
 }
 
-func applyToolFilters(toolCalls []parser.ToolCall, opts types.ToolsQueryOptions) ([]parser.ToolCall, error) {
+func applyToolFilters(toolCalls []types.ToolCall, opts types.ToolsQueryOptions) ([]types.ToolCall, error) {
 	filtered := toolCalls
 	var err error
 
@@ -51,7 +50,7 @@ func applyToolFilters(toolCalls []parser.ToolCall, opts types.ToolsQueryOptions)
 	return applyFlagFilters(filtered, opts.Status, opts.Tool), nil
 }
 
-func applyExpressionFilter(toolCalls []parser.ToolCall, expression string) ([]parser.ToolCall, error) {
+func applyExpressionFilter(toolCalls []types.ToolCall, expression string) ([]types.ToolCall, error) {
 	if expression == "" {
 		return toolCalls, nil
 	}
@@ -61,7 +60,7 @@ func applyExpressionFilter(toolCalls []parser.ToolCall, expression string) ([]pa
 		return nil, fmt.Errorf("%w: %v", ErrFilterInvalid, err)
 	}
 
-	var filtered []parser.ToolCall
+	var filtered []types.ToolCall
 	for _, tc := range toolCalls {
 		record := map[string]interface{}{
 			"tool":   tc.ToolName,
@@ -83,16 +82,16 @@ func applyExpressionFilter(toolCalls []parser.ToolCall, expression string) ([]pa
 	return filtered, nil
 }
 
-func applySimpleWhere(toolCalls []parser.ToolCall, where string) ([]parser.ToolCall, error) {
+func applySimpleWhere(toolCalls []types.ToolCall, where string) ([]types.ToolCall, error) {
 	result, err := filter.ApplyWhere(toolCalls, where, "tool_calls")
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrFilterInvalid, err)
 	}
-	return result.([]parser.ToolCall), nil
+	return result.([]types.ToolCall), nil
 }
 
-func applyFlagFilters(toolCalls []parser.ToolCall, status, tool string) []parser.ToolCall {
-	var result []parser.ToolCall
+func applyFlagFilters(toolCalls []types.ToolCall, status, tool string) []types.ToolCall {
+	var result []types.ToolCall
 
 	for _, tc := range toolCalls {
 		if !matchesStatus(tc, status) {
@@ -107,7 +106,7 @@ func applyFlagFilters(toolCalls []parser.ToolCall, status, tool string) []parser
 	return result
 }
 
-func matchesStatus(tc parser.ToolCall, status string) bool {
+func matchesStatus(tc types.ToolCall, status string) bool {
 	if status == "" {
 		return true
 	}
@@ -122,7 +121,7 @@ func matchesStatus(tc parser.ToolCall, status string) bool {
 	}
 }
 
-func sortToolCalls(toolCalls []parser.ToolCall, sortBy string, reverse bool) {
+func sortToolCalls(toolCalls []types.ToolCall, sortBy string, reverse bool) {
 	if sortBy == "" {
 		// Default sort by timestamp to maintain deterministic order
 		sort.SliceStable(toolCalls, func(i, j int) bool {
@@ -157,7 +156,7 @@ func sortToolCalls(toolCalls []parser.ToolCall, sortBy string, reverse bool) {
 	})
 }
 
-func applyToolPagination(toolCalls []parser.ToolCall, limit, offset int) []parser.ToolCall {
+func applyToolPagination(toolCalls []types.ToolCall, limit, offset int) []types.ToolCall {
 	config := filter.PaginationConfig{Limit: limit, Offset: offset}
 	return filter.ApplyPagination(toolCalls, config)
 }

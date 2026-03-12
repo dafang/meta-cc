@@ -1,6 +1,6 @@
 package analyzer
 
-import "github.com/yaleh/meta-cc/internal/parser"
+import "github.com/yaleh/meta-cc/internal/types"
 
 // QualityDimension represents a single quality metric with a normalized score.
 type QualityDimension struct {
@@ -17,7 +17,7 @@ type QualityScanResult struct {
 // QualityScan computes four quality dimensions over the given tool calls.
 // entries is currently unused but kept for API consistency.
 // If toolCalls is empty, all scores are 1.0 (vacuously perfect).
-func QualityScan(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*QualityScanResult, error) {
+func QualityScan(entries []types.SessionEntry, toolCalls []types.ToolCall) (*QualityScanResult, error) {
 	total := len(toolCalls)
 	if total == 0 {
 		return &QualityScanResult{

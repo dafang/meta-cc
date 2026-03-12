@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // AggregateConfig defines aggregation parameters
@@ -20,14 +20,14 @@ type AggregateResult struct {
 }
 
 // Aggregate performs aggregation on tool calls
-func Aggregate(tools []parser.ToolCall, config AggregateConfig) ([]AggregateResult, error) {
+func Aggregate(tools []types.ToolCall, config AggregateConfig) ([]AggregateResult, error) {
 	// Validate group-by field
 	if !isValidGroupByField(config.GroupBy) {
 		return nil, fmt.Errorf("invalid group-by field: %s", config.GroupBy)
 	}
 
 	// Step 1: Group by field
-	groups := make(map[string][]parser.ToolCall)
+	groups := make(map[string][]types.ToolCall)
 	for _, tool := range tools {
 		groupValue := getFieldValue(tool, config.GroupBy)
 		groups[groupValue] = append(groups[groupValue], tool)

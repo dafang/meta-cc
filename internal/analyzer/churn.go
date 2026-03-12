@@ -3,7 +3,6 @@ package analyzer
 import (
 	"sort"
 
-	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
 	"github.com/yaleh/meta-cc/internal/types"
 )
@@ -19,11 +18,11 @@ type fileAccessStats struct {
 }
 
 // DetectFileChurn detects files with frequent access
-func DetectFileChurn(entries []parser.SessionEntry, threshold int) FileChurnAnalysis {
+func DetectFileChurn(entries []types.SessionEntry, threshold int) FileChurnAnalysis {
 	// Extract file access events
 	fileAccess := make(map[string]*fileAccessStats)
 
-	toolCalls := parser.ExtractToolCalls(entries)
+	toolCalls := types.ExtractToolCalls(entries)
 	for _, tc := range toolCalls {
 		// Extract file path
 		filePath := extractFileFromToolCall(tc)
@@ -101,7 +100,7 @@ func DetectFileChurn(entries []parser.SessionEntry, threshold int) FileChurnAnal
 	}
 }
 
-func getToolCallTimestamp(entries []parser.SessionEntry, uuid string) int64 {
+func getToolCallTimestamp(entries []types.SessionEntry, uuid string) int64 {
 	for _, entry := range entries {
 		if entry.UUID == uuid {
 			return turnindex.ParseTimestamp(entry.Timestamp)
