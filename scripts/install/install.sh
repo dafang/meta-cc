@@ -80,17 +80,18 @@ install_claude_files() {
     CLAUDE_DIR="${HOME}/.claude"
     mkdir -p "$CLAUDE_DIR/commands" "$CLAUDE_DIR/agents" "$CLAUDE_DIR/skills"
 
-    # Check if commands/agents directories exist
+    # Check if commands directory exists (required)
     if [ ! -d "commands" ]; then
         error_exit "commands directory not found"
     fi
-    if [ ! -d "agents" ]; then
-        error_exit "agents directory not found"
-    fi
 
-    # Copy slash commands and subagents
+    # Copy slash commands
     cp commands/* "$CLAUDE_DIR/commands/" 2>/dev/null || error_exit "Failed to copy slash commands"
-    cp agents/* "$CLAUDE_DIR/agents/" 2>/dev/null || error_exit "Failed to copy subagents"
+
+    # Copy subagents if directory exists (removed in 3.0.0+)
+    if [ -d "agents" ] && [ "$(ls -A agents 2>/dev/null)" ]; then
+        cp agents/* "$CLAUDE_DIR/agents/" 2>/dev/null || warn "No agents to copy"
+    fi
 
     # Copy skills if directory exists
     if [ -d "skills" ]; then
