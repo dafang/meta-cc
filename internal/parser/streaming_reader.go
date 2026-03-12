@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"io"
 )
 
 // FilterStrategy controls how ReadLineFiltered handles image content.
@@ -113,4 +114,27 @@ func replaceAllDataFields(line []byte) []byte {
 	}
 
 	return buf.Bytes()
+}
+
+// ReadAllFiltered reads all lines from r using ReadLineFiltered and returns
+// the raw JSON bytes of non-empty lines. It is a convenience wrapper used
+// by the stage2 executors.
+func ReadAllFiltered(r *bufio.Reader, strategy FilterStrategy) ([]json.RawMessage, error) {
+	var results []json.RawMessage
+	for {
+		line, _, err := ReadLineFiltered(r, strategy)
+		trimmed := bytes.TrimRight(line, "\r\n")
+		if len(bytes.TrimSpace(trimmed)) > 0 {
+			cp := make([]byte, len(trimmed))
+			copy(cp, trimmed)
+			results = append(results, json.RawMessage(cp))
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return results, nil
 }

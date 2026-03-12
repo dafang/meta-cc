@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/itchyny/gojq"
+
+	"github.com/yaleh/meta-cc/internal/parser"
 )
 
 // Stage2Query represents a Stage 2 query request
@@ -174,7 +176,10 @@ func streamFilesWithJQ(files []string, jqExpr string, limit int) ([]interface{},
 	return results, metadata, nil
 }
 
-// readJSONLFile reads a JSONL file and returns all records as a slice
+// readJSONLFile reads a JSONL file and returns all records as a slice.
+// It uses parser.ReadLineFiltered so that oversized lines (e.g. those
+// containing large base64 images) are handled transparently instead of
+// causing an error.
 func readJSONLFile(filepath string) ([]interface{}, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -182,32 +187,25 @@ func readJSONLFile(filepath string) ([]interface{}, error) {
 	}
 	defer file.Close()
 
-	var records []interface{}
-	scanner := bufio.NewScanner(file)
-
-	// Increase buffer size to handle large lines (default is 64KB)
-	const maxLineSize = 10 * 1024 * 1024 // 10MB
-	buf := make([]byte, maxLineSize)
-	scanner.Buffer(buf, maxLineSize)
+	r := bufio.NewReader(file)
+	rawMessages, err := parser.ReadAllFiltered(r, parser.StrategyDefault)
+	if err != nil {
+		return nil, fmt.Errorf("error reading file: %w", err)
+	}
 
 	lineNum := 0
-	for scanner.Scan() {
+	records := make([]interface{}, 0, len(rawMessages))
+	for _, raw := range rawMessages {
 		lineNum++
-		line := strings.TrimSpace(scanner.Text())
+		line := strings.TrimSpace(string(raw))
 		if line == "" {
 			continue
 		}
-
 		var record interface{}
 		if err := json.Unmarshal([]byte(line), &record); err != nil {
 			return nil, fmt.Errorf("invalid JSON at line %d: %w", lineNum, err)
 		}
-
 		records = append(records, record)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading file: %w", err)
 	}
 
 	return records, nil

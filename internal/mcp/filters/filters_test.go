@@ -1,6 +1,7 @@
 package filters
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -524,6 +525,51 @@ func TestExpandContextTurns_SnakeCaseSessionID(t *testing.T) {
 
 	if len(result) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(result))
+	}
+}
+
+// TestLoadTurnsForSession_LargeImageLine_NoError verifies that loadTurnsForSession
+// does NOT return an error when a JSONL file contains a large image line (>10MB),
+// and that the matching turn is still returned with binary content replaced.
+func TestLoadTurnsForSession_LargeImageLine_NoError(t *testing.T) {
+	dir := t.TempDir()
+
+	sessionID := "session-large-image"
+	largeBase64 := strings.Repeat("A", 11*1024*1024) // 11 MB, exceeds old 10 MB Scanner limit
+
+	// Write JSONL using actual Claude Code image structure (triggers stripImageData)
+	imageLine := `{"uuid":"img-turn","sessionId":"` + sessionID + `","message":{"content":[{"type":"tool_result","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + largeBase64 + `"}}]}]}}`
+	normalLine := `{"uuid":"normal-turn","sessionId":"` + sessionID + `","content":"hello"}`
+
+	path := filepath.Join(dir, "session.jsonl")
+	if err := os.WriteFile(path, []byte(imageLine+"\n"+normalLine+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	turns, err := loadTurnsForSession(dir, sessionID)
+	if err != nil {
+		t.Fatalf("loadTurnsForSession returned unexpected error: %v", err)
+	}
+	if len(turns) != 2 {
+		t.Fatalf("expected 2 turns, got %d", len(turns))
+	}
+
+	// First turn: large base64 should be stripped (data replacement tested at stripImageData level)
+	imgJSON, _ := json.Marshal(turns[0])
+	if bytes.Contains(imgJSON, []byte(largeBase64)) {
+		t.Error("large base64 data should have been stripped from image turn")
+	}
+	if !bytes.Contains(imgJSON, []byte("binary-omitted")) {
+		t.Error("expected binary-omitted placeholder in image turn")
+	}
+
+	// Second turn: normal content preserved
+	normalObj, ok := turns[1].(map[string]interface{})
+	if !ok {
+		t.Fatalf("turns[1] is not a map")
+	}
+	if normalObj["content"] != "hello" {
+		t.Errorf("expected content=\"hello\", got %v", normalObj["content"])
 	}
 }
 

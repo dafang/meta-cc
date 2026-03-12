@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/yaleh/meta-cc/internal/parser"
 )
 
 const (
@@ -315,17 +317,19 @@ func loadTurnsForSession(baseDir, sessionID string) ([]interface{}, error) {
 			continue
 		}
 
-		scanner := bufio.NewScanner(f)
-		// Allow long lines (up to 10 MB per line)
-		buf := make([]byte, 0, 64*1024)
-		scanner.Buffer(buf, 10*1024*1024)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "" {
+		r := bufio.NewReader(f)
+		rawMessages, readErr := parser.ReadAllFiltered(r, parser.StrategyDefault)
+		f.Close()
+		if readErr != nil {
+			continue
+		}
+
+		for _, raw := range rawMessages {
+			if len(raw) == 0 {
 				continue
 			}
 			var obj map[string]interface{}
-			if err := json.Unmarshal([]byte(line), &obj); err != nil {
+			if err := json.Unmarshal(raw, &obj); err != nil {
 				continue
 			}
 			sid, _ := obj["sessionId"].(string)
@@ -333,7 +337,6 @@ func loadTurnsForSession(baseDir, sessionID string) ([]interface{}, error) {
 				turns = append(turns, obj)
 			}
 		}
-		f.Close()
 
 		if len(turns) > 0 {
 			return turns, nil

@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"sync"
@@ -12,7 +14,7 @@ import (
 
 	"github.com/itchyny/gojq"
 
-	"github.com/yaleh/meta-cc/internal/types"
+	"github.com/yaleh/meta-cc/internal/parser"
 )
 
 // QueryExecutor executes jq queries on JSONL session data with expression caching
@@ -182,16 +184,9 @@ func (e *QueryExecutor) processFileWithTimeRange(ctx context.Context, filepath s
 	defer file.Close()
 
 	var results []interface{}
-	scanner := bufio.NewScanner(file)
+	r := bufio.NewReader(file)
 
-	// Increase buffer size for large lines
-	buf := make([]byte, types.MaxScannerLineBytes)
-	scanner.Buffer(buf, types.MaxScannerLineBytes)
-
-	lineNum := 0
-	for scanner.Scan() {
-		lineNum++
-
+	for {
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
@@ -199,15 +194,28 @@ func (e *QueryExecutor) processFileWithTimeRange(ctx context.Context, filepath s
 		default:
 		}
 
-		line := scanner.Text()
-		if line == "" {
+		rawLine, _, readErr := parser.ReadLineFiltered(r, parser.StrategyDefault)
+		trimmed := bytes.TrimSpace(rawLine)
+		if len(trimmed) == 0 {
+			if readErr == io.EOF {
+				break
+			}
+			if readErr != nil {
+				return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
+			}
 			continue
 		}
 
 		// Parse JSON line to map for timestamp inspection
 		var entry map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+		if err := json.Unmarshal(trimmed, &entry); err != nil {
 			// Skip invalid JSON lines (don't fail entire file)
+			if readErr == io.EOF {
+				break
+			}
+			if readErr != nil {
+				return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
+			}
 			continue
 		}
 
@@ -216,9 +224,21 @@ func (e *QueryExecutor) processFileWithTimeRange(ctx context.Context, filepath s
 			if ts, ok := entry["timestamp"].(string); ok {
 				if t, err := time.Parse(time.RFC3339, ts); err == nil {
 					if tr.Since != nil && t.Before(*tr.Since) {
+						if readErr == io.EOF {
+							break
+						}
+						if readErr != nil {
+							return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
+						}
 						continue
 					}
 					if tr.Until != nil && !t.Before(*tr.Until) {
+						if readErr == io.EOF {
+							break
+						}
+						if readErr != nil {
+							return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
+						}
 						continue
 					}
 				}
@@ -244,10 +264,13 @@ func (e *QueryExecutor) processFileWithTimeRange(ctx context.Context, filepath s
 
 			results = append(results, value)
 		}
-	}
 
-	if err := scanner.Err(); err != nil {
-		return results, fmt.Errorf("error reading file %s: %w", filepath, err)
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
+		}
 	}
 
 	return results, nil
@@ -262,16 +285,9 @@ func (e *QueryExecutor) processFile(ctx context.Context, filepath string, code *
 	defer file.Close()
 
 	var results []interface{}
-	scanner := bufio.NewScanner(file)
+	r := bufio.NewReader(file)
 
-	// Increase buffer size for large lines
-	buf := make([]byte, types.MaxScannerLineBytes)
-	scanner.Buffer(buf, types.MaxScannerLineBytes)
-
-	lineNum := 0
-	for scanner.Scan() {
-		lineNum++
-
+	for {
 		// Check context cancellation
 		select {
 		case <-ctx.Done():
@@ -279,15 +295,28 @@ func (e *QueryExecutor) processFile(ctx context.Context, filepath string, code *
 		default:
 		}
 
-		line := scanner.Text()
-		if line == "" {
+		rawLine, _, readErr := parser.ReadLineFiltered(r, parser.StrategyDefault)
+		trimmed := bytes.TrimSpace(rawLine)
+		if len(trimmed) == 0 {
+			if readErr == io.EOF {
+				break
+			}
+			if readErr != nil {
+				return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
+			}
 			continue
 		}
 
 		// Parse JSON line
 		var entry interface{}
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+		if err := json.Unmarshal(trimmed, &entry); err != nil {
 			// Skip invalid JSON lines (don't fail entire file)
+			if readErr == io.EOF {
+				break
+			}
+			if readErr != nil {
+				return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
+			}
 			continue
 		}
 
@@ -308,10 +337,13 @@ func (e *QueryExecutor) processFile(ctx context.Context, filepath string, code *
 
 			results = append(results, value)
 		}
-	}
 
-	if err := scanner.Err(); err != nil {
-		return results, fmt.Errorf("error reading file %s: %w", filepath, err)
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
+		}
 	}
 
 	return results, nil

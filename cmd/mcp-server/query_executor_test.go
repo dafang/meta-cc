@@ -585,6 +585,80 @@ func TestStreamFilesNonexistentFile(t *testing.T) {
 	}
 }
 
+// TestProcessFile_LargeImageLine_NoError verifies that processFile handles a
+// JSONL file containing a line with a ~5 MB base64 image without returning an
+// error. After the migration to ReadLineFiltered the large base64 payload is
+// transparently truncated so the entry is still valid JSON and parsed normally.
+func TestProcessFile_LargeImageLine_NoError(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "image-line.jsonl")
+
+	// Build a ~5 MB base64 payload embedded in a JSON line.
+	largePayload := make([]byte, 5_000_000)
+	for i := range largePayload {
+		largePayload[i] = 'A'
+	}
+	// Construct a line that looks like a tool-result with an inline image.
+	// Use a JSON object that is valid before the truncation happens.
+	line := `{"type":"tool_result","id":"tr1","content":"data:image/png;base64,` +
+		string(largePayload) + `"}`
+	if err := os.WriteFile(file, []byte(line+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	executor := NewQueryExecutor(tmpDir)
+	ctx := context.Background()
+
+	code, err := executor.compileExpression(".")
+	if err != nil {
+		t.Fatalf("failed to compile expression: %v", err)
+	}
+
+	results, err := executor.processFile(ctx, file, code)
+	if err != nil {
+		t.Fatalf("processFile returned error for large image line: %v", err)
+	}
+	// The entry is included (possibly with truncated image data).
+	if len(results) != 1 {
+		t.Errorf("expected 1 result, got %d", len(results))
+	}
+}
+
+// TestProcessFileWithTimeRange_LargeImageLine_NoError verifies that
+// processFileWithTimeRange handles a ~5 MB image line without error.
+func TestProcessFileWithTimeRange_LargeImageLine_NoError(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "image-line-tr.jsonl")
+
+	largePayload := make([]byte, 5_000_000)
+	for i := range largePayload {
+		largePayload[i] = 'B'
+	}
+	line := `{"type":"tool_result","id":"tr2","timestamp":"2025-01-01T00:00:00Z","content":"data:image/png;base64,` +
+		string(largePayload) + `"}`
+	if err := os.WriteFile(file, []byte(line+"\n"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	executor := NewQueryExecutor(tmpDir)
+	ctx := context.Background()
+
+	code, err := executor.compileExpression(".")
+	if err != nil {
+		t.Fatalf("failed to compile expression: %v", err)
+	}
+
+	// No time range constraints — all entries should be included.
+	tr := parsedTimeRange{}
+	results, err := executor.processFileWithTimeRange(ctx, file, code, tr)
+	if err != nil {
+		t.Fatalf("processFileWithTimeRange returned error for large image line: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 result, got %d", len(results))
+	}
+}
+
 // stringContains is a helper to check if a string contains a substring
 func stringContains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
