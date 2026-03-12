@@ -77,9 +77,9 @@ func TestCompileExpression(t *testing.T) {
 // TestExpressionCache tests LRU cache behavior
 func TestExpressionCache(t *testing.T) {
 	cache := &ExpressionCache{
-		entries: make(map[string]interface{}),
-		keys:    []string{},
-		maxSize: 3,
+		Entries: make(map[string]interface{}),
+		Keys:    []string{},
+		MaxSize: 3,
 	}
 
 	// Test cache miss
@@ -97,14 +97,14 @@ func TestExpressionCache(t *testing.T) {
 	cache.Put("expr2", "code2")
 	cache.Put("expr3", "code3")
 
-	if len(cache.entries) != 3 {
-		t.Errorf("expected cache size 3, got %d", len(cache.entries))
+	if len(cache.Entries) != 3 {
+		t.Errorf("expected cache size 3, got %d", len(cache.Entries))
 	}
 
 	// Test LRU eviction
 	cache.Put("expr4", "code4")
-	if len(cache.entries) != 3 {
-		t.Errorf("expected cache size 3 after eviction, got %d", len(cache.entries))
+	if len(cache.Entries) != 3 {
+		t.Errorf("expected cache size 3 after eviction, got %d", len(cache.Entries))
 	}
 
 	// First entry should be evicted
