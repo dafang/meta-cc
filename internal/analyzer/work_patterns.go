@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/query/turnindex"
 )
 
 // ToolCount represents tool usage count
@@ -77,7 +78,7 @@ func GetWorkPatterns(entries []parser.SessionEntry, toolCalls []parser.ToolCall)
 			continue
 		}
 
-		ts := parseTimestamp(tc.Timestamp)
+		ts := turnindex.ParseTimestamp(tc.Timestamp)
 		if prevFile != "" && filePath != prevFile {
 			gap := ts - prevTs
 			if gap < 0 {

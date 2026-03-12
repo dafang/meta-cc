@@ -8,6 +8,7 @@ import (
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
 	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/query/turnindex"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // BuildFileAccessQuery builds a file access history query
@@ -34,7 +35,7 @@ func BuildFileAccessQuery(entries []parser.SessionEntry, filePath string) (*File
 		}
 
 		// Determine action type
-		action := getActionType(tc.ToolName)
+		action := types.FileActionType(tc.ToolName)
 		if action == "" {
 			continue
 		}
@@ -115,22 +116,6 @@ func lastSlash(path string) string {
 		return ""
 	}
 	return path[:idx+1]
-}
-
-// getActionType maps tool name to action type
-func getActionType(toolName string) string {
-	switch toolName {
-	case "Read":
-		return "Read"
-	case "Edit":
-		return "Edit"
-	case "Write":
-		return "Write"
-	case "NotebookEdit":
-		return "Edit"
-	default:
-		return ""
-	}
 }
 
 // calculateTimeSpan calculates time span in minutes

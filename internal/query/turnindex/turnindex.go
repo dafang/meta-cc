@@ -28,14 +28,15 @@ func BuildTurnIndex(entries []parser.SessionEntry) map[string]int {
 func GetToolCallTimestamp(entries []parser.SessionEntry, uuid string) int64 {
 	for _, entry := range entries {
 		if entry.UUID == uuid {
-			return parseTimestamp(entry.Timestamp)
+			return ParseTimestamp(entry.Timestamp)
 		}
 	}
 	return 0
 }
 
-// parseTimestamp parses an RFC3339Nano timestamp string to Unix seconds.
-func parseTimestamp(ts string) int64 {
+// ParseTimestamp parses an RFC3339Nano timestamp string to Unix seconds.
+// Returns 0 if the timestamp cannot be parsed.
+func ParseTimestamp(ts string) int64 {
 	t, err := time.Parse(time.RFC3339Nano, ts)
 	if err != nil {
 		return 0

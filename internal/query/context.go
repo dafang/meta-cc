@@ -3,7 +3,6 @@ package query
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/yaleh/meta-cc/internal/analyzer"
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
@@ -121,7 +120,7 @@ func buildTurnPreview(entry parser.SessionEntry, turn int) TurnPreview {
 		Role:      "",
 		Preview:   "",
 		Tools:     []string{},
-		Timestamp: parseTimestamp(entry.Timestamp),
+		Timestamp: turnindex.ParseTimestamp(entry.Timestamp),
 	}
 
 	if entry.Message == nil {
@@ -170,21 +169,12 @@ func buildErrorDetail(tc parser.ToolCall, turn int, entries []parser.SessionEntr
 	// Find timestamp
 	for _, entry := range entries {
 		if entry.UUID == tc.UUID {
-			detail.Timestamp = parseTimestamp(entry.Timestamp)
+			detail.Timestamp = turnindex.ParseTimestamp(entry.Timestamp)
 			break
 		}
 	}
 
 	return detail
-}
-
-// parseTimestamp parses RFC3339Nano timestamp to Unix timestamp
-func parseTimestamp(ts string) int64 {
-	t, err := time.Parse(time.RFC3339Nano, ts)
-	if err != nil {
-		return 0
-	}
-	return t.Unix()
 }
 
 // truncateText truncates text to maxLen characters

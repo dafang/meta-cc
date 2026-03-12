@@ -12,6 +12,23 @@ type ToolCall struct {
 	Timestamp string                 `json:"timestamp"` // ISO 8601 timestamp
 }
 
+// FileActionType maps a tool name to a file action category ("Read", "Edit", or "Write").
+// Returns an empty string if the tool does not perform a file action.
+func FileActionType(toolName string) string {
+	switch toolName {
+	case "Read":
+		return "Read"
+	case "Edit":
+		return "Edit"
+	case "Write":
+		return "Write"
+	case "NotebookEdit":
+		return "Edit"
+	default:
+		return ""
+	}
+}
+
 // ExtractToolCalls extracts all tool calls from a SessionEntry slice.
 // It pairs each ToolUse with its corresponding ToolResult by tool_use_id.
 func ExtractToolCalls(entries []SessionEntry) []ToolCall {

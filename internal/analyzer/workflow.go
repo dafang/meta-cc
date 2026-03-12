@@ -3,9 +3,9 @@ package analyzer
 import (
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/query/turnindex"
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
@@ -59,7 +59,7 @@ type TurnContext struct {
 // DetectToolSequences detects repeated tool call sequences
 func DetectToolSequences(entries []parser.SessionEntry, minLength, minOccurrences int) SequenceAnalysis {
 	// Build turn index
-	turnIndex := buildTurnIndex(entries)
+	turnIndex := turnindex.BuildTurnIndex(entries)
 
 	// Extract tool calls with turn numbers
 	toolCalls := extractToolCallsWithTurns(entries, turnIndex)
@@ -91,7 +91,7 @@ func DetectFileChurn(entries []parser.SessionEntry, threshold int) FileChurnAnal
 		}
 
 		// Get action type
-		action := getActionType(tc.ToolName)
+		action := types.FileActionType(tc.ToolName)
 		if action == "" {
 			continue
 		}
@@ -163,7 +163,7 @@ func DetectFileChurn(entries []parser.SessionEntry, threshold int) FileChurnAnal
 // DetectIdlePeriods detects idle periods in the session
 func DetectIdlePeriods(entries []parser.SessionEntry, thresholdMin int) IdlePeriodAnalysis {
 	// Build turn index
-	turnIndex := buildTurnIndex(entries)
+	turnIndex := turnindex.BuildTurnIndex(entries)
 
 	// Extract all entries with timestamps (both user and assistant)
 	type entryWithTurn struct {
@@ -194,8 +194,8 @@ func DetectIdlePeriods(entries []parser.SessionEntry, thresholdMin int) IdlePeri
 		current := entriesWithTurns[i]
 		next := entriesWithTurns[i+1]
 
-		currentTs := parseTimestamp(current.entry.Timestamp)
-		nextTs := parseTimestamp(next.entry.Timestamp)
+		currentTs := turnindex.ParseTimestamp(current.entry.Timestamp)
+		nextTs := turnindex.ParseTimestamp(next.entry.Timestamp)
 
 		if currentTs == 0 || nextTs == 0 {
 			continue
@@ -243,18 +243,6 @@ type toolCallWithTurn struct {
 	uuid     string
 	filePath string
 	command  string
-}
-
-func buildTurnIndex(entries []parser.SessionEntry) map[string]int {
-	turnIndex := make(map[string]int)
-	turn := 1
-	for _, entry := range entries {
-		if entry.IsMessage() {
-			turnIndex[entry.UUID] = turn
-			turn++
-		}
-	}
-	return turnIndex
 }
 
 func extractToolCallsWithTurns(entries []parser.SessionEntry, turnIndex map[string]int) []toolCallWithTurn {
@@ -359,7 +347,7 @@ func calculateSequenceTimeSpan(occurrences []types.SequenceOccurrence, entries [
 	for _, occ := range occurrences {
 		// Find timestamps for turns in this occurrence
 		for _, entry := range entries {
-			ts := parseTimestamp(entry.Timestamp)
+			ts := turnindex.ParseTimestamp(entry.Timestamp)
 			if ts == 0 {
 				continue
 			}
@@ -416,36 +404,13 @@ func extractCommandFromToolCall(tc parser.ToolCall) string {
 	return ""
 }
 
-func getActionType(toolName string) string {
-	switch toolName {
-	case "Read":
-		return "Read"
-	case "Edit":
-		return "Edit"
-	case "Write":
-		return "Write"
-	case "NotebookEdit":
-		return "Edit"
-	default:
-		return ""
-	}
-}
-
 func getToolCallTimestamp(entries []parser.SessionEntry, uuid string) int64 {
 	for _, entry := range entries {
 		if entry.UUID == uuid {
-			return parseTimestamp(entry.Timestamp)
+			return turnindex.ParseTimestamp(entry.Timestamp)
 		}
 	}
 	return 0
-}
-
-func parseTimestamp(ts string) int64 {
-	t, err := time.Parse(time.RFC3339, ts)
-	if err != nil {
-		return 0
-	}
-	return t.Unix()
 }
 
 func extractTurnContext(entry parser.SessionEntry, turn int) *TurnContext {

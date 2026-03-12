@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 func TestBuildFileAccessQuery(t *testing.T) {
@@ -278,9 +279,9 @@ func TestGetActionType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.toolName, func(t *testing.T) {
-			got := getActionType(tt.toolName)
+			got := types.FileActionType(tt.toolName)
 			if got != tt.want {
-				t.Errorf("getActionType(%q) = %q, want %q", tt.toolName, got, tt.want)
+				t.Errorf("types.FileActionType(%q) = %q, want %q", tt.toolName, got, tt.want)
 			}
 		})
 	}
