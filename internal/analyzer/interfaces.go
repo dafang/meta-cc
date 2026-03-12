@@ -1,35 +1,35 @@
 package analyzer
 
-import "github.com/yaleh/meta-cc/internal/parser"
+import "github.com/yaleh/meta-cc/internal/types"
 
 // BugAnalyzer analyzes session entries for bugs.
 type BugAnalyzer interface {
-	AnalyzeBugs(entries []parser.SessionEntry, toolCalls []parser.ToolCall, limit int) (*BugAnalysisResult, error)
+	AnalyzeBugs(entries []types.SessionEntry, toolCalls []types.ToolCall, limit int) (*BugAnalysisResult, error)
 }
 
 // ErrorAnalyzer analyzes session entries for errors.
 type ErrorAnalyzer interface {
-	AnalyzeErrors(entries []parser.SessionEntry, toolCalls []parser.ToolCall, limit int) (*ErrorAnalysisResult, error)
+	AnalyzeErrors(entries []types.SessionEntry, toolCalls []types.ToolCall, limit int) (*ErrorAnalysisResult, error)
 }
 
 // QualityScanner performs quality scan on session entries.
 type QualityScanner interface {
-	QualityScan(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*QualityScanResult, error)
+	QualityScan(entries []types.SessionEntry, toolCalls []types.ToolCall) (*QualityScanResult, error)
 }
 
 // WorkPatternsAnalyzer analyzes work patterns from session entries.
 type WorkPatternsAnalyzer interface {
-	GetWorkPatterns(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*WorkPatternsResult, error)
+	GetWorkPatterns(entries []types.SessionEntry, toolCalls []types.ToolCall) (*WorkPatternsResult, error)
 }
 
 // TimelineAnalyzer builds a timeline from session entries.
 type TimelineAnalyzer interface {
-	GetTimeline(entries []parser.SessionEntry, limit int) (*TimelineResult, error)
+	GetTimeline(entries []types.SessionEntry, limit int) (*TimelineResult, error)
 }
 
 // TechDebtAnalyzer analyzes technical debt in session entries.
 type TechDebtAnalyzer interface {
-	GetTechDebt(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*TechDebtResult, error)
+	GetTechDebt(entries []types.SessionEntry, toolCalls []types.ToolCall) (*TechDebtResult, error)
 }
 
 // DefaultAnalyzer implements all analyzer interfaces by delegating to package-level functions.
@@ -44,31 +44,31 @@ var _ TimelineAnalyzer = (*DefaultAnalyzer)(nil)
 var _ TechDebtAnalyzer = (*DefaultAnalyzer)(nil)
 
 // AnalyzeBugs delegates to the package-level AnalyzeBugs function.
-func (d *DefaultAnalyzer) AnalyzeBugs(entries []parser.SessionEntry, toolCalls []parser.ToolCall, limit int) (*BugAnalysisResult, error) {
+func (d *DefaultAnalyzer) AnalyzeBugs(entries []types.SessionEntry, toolCalls []types.ToolCall, limit int) (*BugAnalysisResult, error) {
 	return AnalyzeBugs(entries, toolCalls, limit)
 }
 
 // AnalyzeErrors delegates to the package-level AnalyzeErrors function.
-func (d *DefaultAnalyzer) AnalyzeErrors(entries []parser.SessionEntry, toolCalls []parser.ToolCall, limit int) (*ErrorAnalysisResult, error) {
+func (d *DefaultAnalyzer) AnalyzeErrors(entries []types.SessionEntry, toolCalls []types.ToolCall, limit int) (*ErrorAnalysisResult, error) {
 	return AnalyzeErrors(entries, toolCalls, limit)
 }
 
 // QualityScan delegates to the package-level QualityScan function.
-func (d *DefaultAnalyzer) QualityScan(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*QualityScanResult, error) {
+func (d *DefaultAnalyzer) QualityScan(entries []types.SessionEntry, toolCalls []types.ToolCall) (*QualityScanResult, error) {
 	return QualityScan(entries, toolCalls)
 }
 
 // GetWorkPatterns delegates to the package-level GetWorkPatterns function.
-func (d *DefaultAnalyzer) GetWorkPatterns(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*WorkPatternsResult, error) {
+func (d *DefaultAnalyzer) GetWorkPatterns(entries []types.SessionEntry, toolCalls []types.ToolCall) (*WorkPatternsResult, error) {
 	return GetWorkPatterns(entries, toolCalls)
 }
 
 // GetTimeline delegates to the package-level GetTimeline function.
-func (d *DefaultAnalyzer) GetTimeline(entries []parser.SessionEntry, limit int) (*TimelineResult, error) {
+func (d *DefaultAnalyzer) GetTimeline(entries []types.SessionEntry, limit int) (*TimelineResult, error) {
 	return GetTimeline(entries, limit)
 }
 
 // GetTechDebt delegates to the package-level GetTechDebt function.
-func (d *DefaultAnalyzer) GetTechDebt(entries []parser.SessionEntry, toolCalls []parser.ToolCall) (*TechDebtResult, error) {
+func (d *DefaultAnalyzer) GetTechDebt(entries []types.SessionEntry, toolCalls []types.ToolCall) (*TechDebtResult, error) {
 	return GetTechDebt(entries, toolCalls)
 }
