@@ -16,7 +16,6 @@ import (
 	obspkg "github.com/yaleh/meta-cc/internal/mcp/observability"
 	pipelinepkg "github.com/yaleh/meta-cc/internal/mcp/pipeline"
 	mcquery "github.com/yaleh/meta-cc/internal/mcp/query"
-	responsepkg "github.com/yaleh/meta-cc/internal/mcp/response"
 	schemapkg "github.com/yaleh/meta-cc/internal/mcp/schema"
 	toolspkg "github.com/yaleh/meta-cc/internal/mcp/tools"
 	internalquery "github.com/yaleh/meta-cc/internal/query"
@@ -94,144 +93,18 @@ func RecordToolFailure(toolName, scope string, start time.Time, errorType string
 
 // ExecuteSpecialTool handles special tools that don't go through the standard pipeline.
 func (e *ToolExecutor) ExecuteSpecialTool(cfg *config.Config, toolName, scope string, args map[string]interface{}, start time.Time) (string, bool, error) {
-	switch toolName {
-	case "cleanup_temp_files":
-		output, err := responsepkg.ExecuteCleanupTool(args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return output, true, nil
-
-	case "get_session_directory":
-		result, err := mcquery.HandleGetSessionDirectory(context.Background(), args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		jsonData, err := json.Marshal(result)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, fmt.Errorf("failed to marshal result: %w", err)
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return string(jsonData), true, nil
-
-	case "inspect_session_files":
-		result, err := mcquery.HandleInspectSessionFiles(context.Background(), args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		jsonData, err := json.Marshal(result)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, fmt.Errorf("failed to marshal result: %w", err)
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return string(jsonData), true, nil
-
-	case "execute_stage2_query":
-		result, err := mcquery.HandleExecuteStage2Query(context.Background(), args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		jsonData, err := json.Marshal(result)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, fmt.Errorf("failed to marshal result: %w", err)
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return string(jsonData), true, nil
-
-	case "analyze_bugs":
-		output, err := e.AnalysisSvc.AnalyzeBugs(args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return output, true, nil
-
-	case "analyze_errors":
-		output, err := e.AnalysisSvc.AnalyzeErrors(args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return output, true, nil
-
-	case "quality_scan":
-		output, err := e.AnalysisSvc.QualityScan(args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return output, true, nil
-
-	case "get_work_patterns":
-		output, err := e.AnalysisSvc.GetWorkPatterns(args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return output, true, nil
-
-	case "get_session_metadata":
-		result, err := mcquery.HandleGetSessionMetadata(context.Background(), args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		jsonData, err := json.Marshal(result)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, fmt.Errorf("failed to marshal result: %w", err)
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return string(jsonData), true, nil
-
-	case "get_timeline":
-		output, err := e.AnalysisSvc.GetTimeline(args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return output, true, nil
-
-	case "get_tech_debt":
-		output, err := e.AnalysisSvc.GetTechDebt(args)
-		if err != nil {
-			errorType := obspkg.ClassifyError(err)
-			RecordToolFailure(toolName, scope, start, errorType)
-			return "", true, err
-		}
-		RecordToolSuccess(toolName, scope, start)
-		return output, true, nil
-
-	default:
+	handler, ok := specialToolRegistry[toolName]
+	if !ok {
 		return "", false, nil
 	}
+	output, err := handler(context.Background(), e, args)
+	if err != nil {
+		errorType := obspkg.ClassifyError(err)
+		RecordToolFailure(toolName, scope, start, errorType)
+		return "", true, err
+	}
+	RecordToolSuccess(toolName, scope, start)
+	return output, true, nil
 }
 
 // ExecuteTool executes a meta-cc command and applies jq filtering.
