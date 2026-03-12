@@ -19,7 +19,7 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 # Default target when running 'make' without arguments
 .DEFAULT_GOAL := all
 
-.PHONY: all build stage test test-all test-coverage clean install install-local install-user uninstall-local uninstall-user uninstall-legacy cross-compile bundle-release lint lint-errors fmt vet help sync-plugin-files dev check-workspace check-temp-files check-fixtures check-deps check-imports check-scripts check-debug check-go-quality pre-commit ci metrics-mcp check-test-quality check-formatting fix-formatting check-plugin-sync check-mod-tidy test-bats check-release-ready test-all-local pre-commit-full check-essential check-code-quality check-build-quality check-comprehensive check-commit-ready check-push-ready
+.PHONY: all build stage test test-all test-coverage clean install install-local install-user uninstall-local uninstall-user uninstall-legacy cross-compile bundle-release lint lint-errors fmt vet help sync-plugin-files dev check-workspace check-temp-files check-fixtures check-deps check-imports check-scripts check-debug check-go-quality pre-commit ci metrics-mcp check-test-quality check-formatting fix-formatting check-plugin-sync check-mod-tidy test-bats check-release-ready test-all-local pre-commit-full check-essential check-code-quality check-build-quality check-comprehensive check-commit-ready check-push-ready check-no-scanner
 
 # ==============================================================================
 # Build Quality Gates (BAIME Experiment - Iteration 1)
@@ -524,7 +524,18 @@ deps:
 	$(GOMOD) download
 	$(GOMOD) tidy
 
-lint: fmt vet lint-errors lint-error-handling lint-markdown
+check-no-scanner:
+	@echo "Checking for raw bufio.NewScanner on JSONL paths..."
+	@if grep -rn "bufio\.NewScanner" internal/ cmd/mcp-server/ --include="*.go" \
+		| grep -v "main\.go" \
+		| grep -v "_test\.go" \
+		| grep -v "^Binary"; then \
+		echo "ERROR: Found raw bufio.NewScanner usage. Use parser.ReadLineFiltered instead."; \
+		exit 1; \
+	fi
+	@echo "OK: No raw bufio.NewScanner found."
+
+lint: fmt vet lint-errors lint-error-handling lint-markdown check-no-scanner
 	@echo "Running static analysis..."
 	@if command -v golangci-lint >/dev/null 2>&1; then \
 		golangci-lint run ./... || echo "⚠️ golangci-lint issues found (non-blocking)"; \

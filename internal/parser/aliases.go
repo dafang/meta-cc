@@ -13,8 +13,8 @@ type ToolUse = types.ToolUse
 type ToolResult = types.ToolResult
 type ToolCall = types.ToolCall
 
-// MaxScannerLineBytes is an alias for the constant in internal/types.
-const MaxScannerLineBytes = types.MaxScannerLineBytes
+// LargeLineWarnBytes is an alias for the constant in internal/types.
+const LargeLineWarnBytes = types.LargeLineWarnBytes
 
 // ExtractToolCalls is an alias for the function in internal/types.
 var ExtractToolCalls = types.ExtractToolCalls

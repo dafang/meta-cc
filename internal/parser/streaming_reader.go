@@ -5,6 +5,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
+
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 // FilterStrategy controls how ReadLineFiltered handles image content.
@@ -28,6 +31,11 @@ func ReadLineFiltered(r *bufio.Reader, strategy FilterStrategy) ([]byte, bool, e
 	// We still want to process any data returned before propagating EOF.
 	if len(line) == 0 && err != nil {
 		return nil, false, err
+	}
+
+	// Observational monitoring: log large lines at debug level (not an error).
+	if len(line) > types.LargeLineWarnBytes {
+		slog.Debug("large line detected", "bytes", len(line))
 	}
 
 	switch strategy {

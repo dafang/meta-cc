@@ -265,3 +265,25 @@ func TestReadLineFiltered_NormalLineAfterLargeLine(t *testing.T) {
 		t.Errorf("second line should contain UUID %s, got: %.200s", normalUUID, secondGot)
 	}
 }
+
+// TestReadLineFiltered_LargeLineMonitoring verifies that lines exceeding
+// LargeLineWarnBytes do NOT return an error — monitoring is purely observational.
+func TestReadLineFiltered_LargeLineMonitoring(t *testing.T) {
+	// Build a line larger than LargeLineWarnBytes (4MB) by padding base64 data.
+	rawData := bytes.Repeat([]byte{0xAB}, 3*1024*1024) // 3MB binary → ~4MB base64
+	b64data := base64.StdEncoding.EncodeToString(rawData)
+	largeLine := buildImageJSONLLine(b64data)
+
+	r := bufio.NewReaderSize(strings.NewReader(largeLine+"\n"), 64*1024)
+
+	got, skipped, err := ReadLineFiltered(r, StrategyDefault)
+	if err != nil && err != io.EOF {
+		t.Fatalf("large line must not cause an error, got: %v", err)
+	}
+	if skipped {
+		t.Error("large line should not be skipped with StrategyDefault")
+	}
+	if len(got) == 0 {
+		t.Error("large line should produce non-empty output")
+	}
+}

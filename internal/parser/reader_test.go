@@ -261,7 +261,7 @@ func TestParseEntriesFromContent_FilterNonMessageTypes(t *testing.T) {
 }
 
 func TestParseEntries_LargeImageLine_NotSkipped(t *testing.T) {
-	// Build a ~4MB+ base64 image line (exceeds MaxScannerLineBytes=4MB) followed by a normal entry
+	// Build a ~4MB+ base64 image line (exceeds LargeLineWarnBytes=4MB) followed by a normal entry
 	rawData := bytes.Repeat([]byte{0xDE, 0xAD, 0xBE, 0xEF}, 768*1024) // 3MB binary → ~4MB base64
 	b64data := base64.StdEncoding.EncodeToString(rawData)
 
