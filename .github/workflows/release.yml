@@ -71,9 +71,9 @@ jobs:
             # Copy Claude Code plugin structure
             cp -r .claude-plugin/* $PKG_DIR/.claude-plugin/
             cp -r dist/commands/* $PKG_DIR/commands/
-            cp -r dist/agents/* $PKG_DIR/agents/
-            cp -r dist/skills/* $PKG_DIR/skills/
-            cp -r lib/* $PKG_DIR/lib/
+            [ -d dist/agents ] && [ "$(ls -A dist/agents)" ] && cp -r dist/agents/* $PKG_DIR/agents/ || true
+            [ -d dist/skills ] && [ "$(ls -A dist/skills)" ] && cp -r dist/skills/* $PKG_DIR/skills/ || true
+            [ -d lib ] && [ "$(ls -A lib)" ] && cp -r lib/* $PKG_DIR/lib/ || true
 
             # Copy plugin.json from plugin-src location into archive .claude-plugin/
             cp plugin-src/.claude-plugin/plugin.json $PKG_DIR/.claude-plugin/

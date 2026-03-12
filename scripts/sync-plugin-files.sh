@@ -55,7 +55,7 @@ if [ "$VERIFY_MODE" = true ]; then
 else
     # SYNC MODE: Perform the sync
     # Create dist directories (clean commands to remove stale files)
-    mkdir -p "$DIST_DIR/commands"
+    mkdir -p "$DIST_DIR/commands" "$DIST_DIR/agents" "$DIST_DIR/skills"
     rm -f "$DIST_DIR/commands/"*.md 2>/dev/null || true
 
     # Copy published commands (source: plugin-src/commands/)
