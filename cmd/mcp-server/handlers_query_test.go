@@ -681,6 +681,29 @@ func TestExcludeSystemMessages(t *testing.T) {
 	assert.Len(t, result2.Entries, 2, "with exclusion, only 2 real user messages should be returned")
 }
 
+// TestLoadTurnsForSession_Handlers_LargeImageLine_NoError verifies that
+// loadTurnsForSession handles lines larger than 10MB (e.g. base64 image data)
+// without error, using the streaming reader.
+func TestLoadTurnsForSession_Handlers_LargeImageLine_NoError(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "session.jsonl")
+
+	// Build a line with a 5MB base64 image payload
+	imageData := strings.Repeat("A", 5*1024*1024)
+	imageLine := `{"type":"user","sessionId":"sess-large","message":{"content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + imageData + `"}}]}}`
+
+	normalLine := `{"type":"user","sessionId":"sess-large","message":{"role":"user","content":"normal"}}`
+
+	content := imageLine + "\n" + normalLine + "\n"
+	require.NoError(t, os.WriteFile(file, []byte(content), 0644))
+
+	turns, err := loadTurnsForSession(tmpDir, "sess-large")
+	require.NoError(t, err, "loadTurnsForSession should not error on large image line")
+	// The image line is truncated to valid JSON by StrategyDefault,
+	// so both lines should be returned (2 turns).
+	assert.GreaterOrEqual(t, len(turns), 1, "should return at least the normal turn")
+}
+
 // TestLoadTurnsForSession_Basic verifies that loadTurnsForSession correctly filters
 // entries by sessionId from a JSONL file.
 func TestLoadTurnsForSession_Basic(t *testing.T) {

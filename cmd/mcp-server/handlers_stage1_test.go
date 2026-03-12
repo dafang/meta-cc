@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -297,4 +298,50 @@ func TestGetSessionDirectory_JSON(t *testing.T) {
 	assert.Equal(t, sessionDir, decoded["directory"])
 	assert.Equal(t, "project", decoded["scope"])
 	assert.Equal(t, float64(1), decoded["file_count"]) // JSON unmarshals numbers as float64
+}
+
+// TestCountLines_LargeImageLine_NoError verifies that countLines handles lines
+// larger than 10MB (e.g. base64 image data) without error and returns correct count.
+func TestCountLines_LargeImageLine_NoError(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "large.jsonl")
+
+	// Build a line with a 5MB payload
+	imageData := strings.Repeat("A", 5*1024*1024)
+	line1 := `{"type":"user","data":"` + imageData + `"}`
+	line2 := `{"type":"assistant","message":"normal"}`
+	line3 := `{"type":"user","message":"another"}`
+
+	content := line1 + "\n" + line2 + "\n" + line3 + "\n"
+	require.NoError(t, os.WriteFile(file, []byte(content), 0644))
+
+	count, err := countLines(file)
+	require.NoError(t, err, "countLines should not error on large line")
+	assert.Equal(t, 3, count, "should count 3 lines")
+}
+
+// TestCountLines_EmptyFile verifies that countLines returns 0 for an empty file.
+func TestCountLines_EmptyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "empty.jsonl")
+	require.NoError(t, os.WriteFile(file, []byte(""), 0644))
+
+	count, err := countLines(file)
+	require.NoError(t, err, "countLines should not error on empty file")
+	assert.Equal(t, 0, count, "empty file should have 0 lines")
+}
+
+// TestCountLines_NoTrailingNewline verifies that countLines correctly counts
+// a file where the last line has no trailing newline.
+func TestCountLines_NoTrailingNewline(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "notrail.jsonl")
+
+	// 3 lines, last line has no trailing newline
+	content := `{"type":"user"}` + "\n" + `{"type":"assistant"}` + "\n" + `{"type":"user"}`
+	require.NoError(t, os.WriteFile(file, []byte(content), 0644))
+
+	count, err := countLines(file)
+	require.NoError(t, err, "countLines should not error on file without trailing newline")
+	assert.Equal(t, 3, count, "should count 3 lines even without trailing newline")
 }

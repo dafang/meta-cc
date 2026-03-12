@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
+	"github.com/yaleh/meta-cc/internal/parser"
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
@@ -84,49 +86,57 @@ func inspectFile(path string, includeSamples bool) (*FileMetadata, error) {
 	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	// Increase buffer size to handle long lines (session files can have very long tool_use blocks)
-	maxCapacity := 10 * 1024 * 1024 // 10MB max line length
-	buf := make([]byte, maxCapacity)
-	scanner.Buffer(buf, maxCapacity)
-
+	r := bufio.NewReader(file)
 	lines := make([]string, 0)
 	var minTime, maxTime time.Time
 
-	// Process each line
-	for scanner.Scan() {
-		line := scanner.Text()
-		if line == "" {
+	// Process each line using streaming reader (handles lines of any size)
+	for {
+		lineBytes, skipped, readErr := parser.ReadLineFiltered(r, parser.StrategyDefault)
+		if skipped {
+			if readErr == io.EOF {
+				break
+			}
 			continue
 		}
+		if len(lineBytes) > 0 {
+			// Trim trailing newline
+			line := string(lineBytes)
+			if len(line) > 0 && line[len(line)-1] == '\n' {
+				line = line[:len(line)-1]
+			}
+			if line != "" {
+				metadata.LineCount++
+				lines = append(lines, line)
 
-		metadata.LineCount++
-		lines = append(lines, line)
+				// Parse record type (only count valid JSON with type field)
+				recordType := parseRecordType(line)
+				if recordType != "unknown" {
+					metadata.RecordTypes[recordType]++
+				}
 
-		// Parse record type (only count valid JSON with type field)
-		recordType := parseRecordType(line)
-		if recordType != "unknown" {
-			metadata.RecordTypes[recordType]++
-		}
-
-		// Extract timestamp for time range
-		var record map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &record); err == nil {
-			if ts, ok := record["timestamp"].(string); ok {
-				if t, err := time.Parse(time.RFC3339, ts); err == nil {
-					if minTime.IsZero() || t.Before(minTime) {
-						minTime = t
-					}
-					if maxTime.IsZero() || t.After(maxTime) {
-						maxTime = t
+				// Extract timestamp for time range
+				var record map[string]interface{}
+				if err := json.Unmarshal([]byte(line), &record); err == nil {
+					if ts, ok := record["timestamp"].(string); ok {
+						if t, err := time.Parse(time.RFC3339, ts); err == nil {
+							if minTime.IsZero() || t.Before(minTime) {
+								minTime = t
+							}
+							if maxTime.IsZero() || t.After(maxTime) {
+								maxTime = t
+							}
+						}
 					}
 				}
 			}
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading file: %w", err)
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return nil, fmt.Errorf("error reading file: %w", readErr)
+		}
 	}
 
 	// Set time range

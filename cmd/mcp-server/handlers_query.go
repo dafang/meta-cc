@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
 
 	"github.com/yaleh/meta-cc/internal/locator"
+	"github.com/yaleh/meta-cc/internal/parser"
 )
 
 // parsedTimeRange specifies optional lower and upper bounds for timestamp filtering.
@@ -156,22 +158,36 @@ func loadTurnsForSession(baseDir, sessionID string) ([]interface{}, error) {
 			continue
 		}
 
-		scanner := bufio.NewScanner(f)
-		// Allow long lines (up to 10 MB per line)
-		buf := make([]byte, 0, 64*1024)
-		scanner.Buffer(buf, 10*1024*1024)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "" {
+		r := bufio.NewReader(f)
+		for {
+			line, skipped, readErr := parser.ReadLineFiltered(r, parser.StrategyDefault)
+			if skipped {
+				if readErr == io.EOF {
+					break
+				}
 				continue
 			}
-			var obj map[string]interface{}
-			if err := json.Unmarshal([]byte(line), &obj); err != nil {
-				continue
+			if len(line) > 0 {
+				lineStr := string(line)
+				// Trim trailing newline
+				if len(lineStr) > 0 && lineStr[len(lineStr)-1] == '\n' {
+					lineStr = lineStr[:len(lineStr)-1]
+				}
+				if lineStr != "" {
+					var obj map[string]interface{}
+					if err := json.Unmarshal([]byte(lineStr), &obj); err == nil {
+						sid, _ := obj["sessionId"].(string)
+						if sid == sessionID {
+							turns = append(turns, obj)
+						}
+					}
+				}
 			}
-			sid, _ := obj["sessionId"].(string)
-			if sid == sessionID {
-				turns = append(turns, obj)
+			if readErr == io.EOF {
+				break
+			}
+			if readErr != nil {
+				break
 			}
 		}
 		f.Close()

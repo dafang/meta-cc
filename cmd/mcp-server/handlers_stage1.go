@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -339,23 +340,30 @@ func handleGetSessionMetadata(ctx context.Context, args map[string]interface{}) 
 	return result, nil
 }
 
-// countLines counts the number of lines in a file (approximate record count)
-func countLines(filepath string) (int, error) {
-	file, err := os.Open(filepath)
+// countLines counts the number of lines in a file (approximate record count).
+// Uses bufio.Reader.ReadBytes to handle lines of arbitrary length without
+// a fixed buffer cap (unlike bufio.Scanner which has a 64KB default limit).
+// TODO(post-stabilization): caller ignores error
+func countLines(filename string) (int, error) {
+	f, err := os.Open(filename)
 	if err != nil {
 		return 0, err
 	}
-	defer file.Close()
+	defer f.Close()
 
-	scanner := bufio.NewScanner(file)
-	lineCount := 0
-	for scanner.Scan() {
-		lineCount++
+	r := bufio.NewReader(f)
+	count := 0
+	for {
+		line, err := r.ReadBytes('\n')
+		if len(line) > 0 {
+			count++
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return count, err
+		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return 0, err
-	}
-
-	return lineCount, nil
+	return count, nil
 }

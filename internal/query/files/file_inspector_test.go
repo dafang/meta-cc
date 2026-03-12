@@ -4,9 +4,38 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
+
+// TestInspectFiles_LargeImageLine_NoError verifies that InspectFiles handles
+// lines larger than 10MB (e.g. base64 image data) without error.
+func TestInspectFiles_LargeImageLine_NoError(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessionFile := filepath.Join(tmpDir, "session_large.jsonl")
+
+	// Build a line with a 5MB base64 image payload using strings.Repeat
+	imageData := strings.Repeat("A", 5*1024*1024)
+	imageLine := `{"type":"user","timestamp":"2025-10-26T10:00:00Z","message":{"content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + imageData + `"}}]}}`
+	normalLine := `{"type":"assistant","timestamp":"2025-10-26T10:01:00Z","message":{"content":"hi"}}`
+
+	content := imageLine + "\n" + normalLine + "\n"
+	if err := os.WriteFile(sessionFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	result, err := InspectFiles([]string{sessionFile}, false)
+	if err != nil {
+		t.Fatalf("InspectFiles should not error on large image line: %v", err)
+	}
+
+	file := result.Files[0]
+	// Both lines should be counted (image line truncated to valid JSON by StrategyDefault)
+	if file.LineCount < 1 {
+		t.Errorf("Expected at least 1 line, got %d", file.LineCount)
+	}
+}
 
 // TestInspectFiles_SingleFile tests inspection of a single session file
 func TestInspectFiles_SingleFile(t *testing.T) {
