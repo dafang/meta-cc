@@ -86,7 +86,7 @@ jobs:
               $PKG_DIR/.claude-plugin/plugin.json \
               > $PKG_DIR/.claude-plugin/plugin.json.tmp
             mv $PKG_DIR/.claude-plugin/plugin.json.tmp $PKG_DIR/.claude-plugin/plugin.json
-            jq '.plugins[0].commands |= map(gsub("\\./plugin-src/commands/"; "./commands/"))' \
+            jq '.plugins[0].source = "." | .plugins[0].commands |= map(gsub("\\./plugin-src/commands/"; "./commands/"))' \
               $PKG_DIR/.claude-plugin/marketplace.json \
               > $PKG_DIR/.claude-plugin/marketplace.json.tmp
             mv $PKG_DIR/.claude-plugin/marketplace.json.tmp $PKG_DIR/.claude-plugin/marketplace.json
