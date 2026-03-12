@@ -59,7 +59,7 @@ jobs:
 
           for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64; do
             PKG_DIR=build/packages/meta-cc-plugin-${platform}
-            mkdir -p $PKG_DIR/bin $PKG_DIR/.claude-plugin $PKG_DIR/commands $PKG_DIR/agents $PKG_DIR/skills $PKG_DIR/lib
+            mkdir -p $PKG_DIR/bin $PKG_DIR/.claude-plugin $PKG_DIR/commands $PKG_DIR/lib
 
             # Copy MCP server binary (MCP-only architecture)
             if [[ $platform == windows-* ]]; then
@@ -71,9 +71,7 @@ jobs:
             # Copy Claude Code plugin structure
             cp -r .claude-plugin/* $PKG_DIR/.claude-plugin/
             cp -r dist/commands/* $PKG_DIR/commands/
-            [ -d dist/agents ] && [ "$(ls -A dist/agents)" ] && cp -r dist/agents/* $PKG_DIR/agents/ || true
-            [ -d dist/skills ] && [ "$(ls -A dist/skills)" ] && cp -r dist/skills/* $PKG_DIR/skills/ || true
-            [ -d lib ] && [ "$(ls -A lib)" ] && cp -r lib/* $PKG_DIR/lib/ || true
+            cp -r lib/* $PKG_DIR/lib/
 
             # Copy plugin.json from plugin-src location into archive .claude-plugin/
             cp plugin-src/.claude-plugin/plugin.json $PKG_DIR/.claude-plugin/
