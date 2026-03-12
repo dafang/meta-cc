@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	querypkg "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
 // Phase 27 Stage 27.1: Tests for query and query_raw removed
@@ -228,15 +230,15 @@ func TestHybridOutputMode(t *testing.T) {
 			}
 			f.Close()
 
-			executor := NewQueryExecutor(tmpDir)
+			executor := querypkg.NewQueryExecutor(tmpDir)
 			ctx := context.Background()
 
-			code, err := executor.compileExpression(".")
+			code, err := executor.CompileExpression(".")
 			if err != nil {
 				t.Fatalf("failed to compile expression: %v", err)
 			}
 
-			qr := executor.streamFiles(ctx, []string{file}, code, 0)
+			qr := executor.StreamFiles(ctx, []string{file}, code, 0)
 
 			// Serialize results to check size
 			jsonData, err := json.Marshal(qr.Entries)
@@ -394,8 +396,8 @@ func TestExecuteQueryTimeFilter(t *testing.T) {
 	}
 	f.Close()
 
-	executor := NewQueryExecutor(tmpDir)
-	code, err := executor.compileExpression(".")
+	executor := querypkg.NewQueryExecutor(tmpDir)
+	code, err := executor.CompileExpression(".")
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -403,24 +405,24 @@ func TestExecuteQueryTimeFilter(t *testing.T) {
 
 	// since=T-1.5h → T-1h and T+0 (2 results)
 	tMinus1h30m := now.Add(-90 * time.Minute)
-	tr1 := parsedTimeRange{Since: &tMinus1h30m}
-	result1 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr1)
+	tr1 := querypkg.ParsedTimeRange{Since: &tMinus1h30m}
+	result1 := executor.StreamFilesWithTimeRange(ctx, files, code, 0, tr1)
 	assert.Len(t, result1.Entries, 2, "since=T-1.5h should return 2 results")
 
 	// until=T-0.5h → T-2h and T-1h (2 results)
 	tMinus30m := now.Add(-30 * time.Minute)
-	tr2 := parsedTimeRange{Until: &tMinus30m}
-	result2 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr2)
+	tr2 := querypkg.ParsedTimeRange{Until: &tMinus30m}
+	result2 := executor.StreamFilesWithTimeRange(ctx, files, code, 0, tr2)
 	assert.Len(t, result2.Entries, 2, "until=T-0.5h should return 2 results")
 
 	// since=T-1.5h, until=T-0.5h → T-1h only (1 result)
-	tr3 := parsedTimeRange{Since: &tMinus1h30m, Until: &tMinus30m}
-	result3 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr3)
+	tr3 := querypkg.ParsedTimeRange{Since: &tMinus1h30m, Until: &tMinus30m}
+	result3 := executor.StreamFilesWithTimeRange(ctx, files, code, 0, tr3)
 	assert.Len(t, result3.Entries, 1, "since=T-1.5h,until=T-0.5h should return 1 result")
 
 	// zero TimeRange → all 3 results
-	tr4 := parsedTimeRange{}
-	result4 := executor.streamFilesWithTimeRange(ctx, files, code, 0, tr4)
+	tr4 := querypkg.ParsedTimeRange{}
+	result4 := executor.StreamFilesWithTimeRange(ctx, files, code, 0, tr4)
 	assert.Len(t, result4.Entries, 3, "zero TimeRange should return all 3 results")
 }
 

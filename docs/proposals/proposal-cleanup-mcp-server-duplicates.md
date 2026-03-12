@@ -1,6 +1,6 @@
 # Proposal: Remove Duplicate Types in `cmd/mcp-server` After Phase 74-75 Extraction
 
-**Status**: Draft
+**Status**: Implemented
 **Date**: 2026-03-12
 **Related**: [proposal-mcp-server-package-split.md](proposal-mcp-server-package-split.md)
 

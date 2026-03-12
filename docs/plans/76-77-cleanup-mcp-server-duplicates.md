@@ -1,6 +1,6 @@
 # Plan 76–77: Clean Up Duplicate Types in `cmd/mcp-server`
 
-**Status**: Draft
+**Status**: Completed
 **Proposal**: [docs/proposals/proposal-cleanup-mcp-server-duplicates.md](../proposals/proposal-cleanup-mcp-server-duplicates.md)
 
 ---

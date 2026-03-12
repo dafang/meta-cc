@@ -6,7 +6,6 @@ import (
 	"github.com/yaleh/meta-cc/internal/config"
 	execpkg "github.com/yaleh/meta-cc/internal/mcp/executor"
 	filterspkg "github.com/yaleh/meta-cc/internal/mcp/filters"
-	mcquery "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
 // Phase 25: convenience tools (query_user_messages, query_tools, etc.) execute jq internally.
@@ -103,6 +102,5 @@ func (e *ToolExecutor) applyMessageFiltersToData(messages []interface{}, maxMess
 }
 
 // Ensure imports are used
-var _ mcquery.QueryResult
 var _ = filterspkg.DefaultPreviewLength
 var _ = (*config.Config)(nil)

@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	querypkg "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
 // TestCompileExpression tests jq expression compilation
 func TestCompileExpression(t *testing.T) {
-	executor := NewQueryExecutor("")
+	executor := querypkg.NewQueryExecutor("")
 
 	tests := []struct {
 		name    string
@@ -57,7 +59,7 @@ func TestCompileExpression(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			code, err := executor.compileExpression(tt.expr)
+			code, err := executor.CompileExpression(tt.expr)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error for expression %q, got nil", tt.expr)
@@ -76,7 +78,7 @@ func TestCompileExpression(t *testing.T) {
 
 // TestExpressionCache tests LRU cache behavior
 func TestExpressionCache(t *testing.T) {
-	cache := &ExpressionCache{
+	cache := &querypkg.ExpressionCache{
 		Entries: make(map[string]interface{}),
 		Keys:    []string{},
 		MaxSize: 3,
@@ -141,7 +143,7 @@ func TestExpressionCache(t *testing.T) {
 
 // TestCacheHitRate tests cache effectiveness
 func TestCacheHitRate(t *testing.T) {
-	executor := NewQueryExecutor("")
+	executor := querypkg.NewQueryExecutor("")
 
 	expressions := []string{
 		"select(.type == \"user\")",
@@ -155,12 +157,12 @@ func TestCacheHitRate(t *testing.T) {
 	misses := 0
 
 	for _, expr := range expressions {
-		if executor.cache.Get(expr) != nil {
+		if executor.Cache.Get(expr) != nil {
 			hits++
 		} else {
 			misses++
 		}
-		executor.compileExpression(expr) // compile and cache
+		executor.CompileExpression(expr) // compile and cache
 	}
 
 	// First 2 are misses, next 3 are hits
@@ -180,7 +182,7 @@ func TestCacheHitRate(t *testing.T) {
 
 // TestBuildExpression tests expression building logic
 func TestBuildExpression(t *testing.T) {
-	executor := NewQueryExecutor("")
+	executor := querypkg.NewQueryExecutor("")
 
 	tests := []struct {
 		name      string
@@ -216,7 +218,7 @@ func TestBuildExpression(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := executor.buildExpression(tt.filter, tt.transform)
+			got := executor.BuildExpression(tt.filter, tt.transform)
 			if got != tt.want {
 				t.Errorf("buildExpression(%q, %q) = %q, want %q",
 					tt.filter, tt.transform, got, tt.want)
@@ -250,16 +252,16 @@ func TestStreamFiles(t *testing.T) {
 	}
 	f.Close()
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
 	// Test: filter user messages only
-	code, err := executor.compileExpression("select(.type == \"user\")")
+	code, err := executor.CompileExpression("select(.type == \"user\")")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
-	qr := executor.streamFiles(ctx, []string{file}, code, 0)
+	qr := executor.StreamFiles(ctx, []string{file}, code, 0)
 
 	// Should have 2 user messages
 	if len(qr.Entries) != 2 {
@@ -302,22 +304,22 @@ func TestStreamFilesWithLimit(t *testing.T) {
 	}
 	f.Close()
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
-	code, err := executor.compileExpression(".")
+	code, err := executor.CompileExpression(".")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
 	// Test with limit=5
-	qr := executor.streamFiles(ctx, []string{file}, code, 5)
+	qr := executor.StreamFiles(ctx, []string{file}, code, 5)
 	if len(qr.Entries) != 5 {
 		t.Errorf("expected 5 results with limit=5, got %d", len(qr.Entries))
 	}
 
 	// Test with limit=0 (no limit)
-	qr = executor.streamFiles(ctx, []string{file}, code, 0)
+	qr = executor.StreamFiles(ctx, []string{file}, code, 0)
 	if len(qr.Entries) != 10 {
 		t.Errorf("expected 10 results with limit=0, got %d", len(qr.Entries))
 	}
@@ -338,15 +340,15 @@ invalid json line
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
-	code, err := executor.compileExpression("select(.type == \"user\")")
+	code, err := executor.CompileExpression("select(.type == \"user\")")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
-	results, err := executor.processFile(ctx, file, code)
+	results, err := executor.ProcessFile(ctx, file, code)
 
 	// Should process valid lines and skip invalid ones
 	if err != nil {
@@ -387,17 +389,17 @@ func TestQueryExecutionPerformance(t *testing.T) {
 	}
 	f.Close()
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
-	code, err := executor.compileExpression("select(.id < 100)")
+	code, err := executor.CompileExpression("select(.id < 100)")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
 	// Measure execution time
 	start := time.Now()
-	qr := executor.streamFiles(ctx, []string{file}, code, 0)
+	qr := executor.StreamFiles(ctx, []string{file}, code, 0)
 	elapsed := time.Since(start)
 
 	// Should complete in < 100ms for 1000 records
@@ -448,15 +450,15 @@ func TestProcessFileLargeLines(t *testing.T) {
 				t.Fatalf("failed to write test file: %v", err)
 			}
 
-			executor := NewQueryExecutor(tmpDir)
+			executor := querypkg.NewQueryExecutor(tmpDir)
 			ctx := context.Background()
 
-			code, err := executor.compileExpression(".")
+			code, err := executor.CompileExpression(".")
 			if err != nil {
 				t.Fatalf("failed to compile expression: %v", err)
 			}
 
-			results, err := executor.processFile(ctx, file, code)
+			results, err := executor.ProcessFile(ctx, file, code)
 			if err != nil {
 				t.Fatalf("processFile returned error for %s: %v", tt.name, err)
 			}
@@ -495,16 +497,16 @@ func TestStreamFilesWithWarnings(t *testing.T) {
 		t.Fatalf("failed to create unreadable file: %v", err)
 	}
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
-	code, err := executor.compileExpression(".")
+	code, err := executor.CompileExpression(".")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
 	// Process both files: valid first, then unreadable
-	result := executor.streamFiles(ctx, []string{validFile, unreadableFile}, code, 0)
+	result := executor.StreamFiles(ctx, []string{validFile, unreadableFile}, code, 0)
 
 	// Should have entries from the valid file
 	if len(result.Entries) != 2 {
@@ -538,15 +540,15 @@ func TestStreamFilesNoWarnings(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
-	code, err := executor.compileExpression(".")
+	code, err := executor.CompileExpression(".")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
-	result := executor.streamFiles(ctx, []string{file}, code, 0)
+	result := executor.StreamFiles(ctx, []string{file}, code, 0)
 
 	if len(result.Entries) != 1 {
 		t.Errorf("expected 1 entry, got %d", len(result.Entries))
@@ -567,15 +569,15 @@ func TestStreamFilesNonexistentFile(t *testing.T) {
 
 	nonexistent := filepath.Join(tmpDir, "does-not-exist.jsonl")
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
-	code, err := executor.compileExpression(".")
+	code, err := executor.CompileExpression(".")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
-	result := executor.streamFiles(ctx, []string{validFile, nonexistent}, code, 0)
+	result := executor.StreamFiles(ctx, []string{validFile, nonexistent}, code, 0)
 
 	if len(result.Entries) != 1 {
 		t.Errorf("expected 1 entry from valid file, got %d", len(result.Entries))
@@ -606,15 +608,15 @@ func TestProcessFile_LargeImageLine_NoError(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
-	code, err := executor.compileExpression(".")
+	code, err := executor.CompileExpression(".")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
-	results, err := executor.processFile(ctx, file, code)
+	results, err := executor.ProcessFile(ctx, file, code)
 	if err != nil {
 		t.Fatalf("processFile returned error for large image line: %v", err)
 	}
@@ -640,17 +642,17 @@ func TestProcessFileWithTimeRange_LargeImageLine_NoError(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
-	code, err := executor.compileExpression(".")
+	code, err := executor.CompileExpression(".")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
 
 	// No time range constraints — all entries should be included.
-	tr := parsedTimeRange{}
-	results, err := executor.processFileWithTimeRange(ctx, file, code, tr)
+	tr := querypkg.ParsedTimeRange{}
+	results, err := executor.ProcessFileWithTimeRange(ctx, file, code, tr)
 	if err != nil {
 		t.Fatalf("processFileWithTimeRange returned error for large image line: %v", err)
 	}
@@ -687,10 +689,10 @@ func TestContextCancellation(t *testing.T) {
 	}
 	f.Close()
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	code, err := executor.compileExpression(".")
+	code, err := executor.CompileExpression(".")
 	if err != nil {
 		t.Fatalf("failed to compile expression: %v", err)
 	}
@@ -698,7 +700,7 @@ func TestContextCancellation(t *testing.T) {
 	// Cancel context immediately
 	cancel()
 
-	qr := executor.streamFiles(ctx, []string{file}, code, 0)
+	qr := executor.StreamFiles(ctx, []string{file}, code, 0)
 
 	// Should return early due to cancellation
 	if len(qr.Entries) > 100 {

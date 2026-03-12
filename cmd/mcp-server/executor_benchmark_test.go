@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	querypkg "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
 // generateTestJSONL creates a temporary JSONL file with n entries
@@ -98,10 +100,10 @@ func BenchmarkQueryExecution(b *testing.B) {
 		tmpDir := generateTestJSONL(&testing.T{}, size)
 		defer os.RemoveAll(tmpDir)
 
-		executor := NewQueryExecutor(tmpDir)
+		executor := querypkg.NewQueryExecutor(tmpDir)
 
 		b.Run(fmt.Sprintf("size_%d_select_all", size), func(b *testing.B) {
-			code, err := executor.compileExpression(".[]")
+			code, err := executor.CompileExpression(".[]")
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -111,7 +113,7 @@ func BenchmarkQueryExecution(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				qr := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.StreamFiles(ctx, files, code, 0)
 				count := 0
 				for range qr.Entries {
 					count++
@@ -120,7 +122,7 @@ func BenchmarkQueryExecution(b *testing.B) {
 		})
 
 		b.Run(fmt.Sprintf("size_%d_filter_type", size), func(b *testing.B) {
-			code, err := executor.compileExpression(`.[] | select(.type == "user")`)
+			code, err := executor.CompileExpression(`.[] | select(.type == "user")`)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -130,7 +132,7 @@ func BenchmarkQueryExecution(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				qr := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.StreamFiles(ctx, files, code, 0)
 				count := 0
 				for range qr.Entries {
 					count++
@@ -139,7 +141,7 @@ func BenchmarkQueryExecution(b *testing.B) {
 		})
 
 		b.Run(fmt.Sprintf("size_%d_filter_and_project", size), func(b *testing.B) {
-			code, err := executor.compileExpression(`.[] | select(.type == "user") | {timestamp, uuid}`)
+			code, err := executor.CompileExpression(`.[] | select(.type == "user") | {timestamp, uuid}`)
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -149,7 +151,7 @@ func BenchmarkQueryExecution(b *testing.B) {
 
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				qr := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.StreamFiles(ctx, files, code, 0)
 				count := 0
 				for range qr.Entries {
 					count++
@@ -161,7 +163,7 @@ func BenchmarkQueryExecution(b *testing.B) {
 
 // BenchmarkExpressionCompilation benchmarks jq expression compilation
 func BenchmarkExpressionCompilation(b *testing.B) {
-	executor := NewQueryExecutor("")
+	executor := querypkg.NewQueryExecutor("")
 
 	expressions := []string{
 		".[]",
@@ -175,7 +177,7 @@ func BenchmarkExpressionCompilation(b *testing.B) {
 		b.Run(fmt.Sprintf("expr_%s", expr[:20]), func(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				_, err := executor.compileExpression(expr)
+				_, err := executor.CompileExpression(expr)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -190,15 +192,15 @@ func BenchmarkStreamProcessing(b *testing.B) {
 	tmpDir := generateTestJSONL(&testing.T{}, size)
 	defer os.RemoveAll(tmpDir)
 
-	executor := NewQueryExecutor(tmpDir)
-	code, _ := executor.compileExpression(".[]")
+	executor := querypkg.NewQueryExecutor(tmpDir)
+	code, _ := executor.CompileExpression(".[]")
 	files, _ := getJSONLFiles(tmpDir)
 	ctx := context.Background()
 
 	b.Run("streaming", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			qr := executor.streamFiles(ctx, files, code, 0)
+			qr := executor.StreamFiles(ctx, files, code, 0)
 			count := 0
 			for range qr.Entries {
 				count++
@@ -209,7 +211,7 @@ func BenchmarkStreamProcessing(b *testing.B) {
 	b.Run("streaming_with_limit_10", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			qr := executor.streamFiles(ctx, files, code, 10)
+			qr := executor.StreamFiles(ctx, files, code, 10)
 			count := 0
 			for range qr.Entries {
 				count++
@@ -220,7 +222,7 @@ func BenchmarkStreamProcessing(b *testing.B) {
 	b.Run("streaming_with_limit_100", func(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			qr := executor.streamFiles(ctx, files, code, 100)
+			qr := executor.StreamFiles(ctx, files, code, 100)
 			count := 0
 			for range qr.Entries {
 				count++
@@ -288,15 +290,15 @@ func BenchmarkConcurrentQueries(b *testing.B) {
 	tmpDir := generateTestJSONL(&testing.T{}, size)
 	defer os.RemoveAll(tmpDir)
 
-	executor := NewQueryExecutor(tmpDir)
-	code, _ := executor.compileExpression(".[]")
+	executor := querypkg.NewQueryExecutor(tmpDir)
+	code, _ := executor.CompileExpression(".[]")
 	files, _ := getJSONLFiles(tmpDir)
 
 	b.Run("sequential", func(b *testing.B) {
 		ctx := context.Background()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			qr := executor.streamFiles(ctx, files, code, 0)
+			qr := executor.StreamFiles(ctx, files, code, 0)
 			count := 0
 			for range qr.Entries {
 				count++
@@ -309,7 +311,7 @@ func BenchmarkConcurrentQueries(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			ctx := context.Background()
 			for pb.Next() {
-				qr := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.StreamFiles(ctx, files, code, 0)
 				count := 0
 				for range qr.Entries {
 					count++
@@ -327,8 +329,8 @@ func BenchmarkMemoryUsage(b *testing.B) {
 		tmpDir := generateTestJSONL(&testing.T{}, size)
 		defer os.RemoveAll(tmpDir)
 
-		executor := NewQueryExecutor(tmpDir)
-		code, _ := executor.compileExpression(".[]")
+		executor := querypkg.NewQueryExecutor(tmpDir)
+		code, _ := executor.CompileExpression(".[]")
 		files, _ := getJSONLFiles(tmpDir)
 
 		b.Run(fmt.Sprintf("size_%d", size), func(b *testing.B) {
@@ -336,7 +338,7 @@ func BenchmarkMemoryUsage(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				qr := executor.streamFiles(ctx, files, code, 0)
+				qr := executor.StreamFiles(ctx, files, code, 0)
 				// Collect all results to measure memory
 				count := 0
 				for range qr.Entries {

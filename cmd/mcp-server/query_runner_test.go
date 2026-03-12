@@ -5,25 +5,27 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	querypkg "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
-// mockJQRunner implements JQRunner for testing.
+// mockJQRunner implements querypkg.JQRunner for testing.
 type mockJQRunner struct {
-	results QueryResult
+	results querypkg.QueryResult
 	err     error
 }
 
-func (m *mockJQRunner) RunQuery(_ context.Context, _ []string, _, _ string, _ int) (QueryResult, error) {
+func (m *mockJQRunner) RunQuery(_ context.Context, _ []string, _, _ string, _ int) (querypkg.QueryResult, error) {
 	return m.results, m.err
 }
 
-func (m *mockJQRunner) RunQueryWithTimeRange(_ context.Context, _ []string, _, _ string, _ int, _ parsedTimeRange) (QueryResult, error) {
+func (m *mockJQRunner) RunQueryWithTimeRange(_ context.Context, _ []string, _, _ string, _ int, _ querypkg.ParsedTimeRange) (querypkg.QueryResult, error) {
 	return m.results, m.err
 }
 
 // Verify interface compliance at compile time.
-var _ JQRunner = (*QueryExecutor)(nil)
-var _ JQRunner = (*mockJQRunner)(nil)
+var _ querypkg.JQRunner = (*querypkg.QueryExecutor)(nil)
+var _ querypkg.JQRunner = (*mockJQRunner)(nil)
 
 func TestJQRunner_InterfaceCompliance(t *testing.T) {
 	// The compile-time checks above are the primary assertion.
@@ -32,7 +34,7 @@ func TestJQRunner_InterfaceCompliance(t *testing.T) {
 
 func TestMockJQRunner(t *testing.T) {
 	mock := &mockJQRunner{
-		results: QueryResult{Entries: []any{"entry1"}},
+		results: querypkg.QueryResult{Entries: []any{"entry1"}},
 	}
 
 	result, err := mock.RunQuery(context.Background(), nil, ".", "", 0)
@@ -46,10 +48,10 @@ func TestMockJQRunner(t *testing.T) {
 
 func TestMockJQRunner_WithTimeRange(t *testing.T) {
 	mock := &mockJQRunner{
-		results: QueryResult{Entries: []any{"entry1", "entry2"}},
+		results: querypkg.QueryResult{Entries: []any{"entry1", "entry2"}},
 	}
 
-	result, err := mock.RunQueryWithTimeRange(context.Background(), nil, ".", "", 0, parsedTimeRange{})
+	result, err := mock.RunQueryWithTimeRange(context.Background(), nil, ".", "", 0, querypkg.ParsedTimeRange{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -80,7 +82,7 @@ func TestQueryExecutor_RunQuery(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
 	result, err := executor.RunQuery(ctx, []string{file}, `select(.type == "user")`, "", 0)
@@ -94,7 +96,7 @@ func TestQueryExecutor_RunQuery(t *testing.T) {
 
 // TestQueryExecutor_RunQuery_InvalidFilter verifies error propagation for bad jq.
 func TestQueryExecutor_RunQuery_InvalidFilter(t *testing.T) {
-	executor := NewQueryExecutor(t.TempDir())
+	executor := querypkg.NewQueryExecutor(t.TempDir())
 	_, err := executor.RunQuery(context.Background(), nil, "select(", "", 0)
 	if err == nil {
 		t.Error("expected error for invalid jq filter, got nil")
@@ -112,10 +114,10 @@ func TestQueryExecutor_RunQueryWithTimeRange(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	executor := NewQueryExecutor(tmpDir)
+	executor := querypkg.NewQueryExecutor(tmpDir)
 	ctx := context.Background()
 
-	tr, err := parseTimeRange("2025-03-01T00:00:00Z", "")
+	tr, err := querypkg.ParseTimeRange("2025-03-01T00:00:00Z", "")
 	if err != nil {
 		t.Fatalf("failed to parse time range: %v", err)
 	}
