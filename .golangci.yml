@@ -34,13 +34,6 @@ linters:
           deny:
             - pkg: "github.com/yaleh/meta-cc/internal/query"
               desc: "internal/query/files must not import its parent package internal/query"
-        no-query-jq-imports-query:
-          list-mode: lax
-          files:
-            - "**/internal/query/jq/**"
-          deny:
-            - pkg: "github.com/yaleh/meta-cc/internal/query"
-              desc: "internal/query/jq must not import its parent package internal/query"
     errcheck:
       check-blank: false  # Allow error assignment to _
       exclude-functions:
