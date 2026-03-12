@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/query/turnindex"
 )
 
 type ProjectState struct {
@@ -40,7 +41,7 @@ func BuildProjectState(entries []parser.SessionEntry, opts ProjectStateOptions) 
 		sessionID = entries[0].SessionID
 	}
 
-	turnIndex := buildTurnIndex(entries)
+	turnIndex := turnindex.BuildTurnIndex(entries)
 	recentFiles := extractRecentFiles(entries, turnIndex)
 
 	var incomplete []IncompleteTask

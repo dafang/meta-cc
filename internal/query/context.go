@@ -8,6 +8,7 @@ import (
 	"github.com/yaleh/meta-cc/internal/analyzer"
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/query/turnindex"
 )
 
 const (
@@ -16,12 +17,6 @@ const (
 
 	// SecondsPerMinute is the conversion factor from seconds to minutes
 	SecondsPerMinute = 60
-
-	// MinSequenceLength is the minimum length of a tool sequence pattern
-	MinSequenceLength = 2
-
-	// MaxSequenceLength is the maximum length of a tool sequence pattern
-	MaxSequenceLength = 5
 )
 
 // BuildContextQuery builds a context query for a specific error signature
@@ -31,7 +26,7 @@ func BuildContextQuery(entries []parser.SessionEntry, errorSignature string, win
 	}
 
 	// Build turn index map
-	turnIndex := buildTurnIndex(entries)
+	turnIndex := turnindex.BuildTurnIndex(entries)
 
 	// Find all error occurrences
 	occurrences := findErrorOccurrences(entries, errorSignature, window, turnIndex)
@@ -40,19 +35,6 @@ func BuildContextQuery(entries []parser.SessionEntry, errorSignature string, win
 		ErrorSignature: errorSignature,
 		Occurrences:    occurrences,
 	}, nil
-}
-
-// buildTurnIndex creates a map of UUID to turn number
-func buildTurnIndex(entries []parser.SessionEntry) map[string]int {
-	index := make(map[string]int)
-	turn := 0
-	for _, entry := range entries {
-		if entry.IsMessage() {
-			index[entry.UUID] = turn
-			turn++
-		}
-	}
-	return index
 }
 
 // findErrorOccurrences finds all occurrences of the error signature

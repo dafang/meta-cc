@@ -1,7 +1,5 @@
 package query
 
-import "github.com/yaleh/meta-cc/internal/types"
-
 // ContextQuery represents context query results
 type ContextQuery struct {
 	ErrorSignature string              `json:"error_signature,omitempty"`
@@ -49,9 +47,4 @@ type FileAccessEvent struct {
 	Turn      int    `json:"turn"`
 	Action    string `json:"action"` // Read/Edit/Write
 	Timestamp int64  `json:"timestamp"`
-}
-
-// ToolSequenceQuery represents tool sequence pattern query results
-type ToolSequenceQuery struct {
-	Sequences []types.SequencePattern `json:"sequences"`
 }

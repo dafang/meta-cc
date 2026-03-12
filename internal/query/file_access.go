@@ -7,6 +7,7 @@ import (
 
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/query/turnindex"
 )
 
 // BuildFileAccessQuery builds a file access history query
@@ -16,7 +17,7 @@ func BuildFileAccessQuery(entries []parser.SessionEntry, filePath string) (*File
 	}
 
 	// Build turn index
-	turnIndex := buildTurnIndex(entries)
+	turnIndex := turnindex.BuildTurnIndex(entries)
 
 	// Extract all tool calls
 	toolCalls := parser.ExtractToolCalls(entries)
@@ -45,7 +46,7 @@ func BuildFileAccessQuery(entries []parser.SessionEntry, filePath string) (*File
 		}
 
 		// Get timestamp
-		timestamp := getToolCallTimestamp(entries, tc.UUID)
+		timestamp := turnindex.GetToolCallTimestamp(entries, tc.UUID)
 
 		// Record event
 		event := FileAccessEvent{
@@ -130,16 +131,6 @@ func getActionType(toolName string) string {
 	default:
 		return ""
 	}
-}
-
-// getToolCallTimestamp finds the timestamp for a tool call UUID
-func getToolCallTimestamp(entries []parser.SessionEntry, uuid string) int64 {
-	for _, entry := range entries {
-		if entry.UUID == uuid {
-			return parseTimestamp(entry.Timestamp)
-		}
-	}
-	return 0
 }
 
 // calculateTimeSpan calculates time span in minutes

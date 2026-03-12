@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/query/turnindex"
 )
 
 type SuccessfulPromptsResult struct {
@@ -41,7 +42,7 @@ type PatternFeatures struct {
 }
 
 func BuildSuccessfulPrompts(entries []parser.SessionEntry, minQuality float64, limit int) *SuccessfulPromptsResult {
-	turnIndex := buildTurnIndex(entries)
+	turnIndex := turnindex.BuildTurnIndex(entries)
 	var prompts []SuccessfulPrompt
 
 	for i, entry := range entries {

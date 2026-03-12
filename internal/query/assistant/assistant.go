@@ -1,4 +1,6 @@
-package query
+// Package assistant implements the assistant messages and conversation turns queries
+// for Claude Code sessions.
+package assistant
 
 import (
 	"fmt"
@@ -9,8 +11,11 @@ import (
 
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/query/turnindex"
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
+// AssistantMessagesOptions holds filtering and sorting options for assistant message queries.
 type AssistantMessagesOptions struct {
 	Pattern   string
 	MinTools  int
@@ -24,6 +29,7 @@ type AssistantMessagesOptions struct {
 	Reverse   bool
 }
 
+// AssistantMessage represents a single assistant message with metadata.
 type AssistantMessage struct {
 	TurnSequence  int                     `json:"turn_sequence"`
 	UUID          string                  `json:"uuid"`
@@ -37,6 +43,7 @@ type AssistantMessage struct {
 	StopReason    string                  `json:"stop_reason,omitempty"`
 }
 
+// AssistantContentBlock represents a single content block in an assistant message.
 type AssistantContentBlock struct {
 	Type     string `json:"type"`
 	Text     string `json:"text,omitempty"`
@@ -48,8 +55,9 @@ type assistantMessageRaw struct {
 	textContent string
 }
 
+// BuildAssistantMessages builds a filtered and sorted list of assistant messages.
 func BuildAssistantMessages(entries []parser.SessionEntry, opts AssistantMessagesOptions) ([]AssistantMessage, error) {
-	turnIndex := buildTurnIndex(entries)
+	turnIndex := turnindex.BuildTurnIndex(entries)
 	raw := extractAssistantMessages(entries, turnIndex)
 
 	if opts.Pattern != "" {
@@ -255,6 +263,7 @@ func sortAssistantMessages(messages []AssistantMessage, sortBy string, reverse b
 // -----------------------------------------------------------------------------
 // Conversation helpers
 
+// ConversationOptions holds filtering and sorting options for conversation turn queries.
 type ConversationOptions struct {
 	StartTurn     int
 	EndTurn       int
@@ -268,16 +277,18 @@ type ConversationOptions struct {
 	Reverse       bool
 }
 
+// ConversationTurn represents a single paired user+assistant conversation turn.
 type ConversationTurn struct {
-	TurnSequence     int               `json:"turn_sequence"`
-	UserMessage      *UserMessage      `json:"user_message,omitempty"`
-	AssistantMessage *AssistantMessage `json:"assistant_message,omitempty"`
-	Duration         int               `json:"duration_ms"`
-	Timestamp        string            `json:"timestamp"`
+	TurnSequence     int                `json:"turn_sequence"`
+	UserMessage      *types.UserMessage `json:"user_message,omitempty"`
+	AssistantMessage *AssistantMessage  `json:"assistant_message,omitempty"`
+	Duration         int                `json:"duration_ms"`
+	Timestamp        string             `json:"timestamp"`
 }
 
+// BuildConversationTurns builds a filtered and sorted list of conversation turns.
 func BuildConversationTurns(entries []parser.SessionEntry, opts ConversationOptions) ([]ConversationTurn, error) {
-	turnIndex := buildTurnIndex(entries)
+	turnIndex := turnindex.BuildTurnIndex(entries)
 	turns := buildConversationTurnList(entries, turnIndex)
 
 	if opts.StartTurn != -1 || opts.EndTurn != -1 {
@@ -328,13 +339,13 @@ func buildConversationTurnList(entries []parser.SessionEntry, turnIndex map[stri
 	var turns []ConversationTurn
 	for turn := range uniqueTurns {
 		user := userByTurn[turn]
-		assistant := assistantByTurn[turn]
-		duration := calculateTurnDuration(user, assistant)
-		timestamp := firstTimestamp(user, assistant, timestampByTurn[turn])
+		asst := assistantByTurn[turn]
+		duration := calculateTurnDuration(user, asst)
+		timestamp := firstTimestamp(user, asst, timestampByTurn[turn])
 		turns = append(turns, ConversationTurn{
 			TurnSequence:     turn,
 			UserMessage:      user,
-			AssistantMessage: assistant,
+			AssistantMessage: asst,
 			Duration:         duration,
 			Timestamp:        timestamp,
 		})
@@ -343,8 +354,8 @@ func buildConversationTurnList(entries []parser.SessionEntry, turnIndex map[stri
 	return turns
 }
 
-func conversationUserMessages(entries []parser.SessionEntry, turnIndex map[string]int) (map[int]*UserMessage, map[int]string) {
-	userByTurn := make(map[int]*UserMessage)
+func conversationUserMessages(entries []parser.SessionEntry, turnIndex map[string]int) (map[int]*types.UserMessage, map[int]string) {
+	userByTurn := make(map[int]*types.UserMessage)
 	turnTimestamps := make(map[int]string)
 
 	for _, entry := range entries {
@@ -357,7 +368,7 @@ func conversationUserMessages(entries []parser.SessionEntry, turnIndex map[strin
 		}
 
 		turn := turnIndex[entry.UUID]
-		userByTurn[turn] = &UserMessage{
+		userByTurn[turn] = &types.UserMessage{
 			TurnSequence: turn,
 			UUID:         entry.UUID,
 			Timestamp:    entry.Timestamp,
@@ -469,24 +480,24 @@ func filterTurnsByDuration(turns []ConversationTurn, minDuration, maxDuration in
 	return filtered
 }
 
-func calculateTurnDuration(user *UserMessage, assistant *AssistantMessage) int {
-	if user == nil || assistant == nil {
+func calculateTurnDuration(user *types.UserMessage, asst *AssistantMessage) int {
+	if user == nil || asst == nil {
 		return 0
 	}
 	start, err1 := parseConversationTimestamp(user.Timestamp)
-	end, err2 := parseConversationTimestamp(assistant.Timestamp)
+	end, err2 := parseConversationTimestamp(asst.Timestamp)
 	if err1 != nil || err2 != nil {
 		return 0
 	}
 	return int(end.Sub(start).Milliseconds())
 }
 
-func firstTimestamp(user *UserMessage, assistant *AssistantMessage, fallback string) string {
+func firstTimestamp(user *types.UserMessage, asst *AssistantMessage, fallback string) string {
 	if user != nil && user.Timestamp != "" {
 		return user.Timestamp
 	}
-	if assistant != nil && assistant.Timestamp != "" {
-		return assistant.Timestamp
+	if asst != nil && asst.Timestamp != "" {
+		return asst.Timestamp
 	}
 	return fallback
 }

@@ -1,4 +1,5 @@
-package query
+// Package sequences implements the tool sequence pattern query for Claude Code sessions.
+package sequences
 
 import (
 	"fmt"
@@ -7,12 +8,18 @@ import (
 
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/query/turnindex"
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
-// BuiltinTools is the set of Claude Code's built-in tools
-// These are the native capabilities shipped with Claude Code
-// Tools prefixed with "mcp__*" are user/server-provided (not built-in)
+// ToolSequenceQuery represents tool sequence pattern query results.
+type ToolSequenceQuery struct {
+	Sequences []types.SequencePattern `json:"sequences"`
+}
+
+// BuiltinTools is the set of Claude Code's built-in tools.
+// These are the native capabilities shipped with Claude Code.
+// Tools prefixed with "mcp__*" are user/server-provided (not built-in).
 var BuiltinTools = map[string]bool{
 	"Bash":         true,
 	"Read":         true,
@@ -30,14 +37,23 @@ var BuiltinTools = map[string]bool{
 	"ExitPlanMode": true,
 }
 
-// BuildToolSequenceQuery builds a tool sequence pattern query
+// SecondsPerMinute is the conversion factor from seconds to minutes.
+const SecondsPerMinute = 60
+
+// MinSequenceLength is the minimum length of a tool sequence pattern.
+const MinSequenceLength = 2
+
+// MaxSequenceLength is the maximum length of a tool sequence pattern.
+const MaxSequenceLength = 5
+
+// BuildToolSequenceQuery builds a tool sequence pattern query.
 func BuildToolSequenceQuery(entries []parser.SessionEntry, minOccurrences int, pattern string, includeBuiltin bool) (*ToolSequenceQuery, error) {
 	if minOccurrences < 1 {
 		return nil, fmt.Errorf("minOccurrences must be at least 1 for query_tool_sequences (got: %d): %w", minOccurrences, mcerrors.ErrInvalidInput)
 	}
 
 	// Build turn index
-	turnIndex := buildTurnIndex(entries)
+	turnIndex := turnindex.BuildTurnIndex(entries)
 
 	// Extract tool calls with turn numbers (with optional built-in tool filtering)
 	toolCalls := extractToolCallsWithTurns(entries, turnIndex, includeBuiltin)
@@ -48,32 +64,32 @@ func BuildToolSequenceQuery(entries []parser.SessionEntry, minOccurrences int, p
 	})
 
 	// Find sequences
-	var sequences []types.SequencePattern
+	var seqs []types.SequencePattern
 	if pattern != "" {
 		// Find specific pattern
 		seq := findSpecificPattern(toolCalls, pattern, entries)
 		if seq.Count >= minOccurrences {
-			sequences = append(sequences, seq)
+			seqs = append(seqs, seq)
 		}
 	} else {
 		// Find all repeated sequences
-		sequences = findAllSequences(toolCalls, minOccurrences, entries)
+		seqs = findAllSequences(toolCalls, minOccurrences, entries)
 	}
 
 	return &ToolSequenceQuery{
-		Sequences: sequences,
+		Sequences: seqs,
 	}, nil
 }
 
-// toolCallWithTurn represents a tool call with its turn number
+// toolCallWithTurn represents a tool call with its turn number.
 type toolCallWithTurn struct {
 	toolName string
 	turn     int
 	uuid     string
 }
 
-// extractToolCallsWithTurns extracts tool calls with turn numbers
-// If includeBuiltin is false, built-in tools (Bash, Read, Edit, etc.) are filtered out
+// extractToolCallsWithTurns extracts tool calls with turn numbers.
+// If includeBuiltin is false, built-in tools (Bash, Read, Edit, etc.) are filtered out.
 func extractToolCallsWithTurns(entries []parser.SessionEntry, turnIndex map[string]int, includeBuiltin bool) []toolCallWithTurn {
 	var result []toolCallWithTurn
 
@@ -96,7 +112,7 @@ func extractToolCallsWithTurns(entries []parser.SessionEntry, turnIndex map[stri
 	return result
 }
 
-// buildSequencePattern builds a SequencePattern from occurrences
+// buildSequencePattern builds a SequencePattern from occurrences.
 func buildSequencePattern(pattern string, occurrences []types.SequenceOccurrence, entries []parser.SessionEntry, toolCalls []toolCallWithTurn) types.SequencePattern {
 	timeSpan := calculateSequenceTimeSpan(occurrences, entries, toolCalls)
 	return types.SequencePattern{
@@ -107,7 +123,7 @@ func buildSequencePattern(pattern string, occurrences []types.SequenceOccurrence
 	}
 }
 
-// findSpecificPattern finds occurrences of a specific pattern
+// findSpecificPattern finds occurrences of a specific pattern.
 func findSpecificPattern(toolCalls []toolCallWithTurn, pattern string, entries []parser.SessionEntry) types.SequencePattern {
 	// Parse pattern (format: "Tool1 → Tool2 → Tool3")
 	tools := parsePattern(pattern)
@@ -133,7 +149,7 @@ func findSpecificPattern(toolCalls []toolCallWithTurn, pattern string, entries [
 	return buildSequencePattern(pattern, occurrences, entries, toolCalls)
 }
 
-// findAllSequences finds all repeated sequences of length 2-5
+// findAllSequences finds all repeated sequences of length 2-5.
 func findAllSequences(toolCalls []toolCallWithTurn, minOccurrences int, entries []parser.SessionEntry) []types.SequencePattern {
 	sequenceMap := make(map[string][]types.SequenceOccurrence)
 
@@ -175,7 +191,7 @@ func findAllSequences(toolCalls []toolCallWithTurn, minOccurrences int, entries 
 	return result
 }
 
-// parsePattern parses a pattern string into tool names
+// parsePattern parses a pattern string into tool names.
 func parsePattern(pattern string) []string {
 	// Split by " → " or "->"
 	pattern = strings.ReplaceAll(pattern, "→", "->")
@@ -192,7 +208,7 @@ func parsePattern(pattern string) []string {
 	return tools
 }
 
-// matchesSequence checks if a sequence matches at a given position
+// matchesSequence checks if a sequence matches at a given position.
 func matchesSequence(toolCalls []toolCallWithTurn, start int, tools []string) bool {
 	if start+len(tools) > len(toolCalls) {
 		return false
@@ -207,22 +223,21 @@ func matchesSequence(toolCalls []toolCallWithTurn, start int, tools []string) bo
 	return true
 }
 
-// findTimestampForTurn finds the timestamp for a specific turn
+// findTimestampForTurn finds the timestamp for a specific turn.
 func findTimestampForTurn(entries []parser.SessionEntry, toolCalls []toolCallWithTurn, turn int) int64 {
 	for _, tc := range toolCalls {
 		if tc.turn == turn {
-			return getToolCallTimestamp(entries, tc.uuid)
+			return turnindex.GetToolCallTimestamp(entries, tc.uuid)
 		}
 	}
 	return 0
 }
 
-// collectOccurrenceTimestamps extracts timestamps from sequence occurrences
+// collectOccurrenceTimestamps extracts timestamps from sequence occurrences.
 func collectOccurrenceTimestamps(occurrences []types.SequenceOccurrence, entries []parser.SessionEntry, toolCalls []toolCallWithTurn) []int64 {
 	var timestamps []int64
 
 	for _, occ := range occurrences {
-		// Get timestamps for start and end of each occurrence
 		startTs := findTimestampForTurn(entries, toolCalls, occ.StartTurn)
 		endTs := findTimestampForTurn(entries, toolCalls, occ.EndTurn)
 
@@ -237,7 +252,7 @@ func collectOccurrenceTimestamps(occurrences []types.SequenceOccurrence, entries
 	return timestamps
 }
 
-// findMinMaxTimestamps finds minimum and maximum values in a slice of timestamps
+// findMinMaxTimestamps finds minimum and maximum values in a slice of timestamps.
 func findMinMaxTimestamps(timestamps []int64) (int64, int64) {
 	if len(timestamps) == 0 {
 		return 0, 0
@@ -257,20 +272,18 @@ func findMinMaxTimestamps(timestamps []int64) (int64, int64) {
 	return minTs, maxTs
 }
 
-// calculateSequenceTimeSpan calculates time span for sequence occurrences
+// calculateSequenceTimeSpan calculates time span for sequence occurrences.
 func calculateSequenceTimeSpan(occurrences []types.SequenceOccurrence, entries []parser.SessionEntry, toolCalls []toolCallWithTurn) int {
 	if len(occurrences) == 0 {
 		return 0
 	}
 
-	// Collect all relevant timestamps
 	timestamps := collectOccurrenceTimestamps(occurrences, entries, toolCalls)
 
 	if len(timestamps) == 0 {
 		return 0
 	}
 
-	// Find min and max
 	minTs, maxTs := findMinMaxTimestamps(timestamps)
 
 	return int((maxTs - minTs) / SecondsPerMinute)

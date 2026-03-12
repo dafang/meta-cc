@@ -6,6 +6,7 @@ import (
 
 	"github.com/yaleh/meta-cc/internal/analyzer"
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/query/turnindex"
 )
 
 func TestBuildContextQuery(t *testing.T) {
@@ -174,7 +175,7 @@ func TestBuildTurnIndex(t *testing.T) {
 		{UUID: "uuid-4", Type: "user", Message: &parser.Message{Role: "user"}},
 	}
 
-	index := buildTurnIndex(entries)
+	index := turnindex.BuildTurnIndex(entries)
 
 	expected := map[string]int{
 		"uuid-1": 0,
