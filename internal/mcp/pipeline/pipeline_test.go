@@ -2,12 +2,22 @@ package pipeline_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/yaleh/meta-cc/internal/config"
 	"github.com/yaleh/meta-cc/internal/mcp/pipeline"
 )
+
+// testConfig returns a minimal config suitable for pipeline tests.
+func testConfig() *config.Config {
+	return &config.Config{
+		Output: config.OutputConfig{
+			Mode:            "auto",
+			InlineThreshold: 32768,
+		},
+	}
+}
 
 // helpers
 
@@ -187,28 +197,6 @@ func TestTimestampStatsTools_Contents(t *testing.T) {
 
 // ─── BuildStatsFirstResponse ──────────────────────────────────────────────────
 
-func makeAdaptFn(returnData interface{}) pipeline.AdaptResponseFunc {
-	return func(data []interface{}, params map[string]interface{}, toolName string) (interface{}, error) {
-		return returnData, nil
-	}
-}
-
-func makeSerializeFn() pipeline.SerializeResponseFunc {
-	return func(response interface{}) (string, error) {
-		b, err := json.Marshal(response)
-		if err != nil {
-			return "", err
-		}
-		return string(b), nil
-	}
-}
-
-func makeErrorAdaptFn() pipeline.AdaptResponseFunc {
-	return func(data []interface{}, params map[string]interface{}, toolName string) (interface{}, error) {
-		return nil, fmt.Errorf("adapt error")
-	}
-}
-
 func TestBuildStatsFirstResponse_Basic(t *testing.T) {
 	rawData := []interface{}{
 		map[string]interface{}{"tool_name": "Bash", "status": "success"},
@@ -216,11 +204,10 @@ func TestBuildStatsFirstResponse_Basic(t *testing.T) {
 	parsedData := rawData
 
 	out, err := pipeline.BuildStatsFirstResponse(
+		testConfig(),
 		rawData, parsedData,
 		map[string]interface{}{},
 		"query_tools", "turn",
-		makeAdaptFn(map[string]interface{}{"mode": "inline", "data": rawData}),
-		makeSerializeFn(),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -230,30 +217,15 @@ func TestBuildStatsFirstResponse_Basic(t *testing.T) {
 	}
 }
 
-func TestBuildStatsFirstResponse_AdaptError(t *testing.T) {
-	rawData := []interface{}{map[string]interface{}{"tool_name": "Bash"}}
-	_, err := pipeline.BuildStatsFirstResponse(
-		rawData, rawData,
-		map[string]interface{}{},
-		"query_tools", "turn",
-		makeErrorAdaptFn(),
-		makeSerializeFn(),
-	)
-	if err == nil {
-		t.Fatal("expected error from adapt fn")
-	}
-}
-
 func TestBuildStatsFirstResponse_TimestampTool(t *testing.T) {
 	rawData := []interface{}{
 		map[string]interface{}{"timestamp": "2024-01-01T10:00:00Z", "role": "user"},
 	}
 	out, err := pipeline.BuildStatsFirstResponse(
+		testConfig(),
 		rawData, rawData,
 		map[string]interface{}{},
 		"query_user_messages", "turn",
-		makeAdaptFn(map[string]interface{}{"mode": "inline"}),
-		makeSerializeFn(),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -266,11 +238,10 @@ func TestBuildStatsFirstResponse_SessionLevel(t *testing.T) {
 		map[string]interface{}{"sessionId": "abc", "role": "user", "content": "hi"},
 	}
 	out, err := pipeline.BuildStatsFirstResponse(
+		testConfig(),
 		rawData, rawData,
 		map[string]interface{}{},
 		"query_user_messages", "session",
-		makeAdaptFn(map[string]interface{}{"mode": "inline"}),
-		makeSerializeFn(),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -285,50 +256,15 @@ func TestBuildStandardResponse_Basic(t *testing.T) {
 		map[string]interface{}{"tool_name": "Bash"},
 	}
 	out, err := pipeline.BuildStandardResponse(
+		testConfig(),
 		data,
 		map[string]interface{}{},
 		"query_tools",
-		makeAdaptFn(map[string]interface{}{"mode": "inline", "data": data}),
-		makeSerializeFn(),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !strings.Contains(out, "inline") {
 		t.Errorf("expected 'inline' in output, got: %s", out)
-	}
-}
-
-func TestBuildStandardResponse_AdaptError(t *testing.T) {
-	data := []interface{}{map[string]interface{}{"tool_name": "Bash"}}
-	_, err := pipeline.BuildStandardResponse(
-		data,
-		map[string]interface{}{},
-		"query_tools",
-		makeErrorAdaptFn(),
-		makeSerializeFn(),
-	)
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if !strings.Contains(err.Error(), "response adaptation error") {
-		t.Errorf("unexpected error message: %v", err)
-	}
-}
-
-func TestBuildStandardResponse_SerializeError(t *testing.T) {
-	data := []interface{}{map[string]interface{}{"tool_name": "Bash"}}
-	errorSerializeFn := func(response interface{}) (string, error) {
-		return "", fmt.Errorf("serialize error")
-	}
-	_, err := pipeline.BuildStandardResponse(
-		data,
-		map[string]interface{}{},
-		"query_tools",
-		makeAdaptFn(map[string]interface{}{"mode": "inline"}),
-		errorSerializeFn,
-	)
-	if err == nil {
-		t.Fatal("expected error")
 	}
 }

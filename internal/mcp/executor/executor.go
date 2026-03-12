@@ -369,17 +369,10 @@ func (e *ToolExecutor) BuildResponse(cfg *config.Config, result mcquery.QueryRes
 		parsedData = internalquery.GroupBySession(parsedData)
 	}
 
-	adaptFn := func(data []interface{}, params map[string]interface{}, toolName string) (interface{}, error) {
-		return responsepkg.AdaptResponse(cfg, data, params, toolName)
-	}
-	serializeFn := func(response interface{}) (string, error) {
-		return responsepkg.SerializeResponse(response)
-	}
-
 	if pipeline.StatsFirst {
-		output, err = pipelinepkg.BuildStatsFirstResponse(rawData, parsedData, args, toolName, pipeline.StatsLevel, adaptFn, serializeFn)
+		output, err = pipelinepkg.BuildStatsFirstResponse(cfg, rawData, parsedData, args, toolName, pipeline.StatsLevel)
 	} else {
-		output, err = pipelinepkg.BuildStandardResponse(parsedData, args, toolName, adaptFn, serializeFn)
+		output, err = pipelinepkg.BuildStandardResponse(cfg, parsedData, args, toolName)
 	}
 
 	if err != nil {

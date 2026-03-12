@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/yaleh/meta-cc/internal/config"
+	responsepkg "github.com/yaleh/meta-cc/internal/mcp/response"
 	querypkg "github.com/yaleh/meta-cc/internal/query"
 )
 
@@ -22,13 +24,6 @@ var TimestampStatsTools = map[string]bool{
 	"query_timestamps":        true,
 	"query_summaries":         true,
 }
-
-// AdaptResponseFunc is the signature of adaptResponse in cmd/mcp-server.
-// It is injected as a dependency to avoid an import cycle.
-type AdaptResponseFunc func(data []interface{}, params map[string]interface{}, toolName string) (interface{}, error)
-
-// SerializeResponseFunc is the signature of serializeResponse in cmd/mcp-server.
-type SerializeResponseFunc func(response interface{}) (string, error)
 
 // InjectWarnings adds a "warnings" field to a JSON response string.
 // If the output is valid JSON object, it adds the field. Otherwise returns as-is.
@@ -107,15 +102,13 @@ func BuildStatsOnlyResponse(parsedData []interface{}, toolName string, statsLeve
 
 // BuildStatsFirstResponse generates a stats-first response: stats header followed by
 // serialized detail data.
-// adaptFn and serializeFn are injected to avoid an import cycle with cmd/mcp-server.
 func BuildStatsFirstResponse(
+	cfg *config.Config,
 	rawData []interface{},
 	parsedData []interface{},
 	args map[string]interface{},
 	toolName string,
 	statsLevel string,
-	adaptFn AdaptResponseFunc,
-	serializeFn SerializeResponseFunc,
 ) (string, error) {
 	// Use rawData for stats (sessionId field preserved, not renamed by content_summary)
 	jsonlData, err := DataToJSONL(rawData)
@@ -138,7 +131,7 @@ func BuildStatsFirstResponse(
 	}
 
 	// Use parsedData for detail rendering (may have content_summary applied)
-	response, err := adaptFn(parsedData, args, toolName)
+	response, err := responsepkg.AdaptResponse(cfg, parsedData, args, toolName)
 	if err != nil {
 		slog.Error("response adaptation failed (stats_first)",
 			"tool_name", toolName,
@@ -148,7 +141,7 @@ func BuildStatsFirstResponse(
 		return "", err
 	}
 
-	serialized, err := serializeFn(response)
+	serialized, err := responsepkg.SerializeResponse(response)
 	if err != nil {
 		slog.Error("response serialization failed (stats_first)",
 			"tool_name", toolName,
@@ -162,15 +155,13 @@ func BuildStatsFirstResponse(
 }
 
 // BuildStandardResponse generates a standard (non-stats) response for the given data.
-// adaptFn and serializeFn are injected to avoid an import cycle with cmd/mcp-server.
 func BuildStandardResponse(
+	cfg *config.Config,
 	parsedData []interface{},
 	args map[string]interface{},
 	toolName string,
-	adaptFn AdaptResponseFunc,
-	serializeFn SerializeResponseFunc,
 ) (string, error) {
-	response, err := adaptFn(parsedData, args, toolName)
+	response, err := responsepkg.AdaptResponse(cfg, parsedData, args, toolName)
 	if err != nil {
 		slog.Error("response adaptation failed",
 			"tool_name", toolName,
@@ -180,7 +171,7 @@ func BuildStandardResponse(
 		return "", fmt.Errorf("response adaptation error for tool %s: %w", toolName, err)
 	}
 
-	output, err := serializeFn(response)
+	output, err := responsepkg.SerializeResponse(response)
 	if err != nil {
 		slog.Error("response serialization failed",
 			"tool_name", toolName,
