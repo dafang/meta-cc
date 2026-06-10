@@ -233,17 +233,17 @@ echo "Step 4: Committing version updates..."
 echo ""
 
 if [ -n "$DRY_RUN" ]; then
-    echo "[DRY RUN] Would run: git add .claude-plugin/marketplace.json CHANGELOG.md"
+    echo "[DRY RUN] Would run: git add .claude-plugin/marketplace.json plugin-src/.claude-plugin/plugin.json CHANGELOG.md"
     echo "[DRY RUN] Would commit with message:"
     echo "    chore: release $VERSION"
     echo ""
-    echo "    Update marketplace.json and CHANGELOG.md to version $VERSION_NUM."
+    echo "    Update marketplace.json, plugin.json, and CHANGELOG.md to version $VERSION_NUM."
     echo ""
 else
-    git add .claude-plugin/marketplace.json CHANGELOG.md
+    git add .claude-plugin/marketplace.json plugin-src/.claude-plugin/plugin.json CHANGELOG.md
     git commit -m "chore: release $VERSION
 
-Update marketplace.json and CHANGELOG.md to version $VERSION_NUM.
+Update marketplace.json, plugin.json, and CHANGELOG.md to version $VERSION_NUM.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 

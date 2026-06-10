@@ -41,6 +41,8 @@ The meta-cc plugin includes:
 
 ### Method 2: Archive Install (Alternative)
 
+**Full install** (MCP server + slash commands):
+
 ```bash
 # Linux/macOS (one-liner)
 curl -L https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-plugin-linux-amd64.tar.gz | tar xz
@@ -49,6 +51,23 @@ cd meta-cc-plugin-linux-amd64
 ```
 
 The archive installer copies the binary and integration files, and automatically merges the MCP server configuration into `~/.claude/mcp.json`.
+
+**Slash commands only** (no binary required, any platform):
+
+```bash
+curl -L https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-skills-latest.tar.gz | tar xz
+cd meta-cc-skills-*/
+./install-skills.sh
+```
+
+**MCP server binary only** (for CI/Docker/PATH installs):
+
+```bash
+# Download the bare binary for your platform, e.g. Linux amd64:
+curl -LO https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-mcp-linux-amd64
+chmod +x meta-cc-mcp-linux-amd64
+INSTALL_DIR=~/.local/bin bash scripts/install/install-mcp.sh meta-cc-mcp-linux-amd64
+```
 
 **Other platforms**: See [Installation Guide](docs/tutorials/installation.md) for macOS (Apple Silicon), Windows, and manual installation.
 
