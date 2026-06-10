@@ -5,6 +5,68 @@ All notable changes to the meta-cc project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.7] - 2026-06-10
+
+
+### Added
+
+- split artifacts — add skills-only package and bare MCP binary
+- add plan for final cmd/mcp-server package split
+- Phase 67+68 - migrate query_executor, stage2, filters to streaming reader
+- Phase 69 - migrate handlers and file inspector to streaming reader
+- Phase 66 - add StreamingReader with image filtering
+
+### Changed
+
+- Maintenance: bump plugin version to 3.0.6
+- Refactoring: Phase 86 - complete parser→types migration for production files
+- Refactoring: Phase 85 - replace ExecuteSpecialTool switch with handler registry
+- Refactoring: Phase 84 - remove injected function types from pipeline
+- Refactoring: Phase 83 - fix interfaces to use types instead of parser
+- Refactoring: Phase 82 - split workflow.go god file into sequences, churn, idle
+- Refactoring: Phase 81 - deduplicate ParseTimestamp and getActionType
+- Documentation: architectural improvement plan phases 81-86
+- Refactoring: Phase 80 - extract turnindex, sequences, assistant sub-packages
+- Tests: Phase 79 - fix permanently skipped tests
+- Refactoring: Phase 78 - delete dead code in internal/query/jq/
+- Documentation: add proposal and plan for phases 78-80
+- Maintenance: bump plugin version to 3.0.5
+- Refactoring: Phase 76-77 - remove duplicate QueryExecutor/JQRunner wrappers
+- Documentation: add proposal and plan
+- Refactoring: Phase 74-75 - extract executor and query helpers to internal packages
+- Refactoring: Phase 70 - rename MaxScannerLineBytes, add lint guard
+
+## [3.0.7] - 2026-06-10
+
+
+### Added
+
+- split artifacts — add skills-only package and bare MCP binary
+- add plan for final cmd/mcp-server package split
+- Phase 67+68 - migrate query_executor, stage2, filters to streaming reader
+- Phase 69 - migrate handlers and file inspector to streaming reader
+- Phase 66 - add StreamingReader with image filtering
+
+### Changed
+
+- Maintenance: bump plugin version to 3.0.6
+- Refactoring: Phase 86 - complete parser→types migration for production files
+- Refactoring: Phase 85 - replace ExecuteSpecialTool switch with handler registry
+- Refactoring: Phase 84 - remove injected function types from pipeline
+- Refactoring: Phase 83 - fix interfaces to use types instead of parser
+- Refactoring: Phase 82 - split workflow.go god file into sequences, churn, idle
+- Refactoring: Phase 81 - deduplicate ParseTimestamp and getActionType
+- Documentation: architectural improvement plan phases 81-86
+- Refactoring: Phase 80 - extract turnindex, sequences, assistant sub-packages
+- Tests: Phase 79 - fix permanently skipped tests
+- Refactoring: Phase 78 - delete dead code in internal/query/jq/
+- Documentation: add proposal and plan for phases 78-80
+- Maintenance: bump plugin version to 3.0.5
+- Refactoring: Phase 76-77 - remove duplicate QueryExecutor/JQRunner wrappers
+- Documentation: add proposal and plan
+- Refactoring: Phase 74-75 - extract executor and query helpers to internal packages
+- Refactoring: Phase 70 - rename MaxScannerLineBytes, add lint guard
+
 ## [3.0.4] - 2026-03-11
 
 
