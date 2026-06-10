@@ -9,8 +9,11 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build and Release
+  # ================================================================
+  # Job 1: Build MCP server binaries (5 platforms, parallel)
+  # ================================================================
+  build-mcp:
+    name: Build MCP Server Binaries
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +27,94 @@ jobs:
         with:
           go-version: '1.24'
 
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build MCP server binaries (5 platforms)
+        run: |
+          mkdir -p build/mcp
+
+          VERSION=${{ steps.version.outputs.VERSION }}
+          COMMIT=$(git rev-parse --short HEAD)
+          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
+          LDFLAGS="-X github.com/yaleh/meta-cc/cmd.Version=${VERSION} -X github.com/yaleh/meta-cc/cmd.Commit=${COMMIT} -X github.com/yaleh/meta-cc/cmd.BuildTime=${BUILD_TIME}"
+
+          GOOS=linux   GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/mcp/meta-cc-mcp-${VERSION}-linux-amd64   ./cmd/mcp-server
+          GOOS=linux   GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o build/mcp/meta-cc-mcp-${VERSION}-linux-arm64   ./cmd/mcp-server
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/mcp/meta-cc-mcp-${VERSION}-darwin-amd64  ./cmd/mcp-server
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o build/mcp/meta-cc-mcp-${VERSION}-darwin-arm64  ./cmd/mcp-server
+          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/mcp/meta-cc-mcp-${VERSION}-windows-amd64.exe ./cmd/mcp-server
+
+          echo "Built binaries:"
+          ls -lh build/mcp/
+
+      - name: Upload MCP binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-binaries
+          path: build/mcp/
+          retention-days: 1
+
+  # ================================================================
+  # Job 2: Build skills-only package (platform-independent, parallel)
+  # ================================================================
+  build-skills:
+    name: Build Skills Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Sync plugin files
+        run: bash scripts/sync-plugin-files.sh
+
+      - name: Build skills package
+        run: |
+          mkdir -p build/skills
+          bash scripts/release/build-skills-package.sh \
+            --version "${{ steps.version.outputs.VERSION }}" \
+            --output build/skills
+
+          echo "Built skills package:"
+          ls -lh build/skills/
+
+      - name: Run skills smoke tests
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          bash scripts/ci/smoke-tests-skills.sh \
+            "$VERSION" \
+            "build/skills/meta-cc-skills-${VERSION}.tar.gz"
+
+      - name: Upload skills package
+        uses: actions/upload-artifact@v4
+        with:
+          name: skills-package
+          path: build/skills/
+          retention-days: 1
+
+  # ================================================================
+  # Job 3: Bundle combined packages + GitHub Release
+  # (depends on both build-mcp and build-skills)
+  # ================================================================
+  release:
+    name: Bundle and Release
+    runs-on: ubuntu-latest
+    needs: [build-mcp, build-skills]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Record build start time
         id: build_start
         run: echo "BUILD_START=$(date +%s)" >> $GITHUB_OUTPUT
@@ -35,24 +126,19 @@ jobs:
       - name: Sync plugin files
         run: bash scripts/sync-plugin-files.sh
 
-      - name: Build MCP server binaries
-        run: |
-          mkdir -p build
+      - name: Download MCP binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: mcp-binaries
+          path: build/mcp/
 
-          # Set version info for ldflags
-          VERSION=${{ steps.version.outputs.VERSION }}
-          COMMIT=$(git rev-parse --short HEAD)
-          BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
-          LDFLAGS="-X github.com/yaleh/meta-cc/cmd.Version=${VERSION} -X github.com/yaleh/meta-cc/cmd.Commit=${COMMIT} -X github.com/yaleh/meta-cc/cmd.BuildTime=${BUILD_TIME}"
+      - name: Download skills package
+        uses: actions/download-artifact@v4
+        with:
+          name: skills-package
+          path: build/skills/
 
-          # MCP server binaries (MCP-only architecture)
-          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/meta-cc-mcp-linux-amd64 ./cmd/mcp-server
-          GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o build/meta-cc-mcp-linux-arm64 ./cmd/mcp-server
-          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/meta-cc-mcp-darwin-amd64 ./cmd/mcp-server
-          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o build/meta-cc-mcp-darwin-arm64 ./cmd/mcp-server
-          GOOS=windows GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o build/meta-cc-mcp-windows-amd64.exe ./cmd/mcp-server
-
-      - name: Create plugin packages
+      - name: Create combined plugin packages (5 platforms)
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           mkdir -p build/packages
@@ -61,11 +147,13 @@ jobs:
             PKG_DIR=build/packages/meta-cc-plugin-${platform}
             mkdir -p $PKG_DIR/bin $PKG_DIR/.claude-plugin $PKG_DIR/commands $PKG_DIR/lib
 
-            # Copy MCP server binary (MCP-only architecture)
+            # Copy MCP server binary
             if [[ $platform == windows-* ]]; then
-              cp build/meta-cc-mcp-${platform}.exe $PKG_DIR/bin/meta-cc-mcp.exe
+              chmod +x build/mcp/meta-cc-mcp-${VERSION}-${platform}.exe 2>/dev/null || true
+              cp build/mcp/meta-cc-mcp-${VERSION}-${platform}.exe $PKG_DIR/bin/meta-cc-mcp.exe
             else
-              cp build/meta-cc-mcp-${platform} $PKG_DIR/bin/meta-cc-mcp
+              chmod +x build/mcp/meta-cc-mcp-${VERSION}-${platform}
+              cp build/mcp/meta-cc-mcp-${VERSION}-${platform} $PKG_DIR/bin/meta-cc-mcp
             fi
 
             # Copy Claude Code plugin structure
@@ -73,13 +161,13 @@ jobs:
             cp -r dist/commands/* $PKG_DIR/commands/
             cp -r lib/* $PKG_DIR/lib/
 
-            # Copy plugin.json from plugin-src location into archive .claude-plugin/
+            # Copy plugin.json from plugin-src into archive .claude-plugin/
             cp plugin-src/.claude-plugin/plugin.json $PKG_DIR/.claude-plugin/
 
             # Copy .mcp.json to archive root
             cp plugin-src/.mcp.json $PKG_DIR/
 
-            # Rewrite archive commands paths from "./plugin-src/commands/" to "./commands/" for flat layout
+            # Rewrite paths in archive manifests to flat layout
             jq '.commands |= map(gsub("\\./plugin-src/commands/"; "./commands/"))' \
               $PKG_DIR/.claude-plugin/plugin.json \
               > $PKG_DIR/.claude-plugin/plugin.json.tmp
@@ -89,9 +177,11 @@ jobs:
               > $PKG_DIR/.claude-plugin/marketplace.json.tmp
             mv $PKG_DIR/.claude-plugin/marketplace.json.tmp $PKG_DIR/.claude-plugin/marketplace.json
 
-            # Copy scripts and metadata
+            # Copy install scripts, README, LICENSE
             cp scripts/install/install.sh $PKG_DIR/
             cp scripts/install/uninstall.sh $PKG_DIR/
+            cp scripts/install/install-mcp.sh $PKG_DIR/
+            cp scripts/install/install-skills.sh $PKG_DIR/
             cp README.md $PKG_DIR/
             cp LICENSE $PKG_DIR/
 
@@ -101,26 +191,38 @@ jobs:
             cd ../..
           done
 
-      - name: Run smoke tests (multi-platform)
+      - name: Promote skills and bare-binary artifacts to packages/
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+
+          # Skills-only package (already built in build-skills job)
+          cp build/skills/meta-cc-skills-${VERSION}.tar.gz build/packages/
+
+          # Bare MCP binaries (non-Windows, plain files for PATH install)
+          for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            chmod +x build/mcp/meta-cc-mcp-${VERSION}-${platform}
+            cp build/mcp/meta-cc-mcp-${VERSION}-${platform} \
+               build/packages/meta-cc-mcp-${VERSION}-${platform}
+          done
+          cp build/mcp/meta-cc-mcp-${VERSION}-windows-amd64.exe \
+             build/packages/meta-cc-mcp-${VERSION}-windows-amd64.exe
+
+      - name: Run smoke tests for combined packages
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
 
           echo "========================================="
           echo "Running smoke tests for release artifacts"
           echo "========================================="
-          echo "Testing platforms: linux-amd64, darwin-arm64, windows-amd64"
-          echo ""
 
-          # Test key platforms (structure validation only for non-linux)
+          # Combined plugin packages - test key platforms
           for PLATFORM in linux-amd64 darwin-arm64 windows-amd64; do
-            echo "--- Testing $PLATFORM ---"
+            echo "--- Combined package: $PLATFORM ---"
             PACKAGE=build/packages/meta-cc-plugin-${VERSION}-${PLATFORM}.tar.gz
 
-            # Full smoke tests for linux-amd64 (native), structure check for others
             if [ "$PLATFORM" = "linux-amd64" ]; then
               bash scripts/ci/smoke-tests.sh "$VERSION" "$PLATFORM" "$PACKAGE"
             else
-              # Just verify package exists and structure
               if [ -f "$PACKAGE" ]; then
                 echo "✓ Package exists: $PACKAGE"
                 tar -tzf "$PACKAGE" | head -20
@@ -133,14 +235,41 @@ jobs:
             echo ""
           done
 
-          echo "✓ All smoke tests passed - proceeding with release"
+          # Skills-only package
+          echo "--- Skills package ---"
+          bash scripts/ci/smoke-tests-skills.sh \
+            "$VERSION" \
+            "build/packages/meta-cc-skills-${VERSION}.tar.gz"
+          echo ""
+
+          # Bare binaries (existence check only - non-native platforms can't execute)
+          echo "--- Bare MCP binaries ---"
+          for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            BIN=build/packages/meta-cc-mcp-${VERSION}-${platform}
+            if [ -f "$BIN" ] && [ -x "$BIN" ]; then
+              echo "✓ $BIN (executable)"
+            else
+              echo "❌ ERROR: $BIN missing or not executable"
+              exit 1
+            fi
+          done
+          BIN_WIN=build/packages/meta-cc-mcp-${VERSION}-windows-amd64.exe
+          if [ -f "$BIN_WIN" ]; then
+            echo "✓ $BIN_WIN"
+          else
+            echo "❌ ERROR: $BIN_WIN missing"
+            exit 1
+          fi
+          echo ""
+
+          echo "✓ All smoke tests passed"
 
       - name: Calculate build duration
         run: |
           START=${{ steps.build_start.outputs.BUILD_START }}
           END=$(date +%s)
           DURATION=$((END - START))
-          echo "⏱️  Build completed in ${DURATION} seconds"
+          echo "⏱️  Bundle job completed in ${DURATION}s"
           echo "BUILD_DURATION=${DURATION}" >> $GITHUB_ENV
 
       - name: Track build duration metric
@@ -150,16 +279,29 @@ jobs:
       - name: Generate checksums
         run: |
           cd build/packages
-          sha256sum *.tar.gz > checksums.txt
+          sha256sum *.tar.gz *.exe $(ls meta-cc-mcp-*-linux-* meta-cc-mcp-*-darwin-* 2>/dev/null) > checksums.txt 2>/dev/null || sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
 
-      - name: Create version-agnostic symlinks
+      - name: Create version-agnostic convenience copies
         run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
           cd build/packages
+
+          # Combined plugin packages
           for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64; do
-            cp meta-cc-plugin-${{ steps.version.outputs.VERSION }}-${platform}.tar.gz meta-cc-plugin-${platform}.tar.gz
+            cp meta-cc-plugin-${VERSION}-${platform}.tar.gz meta-cc-plugin-${platform}.tar.gz
           done
 
-      - name: Create Release
+          # Skills package
+          cp meta-cc-skills-${VERSION}.tar.gz meta-cc-skills-latest.tar.gz
+
+          # Bare binaries
+          for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            cp meta-cc-mcp-${VERSION}-${platform} meta-cc-mcp-${platform}
+          done
+          cp meta-cc-mcp-${VERSION}-windows-amd64.exe meta-cc-mcp-windows-amd64.exe
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
@@ -170,12 +312,30 @@ jobs:
           body: |
             ## Installation
 
-            Download the appropriate package for your platform and run:
+            ### Full Install (MCP server + slash commands)
+
+            Download the appropriate package for your platform:
 
             ```bash
             tar -xzf meta-cc-plugin-${{ steps.version.outputs.VERSION }}-<platform>.tar.gz
             cd meta-cc-plugin-<platform>
             ./install.sh
+            ```
+
+            ### Slash Commands Only (no binary required)
+
+            ```bash
+            tar -xzf meta-cc-skills-${{ steps.version.outputs.VERSION }}.tar.gz
+            cd meta-cc-skills-${{ steps.version.outputs.VERSION }}
+            ./install-skills.sh
+            ```
+
+            ### MCP Server Only (for CI/Docker/PATH installs)
+
+            ```bash
+            # Download the bare binary for your platform, e.g.:
+            chmod +x meta-cc-mcp-${{ steps.version.outputs.VERSION }}-linux-amd64
+            ./scripts/install/install-mcp.sh meta-cc-mcp-${{ steps.version.outputs.VERSION }}-linux-amd64
             ```
 
             ### Platforms
@@ -185,65 +345,32 @@ jobs:
             - `darwin-arm64`: macOS Apple Silicon
             - `windows-amd64`: Windows x86_64
 
-            See [Installation Guide](https://github.com/yaleh/meta-cc#installation) for detailed instructions and troubleshooting.
-
-            ### Architecture
-            This release contains MCP server binaries only. Query session data using MCP tools via Claude Code.
+            See [Installation Guide](https://github.com/yaleh/meta-cc#installation) for details.
 
             ### Verification
-            After installation, test with:
+            After full install, test with:
             ```
             /meta "show session stats"
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate release summary
-        if: success()
-        run: |
-          echo "==================================="
-          echo "Release ${{ steps.version.outputs.VERSION }} Summary"
-          echo "==================================="
-          echo ""
-          echo "Build Metrics:"
-          echo "  - Build duration: ${BUILD_DURATION}s"
-          echo "  - Platforms built: 5 (linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64)"
-          echo "  - Binaries created: 5 (MCP server × 5 platforms)"
-          echo "  - Architecture: MCP-only"
-          echo ""
-          echo "Artifact Summary:"
-          echo "  - Plugin packages: 5"
-          echo "  - Checksums: 1"
-          echo "  - Total package size: $(du -sh build/packages | cut -f1)"
-          echo ""
-          echo "Quality Gates:"
-          echo "  - Version verification: PASS ✓"
-          echo "  - Smoke tests: PASS ✓ (25/25)"
-          echo "  - Checksums: GENERATED ✓"
-          echo ""
-          echo "Release Status: SUCCESS ✓"
-          echo "==================================="
-
       - name: Create job summary
         if: success()
         run: |
-          echo "## Release ${{ steps.version.outputs.VERSION }} Complete ✓" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Build Metrics" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build duration**: ${BUILD_DURATION}s" >> $GITHUB_STEP_SUMMARY
-          echo "- **Platforms**: 5 (linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Binaries**: 5 (MCP server × 5 platforms)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Architecture**: MCP-only" >> $GITHUB_STEP_SUMMARY
+          VERSION=${{ steps.version.outputs.VERSION }}
+          echo "## Release ${VERSION} Complete ✓" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- **Plugin packages**: 5 platform-specific packages" >> $GITHUB_STEP_SUMMARY
-          echo "- **Total size**: $(du -sh build/packages | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | Type | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`meta-cc-plugin-{platform}.tar.gz\` | Combined (MCP + skills) | 5 |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`meta-cc-skills-${VERSION}.tar.gz\` | Skills only (cross-platform) | 1 |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`meta-cc-mcp-{version}-{platform}\` | Bare MCP binary | 5 |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Quality Gates" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Version verification (marketplace.json)" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Smoke tests (25/25 passed)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ MCP binaries built (5 platforms)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Skills package smoke tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Combined package smoke tests" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Checksums generated (SHA256)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Distribution" >> $GITHUB_STEP_SUMMARY
-          echo "- **GitHub Release**: Created with all artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- **Marketplace**: Available via `/plugin marketplace add yaleh/meta-cc`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build duration (bundle job)**: ${BUILD_DURATION}s" >> $GITHUB_STEP_SUMMARY
