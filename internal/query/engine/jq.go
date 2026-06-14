@@ -8,7 +8,6 @@ import (
 	"github.com/itchyny/gojq"
 
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
-	statspkg "github.com/yaleh/meta-cc/internal/query/stats"
 )
 
 // ApplyJQFilter applies a jq expression to JSONL data.
@@ -30,26 +29,6 @@ func ApplyJQFilter(jsonlData string, jqExpr string) (string, error) {
 	}
 
 	return encodeJQResults(results)
-}
-
-// GenerateStats delegates to internal/query/stats for backward compatibility.
-func GenerateStats(jsonlData string) (string, error) {
-	return statspkg.GenerateStats(jsonlData)
-}
-
-// GenerateTimestampStats delegates to internal/query/stats for backward compatibility.
-func GenerateTimestampStats(jsonlData string) (string, error) {
-	return statspkg.GenerateTimestampStats(jsonlData)
-}
-
-// GroupBySession delegates to internal/query/stats for backward compatibility.
-func GroupBySession(entries []interface{}) []interface{} {
-	return statspkg.GroupBySession(entries)
-}
-
-// GenerateSessionStats delegates to internal/query/stats for backward compatibility.
-func GenerateSessionStats(jsonlData string) (string, error) {
-	return statspkg.GenerateSessionStats(jsonlData)
 }
 
 func defaultJQExpression(expr string) string {
