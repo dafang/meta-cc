@@ -23,15 +23,20 @@ func setupAnalysisTestProjectDir(t *testing.T, sourceJSONL string) string {
 	// Create the fake projects root
 	projectsRoot := t.TempDir()
 	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex-home"))
 
 	// Create a temp "project" directory
 	projectPath := t.TempDir()
 
-	// The locator converts projectPath to a hash via pathToHash (/ -> -)
-	// We replicate the same logic: replace "/" with "-"
+	// The locator resolves symlinks before converting separators to "-".
 	absProject, err := filepath.Abs(projectPath)
 	require.NoError(t, err)
-	hash := strings.ReplaceAll(absProject, "/", "-")
+	resolvedProject, err := filepath.EvalSymlinks(absProject)
+	require.NoError(t, err)
+	hash := strings.ReplaceAll(resolvedProject, "\\", "-")
+	hash = strings.ReplaceAll(hash, "/", "-")
+	hash = strings.ReplaceAll(hash, ":", "-")
 
 	sessionDir := filepath.Join(projectsRoot, hash)
 	err = os.MkdirAll(sessionDir, 0755)

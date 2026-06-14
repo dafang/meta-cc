@@ -108,6 +108,17 @@ teardown() {
     [ -f "$TEST_DIR/meta-cc-skills-v0.0.0-test/lib/meta-utils.sh" ]
 }
 
+@test "skills package: contains Codex skills" {
+    bash scripts/release/build-skills-package.sh \
+        --version "v0.0.0-test" \
+        --output "$TEST_DIR"
+    tar -xzf "$TEST_DIR/meta-cc-skills-v0.0.0-test.tar.gz" -C "$TEST_DIR"
+
+    [ -f "$TEST_DIR/meta-cc-skills-v0.0.0-test/skills/prompt-find/SKILL.md" ]
+    [ -f "$TEST_DIR/meta-cc-skills-v0.0.0-test/skills/prompt-list/SKILL.md" ]
+    [ -f "$TEST_DIR/meta-cc-skills-v0.0.0-test/skills/prompt-show/SKILL.md" ]
+}
+
 @test "skills package: contains install-skills.sh" {
     bash scripts/release/build-skills-package.sh \
         --version "v0.0.0-test" \
@@ -165,6 +176,56 @@ teardown() {
     [ -f "$CLAUDE_DIR/commands/prompt-show.md" ]
 }
 
+@test "install-skills.sh: installs Codex skills to CODEX_HOME" {
+    bash scripts/release/build-skills-package.sh \
+        --version "v0.0.0-test" \
+        --output "$TEST_DIR"
+    tar -xzf "$TEST_DIR/meta-cc-skills-v0.0.0-test.tar.gz" -C "$TEST_DIR"
+
+    PKG_DIR="$TEST_DIR/meta-cc-skills-v0.0.0-test"
+    CLAUDE_DIR="$TEST_DIR/dot-claude"
+    CODEX_HOME="$TEST_DIR/dot-codex"
+    mkdir -p "$CLAUDE_DIR" "$CODEX_HOME"
+
+    run env CLAUDE_DIR="$CLAUDE_DIR" CODEX_HOME="$CODEX_HOME" bash "$PKG_DIR/install-skills.sh"
+    [ "$status" -eq 0 ]
+    [ -f "$CODEX_HOME/skills/prompt-find/SKILL.md" ]
+    [ -f "$CODEX_HOME/skills/prompt-list/SKILL.md" ]
+    [ -f "$CODEX_HOME/skills/prompt-show/SKILL.md" ]
+}
+
+@test "install-skills.sh: can skip Claude Code install" {
+    bash scripts/release/build-skills-package.sh \
+        --version "v0.0.0-test" \
+        --output "$TEST_DIR"
+    tar -xzf "$TEST_DIR/meta-cc-skills-v0.0.0-test.tar.gz" -C "$TEST_DIR"
+
+    PKG_DIR="$TEST_DIR/meta-cc-skills-v0.0.0-test"
+    CLAUDE_DIR="$TEST_DIR/dot-claude"
+    CODEX_HOME="$TEST_DIR/dot-codex"
+
+    run env INSTALL_CLAUDE=0 CLAUDE_DIR="$CLAUDE_DIR" CODEX_HOME="$CODEX_HOME" bash "$PKG_DIR/install-skills.sh"
+    [ "$status" -eq 0 ]
+    [ ! -e "$CLAUDE_DIR/commands/prompt-find.md" ]
+    [ -f "$CODEX_HOME/skills/prompt-find/SKILL.md" ]
+}
+
+@test "install-skills.sh: can skip Codex install" {
+    bash scripts/release/build-skills-package.sh \
+        --version "v0.0.0-test" \
+        --output "$TEST_DIR"
+    tar -xzf "$TEST_DIR/meta-cc-skills-v0.0.0-test.tar.gz" -C "$TEST_DIR"
+
+    PKG_DIR="$TEST_DIR/meta-cc-skills-v0.0.0-test"
+    CLAUDE_DIR="$TEST_DIR/dot-claude"
+    CODEX_HOME="$TEST_DIR/dot-codex"
+
+    run env INSTALL_CODEX=0 CLAUDE_DIR="$CLAUDE_DIR" CODEX_HOME="$CODEX_HOME" bash "$PKG_DIR/install-skills.sh"
+    [ "$status" -eq 0 ]
+    [ -f "$CLAUDE_DIR/commands/prompt-find.md" ]
+    [ ! -e "$CODEX_HOME/skills/prompt-find/SKILL.md" ]
+}
+
 @test "install-skills.sh: installs lib/meta-utils.sh" {
     bash scripts/release/build-skills-package.sh \
         --version "v0.0.0-test" \
@@ -192,4 +253,33 @@ teardown() {
     env CLAUDE_DIR="$CLAUDE_DIR" bash "$PKG_DIR/install-skills.sh"
     run env CLAUDE_DIR="$CLAUDE_DIR" bash "$PKG_DIR/install-skills.sh"
     [ "$status" -eq 0 ]
+}
+
+@test "full install.sh: supports temp Claude and Codex destinations" {
+    PKG_DIR="$TEST_DIR/full-package"
+    mkdir -p "$PKG_DIR/bin" "$PKG_DIR/commands" "$PKG_DIR/skills" "$PKG_DIR/lib" "$PKG_DIR/.claude-plugin" "$PKG_DIR/.codex-plugin"
+
+    printf '#!/bin/sh\nexit 0\n' > "$PKG_DIR/bin/meta-cc-mcp"
+    chmod +x "$PKG_DIR/bin/meta-cc-mcp"
+    cp plugin-src/commands/*.md "$PKG_DIR/commands/"
+    cp -R plugin-src/skills/* "$PKG_DIR/skills/"
+    cp lib/meta-utils.sh "$PKG_DIR/lib/"
+    cp plugin-src/.mcp.json "$PKG_DIR/.mcp.json"
+    cp plugin-src/.codex-mcp.json "$PKG_DIR/.codex-mcp.json"
+    cp plugin-src/.claude-plugin/plugin.json "$PKG_DIR/.claude-plugin/plugin.json"
+    cp plugin-src/.codex-plugin/plugin.json "$PKG_DIR/.codex-plugin/plugin.json"
+    cp scripts/install/install.sh "$PKG_DIR/install.sh"
+
+    CLAUDE_DIR="$TEST_DIR/dot-claude"
+    CODEX_HOME="$TEST_DIR/dot-codex"
+    INSTALL_DIR="$TEST_DIR/bin"
+
+    run bash -c "cd '$PKG_DIR' && env INSTALL_DIR='$INSTALL_DIR' CLAUDE_DIR='$CLAUDE_DIR' CODEX_HOME='$CODEX_HOME' ./install.sh"
+    [ "$status" -eq 0 ]
+    [ -f "$INSTALL_DIR/meta-cc-mcp" ]
+    [ -f "$CLAUDE_DIR/commands/prompt-find.md" ]
+    [ -f "$CLAUDE_DIR/mcp.json" ]
+    [ -f "$CODEX_HOME/skills/prompt-find/SKILL.md" ]
+    [ -f "$CODEX_HOME/plugins/meta-cc/.codex-plugin/plugin.json" ]
+    [ -f "$CODEX_HOME/plugins/meta-cc/.codex-mcp.json" ]
 }

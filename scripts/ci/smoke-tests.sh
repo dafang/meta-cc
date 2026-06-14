@@ -243,8 +243,8 @@ echo ""
 echo "Test Category 3: Plugin Structure"
 echo "----------------------------------"
 
-# Test 3.1: Required directories present (no agents/ or skills/ in 3.0.0)
-REQUIRED_DIRS=("bin" ".claude-plugin" "commands" "lib")
+# Test 3.1: Required directories present
+REQUIRED_DIRS=("bin" ".claude-plugin" ".codex-plugin" "commands" "skills" "lib")
 for dir in "${REQUIRED_DIRS[@]}"; do
     if [ -d "$dir" ]; then
         test_result "Directory exists: $dir" "pass"
@@ -258,8 +258,13 @@ done
 REQUIRED_FILES=(
     "bin/meta-cc-mcp"
     ".claude-plugin/marketplace.json"
+    ".claude-plugin/plugin.json"
+    ".codex-plugin/plugin.json"
+    ".mcp.json"
+    ".codex-mcp.json"
     "install.sh"
     "uninstall.sh"
+    "install-skills.sh"
     "README.md"
     "LICENSE"
 )
@@ -274,8 +279,13 @@ if [ "$PLATFORM" = "windows-amd64" ]; then
     REQUIRED_FILES=(
         "bin/meta-cc-mcp.exe"
         ".claude-plugin/marketplace.json"
+        ".claude-plugin/plugin.json"
+        ".codex-plugin/plugin.json"
+        ".mcp.json"
+        ".codex-mcp.json"
         "install.sh"
         "uninstall.sh"
+        "install-skills.sh"
         "README.md"
         "LICENSE"
     )
@@ -346,12 +356,14 @@ else
     test_result "agents/ directory NOT in archive (removed in 3.0.0)" "pass"
 fi
 
-# Test 3.7: No skills directory in archive (removed in 3.0.0)
-if [ -d "skills" ]; then
-    test_result "skills/ directory NOT in archive (removed in 3.0.0)" "fail" "skills/ directory found in release package"
-else
-    test_result "skills/ directory NOT in archive (removed in 3.0.0)" "pass"
-fi
+# Test 3.7: Codex skills are present
+for skill in prompt-find prompt-list prompt-show; do
+    if [ -f "skills/${skill}/SKILL.md" ]; then
+        test_result "Codex skill exists: skills/${skill}/SKILL.md" "pass"
+    else
+        test_result "Codex skill exists: skills/${skill}/SKILL.md" "fail" "Expected Codex skill file missing"
+    fi
+done
 
 # Test 3.10: plugin.json in archive .claude-plugin/
 if [ -f ".claude-plugin/plugin.json" ]; then
@@ -379,6 +391,28 @@ if [ -f ".mcp.json" ]; then
     fi
 else
     test_result ".mcp.json in archive: exists" "fail" ".mcp.json not found in archive"
+fi
+
+# Test 3.11b: .codex-mcp.json in archive
+if [ -f ".codex-mcp.json" ]; then
+    if jq -e '.mcpServers["meta-cc"]' .codex-mcp.json > /dev/null 2>&1; then
+        test_result ".codex-mcp.json in archive: valid with meta-cc server" "pass"
+    else
+        test_result ".codex-mcp.json in archive: valid with meta-cc server" "fail" "meta-cc server entry missing"
+    fi
+else
+    test_result ".codex-mcp.json in archive: exists" "fail" ".codex-mcp.json not found in archive"
+fi
+
+# Test 3.11c: Codex plugin manifest is valid
+if [ -f ".codex-plugin/plugin.json" ]; then
+    if jq -e '.skills and .mcpServers' .codex-plugin/plugin.json > /dev/null 2>&1; then
+        test_result "Codex plugin manifest declares skills and MCP config" "pass"
+    else
+        test_result "Codex plugin manifest declares skills and MCP config" "fail" "skills or mcpServers missing"
+    fi
+else
+    test_result "Codex plugin manifest exists" "fail" ".codex-plugin/plugin.json not found"
 fi
 
 # Test 3.12: archive marketplace.json source is "."

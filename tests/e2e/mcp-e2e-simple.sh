@@ -27,7 +27,46 @@ fi
 get_json_response() {
     local input="$1"
     # Look for lines starting with { and containing "jsonrpc"
-    echo "$input" | grep -E '^\s*\{' | grep '"jsonrpc"' | head -1
+    echo "$input" | grep -E '^\s*\{' | grep '"jsonrpc"' | head -1 || true
+}
+
+send_request() {
+    local request="$1"
+    local seconds="${2:-5}"
+
+    if command -v timeout >/dev/null 2>&1; then
+        echo "$request" | timeout "$seconds" "$BINARY" 2>&1 || true
+    elif command -v gtimeout >/dev/null 2>&1; then
+        echo "$request" | gtimeout "$seconds" "$BINARY" 2>&1 || true
+    elif command -v python3 >/dev/null 2>&1; then
+        REQUEST_PAYLOAD="$request" python3 - "$seconds" "$BINARY" <<'PY' 2>&1 || true
+import os
+import subprocess
+import sys
+
+seconds = int(sys.argv[1])
+binary = sys.argv[2]
+payload = os.environ["REQUEST_PAYLOAD"] + "\n"
+
+try:
+    proc = subprocess.run(
+        [binary],
+        input=payload,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=seconds,
+        check=False,
+    )
+    print(proc.stdout, end="")
+except subprocess.TimeoutExpired as exc:
+    if exc.stdout:
+        print(exc.stdout, end="")
+    print("__META_CC_TIMEOUT__")
+PY
+    else
+        echo "$request" | "$BINARY" 2>&1 || true
+    fi
 }
 
 echo "=========================================="
@@ -39,7 +78,7 @@ echo ""
 
 # Test 1: List tools (single request)
 echo -e "${BLUE}Test 1: List Tools${NC}"
-RAW_OUTPUT=$(echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | timeout 3 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' 3)
 RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$RESPONSE" ]; then
@@ -64,7 +103,7 @@ echo ""
 # Test 2: Call a simple tool (query_tool_errors)
 echo -e "${BLUE}Test 2: Call query_tool_errors${NC}"
 REQUEST='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"query_tool_errors","arguments":{"limit":5}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$RESPONSE" ]; then
@@ -82,7 +121,7 @@ echo ""
 # Test 3: Call another tool (query_tools)
 echo -e "${BLUE}Test 3: Call query_tools${NC}"
 REQUEST='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query_tools","arguments":{"limit":10}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$RESPONSE" ]; then
@@ -101,7 +140,7 @@ echo ""
 echo -e "${BLUE}Test 4: Check Phase 27 Tools${NC}"
 
 # Get fresh tools list
-RAW_OUTPUT=$(echo '{"jsonrpc":"2.0","id":4,"method":"tools/list"}' | timeout 3 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request '{"jsonrpc":"2.0","id":4,"method":"tools/list"}' 3)
 TOOLS_LIST=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$TOOLS_LIST" ]; then
@@ -133,7 +172,7 @@ echo ""
 # Test 5: get_session_directory (project scope)
 echo -e "${BLUE}Test 5: get_session_directory (project scope)${NC}"
 REQUEST='{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_session_directory","arguments":{"scope":"project"}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$RESPONSE" ]; then
@@ -153,7 +192,7 @@ echo ""
 # Test 6: get_session_directory (session scope)
 echo -e "${BLUE}Test 6: get_session_directory (session scope)${NC}"
 REQUEST='{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_session_directory","arguments":{"scope":"session"}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$RESPONSE" ]; then
@@ -174,7 +213,7 @@ echo ""
 echo -e "${BLUE}Test 7: inspect_session_files (without samples)${NC}"
 # First get the directory to get file list
 REQUEST='{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"get_session_directory","arguments":{"scope":"project"}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 DIR_RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$DIR_RESPONSE" ]; then
@@ -188,7 +227,7 @@ else
         echo -e "  ${YELLOW}⚠ WARNING${NC} - No files found in directory"
     else
         REQUEST="{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_session_files\",\"arguments\":{\"scope\":\"project\",\"files\":$FILES,\"include_samples\":false}}}"
-        RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+        RAW_OUTPUT=$(send_request "$REQUEST" 5)
         RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
         if [ -z "$RESPONSE" ]; then
@@ -210,7 +249,7 @@ echo ""
 echo -e "${BLUE}Test 8: inspect_session_files (with samples)${NC}"
 # First get the directory to get file list
 REQUEST='{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"get_session_directory","arguments":{"scope":"project"}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 DIR_RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$DIR_RESPONSE" ]; then
@@ -224,7 +263,7 @@ else
         echo -e "  ${YELLOW}⚠ WARNING${NC} - No files found in directory"
     else
         REQUEST="{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"tools/call\",\"params\":{\"name\":\"inspect_session_files\",\"arguments\":{\"scope\":\"project\",\"files\":$FILES,\"include_samples\":true,\"sample_size\":3}}}"
-        RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+        RAW_OUTPUT=$(send_request "$REQUEST" 5)
         RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
         if [ -z "$RESPONSE" ]; then
@@ -251,7 +290,7 @@ echo ""
 echo -e "${BLUE}Test 9: execute_stage2_query (basic filter)${NC}"
 # First get the directory to get file list
 REQUEST='{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"get_session_directory","arguments":{"scope":"project"}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 DIR_RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$DIR_RESPONSE" ]; then
@@ -265,7 +304,7 @@ else
         echo -e "  ${YELLOW}⚠ WARNING${NC} - No files found in directory"
     else
         REQUEST="{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"execute_stage2_query\",\"arguments\":{\"scope\":\"project\",\"files\":$FILES,\"filter\":\"select(.type == \\\\\\\"user\\\\\\\")\",\"limit\":5}}}"
-        RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+        RAW_OUTPUT=$(send_request "$REQUEST" 5)
         RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
         if [ -z "$RESPONSE" ]; then
@@ -286,7 +325,7 @@ echo ""
 echo -e "${BLUE}Test 10: execute_stage2_query (full pipeline)${NC}"
 # First get the directory to get file list
 REQUEST='{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"get_session_directory","arguments":{"scope":"project"}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 DIR_RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$DIR_RESPONSE" ]; then
@@ -300,7 +339,7 @@ else
         echo -e "  ${YELLOW}⚠ WARNING${NC} - No files found in directory"
     else
         REQUEST="{\"jsonrpc\":\"2.0\",\"id\":10,\"method\":\"tools/call\",\"params\":{\"name\":\"execute_stage2_query\",\"arguments\":{\"scope\":\"project\",\"files\":$FILES,\"filter\":\"select(.type == \\\\\\\"assistant\\\\\\\")\",\"sort_by\":\"timestamp\",\"sort_order\":\"desc\",\"transform\":\"{timestamp, turn}\",\"limit\":3}}}"
-        RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+        RAW_OUTPUT=$(send_request "$REQUEST" 5)
         RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
         if [ -z "$RESPONSE" ]; then
@@ -321,7 +360,7 @@ echo ""
 echo -e "${BLUE}Test 11: Performance Validation (< 100ms target)${NC}"
 # First get the directory to get file list
 REQUEST='{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_session_directory","arguments":{"scope":"project"}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 DIR_RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$DIR_RESPONSE" ]; then
@@ -336,7 +375,7 @@ else
     else
         START_TIME=$(date +%s%3N)
         REQUEST="{\"jsonrpc\":\"2.0\",\"id\":11,\"method\":\"tools/call\",\"params\":{\"name\":\"execute_stage2_query\",\"arguments\":{\"scope\":\"project\",\"files\":$FILES,\"filter\":\"select(.type == \\\\\\\"user\\\\\\\")\",\"limit\":10}}}"
-        RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+        RAW_OUTPUT=$(send_request "$REQUEST" 5)
         END_TIME=$(date +%s%3N)
         DURATION=$((END_TIME - START_TIME))
 
@@ -361,7 +400,7 @@ echo -e "${BLUE}Test 12: Complete Two-Stage Workflow${NC}"
 # Stage 1: Get directory
 echo -e "  ${BLUE}Stage 1: Get session directory${NC}"
 REQUEST='{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{"name":"get_session_directory","arguments":{"scope":"project"}}}'
-RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+RAW_OUTPUT=$(send_request "$REQUEST" 5)
 RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
 if [ -z "$RESPONSE" ]; then
@@ -376,7 +415,7 @@ else
         # Stage 2: Execute query
         echo -e "  ${BLUE}Stage 2: Execute query${NC}"
         REQUEST="{\"jsonrpc\":\"2.0\",\"id\":13,\"method\":\"tools/call\",\"params\":{\"name\":\"execute_stage2_query\",\"arguments\":{\"scope\":\"project\",\"files\":$FILES,\"filter\":\"select(.type == \\\\\\\"user\\\\\\\")\",\"limit\":5}}}"
-        RAW_OUTPUT=$(echo "$REQUEST" | timeout 5 "$BINARY" 2>&1)
+        RAW_OUTPUT=$(send_request "$REQUEST" 5)
         RESPONSE=$(get_json_response "$RAW_OUTPUT")
 
         if [ -z "$RESPONSE" ]; then

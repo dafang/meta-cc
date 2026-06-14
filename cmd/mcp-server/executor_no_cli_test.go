@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +12,9 @@ import (
 // instead of spawning meta-cc subprocess. This test ensures Phase 23 completion:
 // all MCP query tools must execute without CLI dependency.
 func TestQueryToolsDoNotUseCLI(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex-home"))
+
 	// Create executor - no CLI path needed since all tools use library
 	executor := &ToolExecutor{}
 

@@ -19,7 +19,7 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
 # Default target when running 'make' without arguments
 .DEFAULT_GOAL := all
 
-.PHONY: all build stage test test-all test-coverage clean install install-local install-user uninstall-local uninstall-user uninstall-legacy cross-compile bundle-release lint lint-errors fmt vet help sync-plugin-files dev check-workspace check-temp-files check-fixtures check-deps check-imports check-scripts check-debug check-go-quality pre-commit ci metrics-mcp check-test-quality check-formatting fix-formatting check-plugin-sync check-mod-tidy test-bats check-release-ready test-all-local pre-commit-full check-essential check-code-quality check-build-quality check-comprehensive check-commit-ready check-push-ready check-no-scanner
+.PHONY: all build stage test test-all test-coverage clean install install-local install-user uninstall-local uninstall-user uninstall-legacy cross-compile bundle-release lint lint-errors fmt vet help sync-plugin-files dev check-workspace check-temp-files check-fixtures check-deps check-imports check-scripts check-debug check-go-quality pre-commit ci metrics-mcp check-test-quality check-formatting fix-formatting check-plugin-sync check-mod-tidy test-bats check-release-ready test-all-local pre-commit-full check-essential check-code-quality check-build-quality check-comprehensive check-commit-ready check-push-ready check-no-scanner test-e2e-mcp test-e2e-codex
 
 # ==============================================================================
 # Build Quality Gates (BAIME Experiment - Iteration 1)
@@ -429,7 +429,11 @@ test-e2e-mcp: build
 	@echo "Running MCP E2E tests..."
 	@bash tests/e2e/mcp-e2e-simple.sh ./bin/$(MCP_BINARY_NAME)
 
-test-all: test test-e2e-mcp
+test-e2e-codex: build
+	@echo "Running Codex E2E tests..."
+	@bash tests/e2e/codex-e2e.sh ./bin/$(MCP_BINARY_NAME)
+
+test-all: test test-e2e-mcp test-e2e-codex
 	@echo "Running all tests (including slow E2E tests ~30s)..."
 	$(GOTEST) -v ./...
 	@echo ""
@@ -643,6 +647,7 @@ help:
 	@echo "  make stage                   - Build + copy binary to plugin-src/bin/ for local install"
 	@echo "  make test                    - Run tests (short mode, skips slow E2E tests)"
 	@echo "  make test-all                - Run all tests (including slow E2E tests ~30s)"
+	@echo "  make test-e2e-codex          - Run Codex install/session E2E tests"
 	@echo "  make test-coverage           - Run tests with coverage report"
 	@echo "  make test-coverage-check     - Check test coverage meets 75% threshold"
 	@echo "  make lint                    - Run static analysis (fmt + vet + error-linting + golangci-lint + markdown)"

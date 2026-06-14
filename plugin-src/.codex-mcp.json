@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "meta-cc": {
+      "command": "./bin/meta-cc-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}

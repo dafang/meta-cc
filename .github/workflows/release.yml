@@ -145,7 +145,7 @@ jobs:
 
           for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64; do
             PKG_DIR=build/packages/meta-cc-plugin-${platform}
-            mkdir -p $PKG_DIR/bin $PKG_DIR/.claude-plugin $PKG_DIR/commands $PKG_DIR/lib
+            mkdir -p $PKG_DIR/bin $PKG_DIR/.claude-plugin $PKG_DIR/.codex-plugin $PKG_DIR/commands $PKG_DIR/skills $PKG_DIR/lib
 
             # Copy MCP server binary
             if [[ $platform == windows-* ]]; then
@@ -159,19 +159,26 @@ jobs:
             # Copy Claude Code plugin structure
             cp -r .claude-plugin/* $PKG_DIR/.claude-plugin/
             cp -r dist/commands/* $PKG_DIR/commands/
+            cp -r plugin-src/skills/* $PKG_DIR/skills/
             cp -r lib/* $PKG_DIR/lib/
 
             # Copy plugin.json from plugin-src into archive .claude-plugin/
             cp plugin-src/.claude-plugin/plugin.json $PKG_DIR/.claude-plugin/
+            cp plugin-src/.codex-plugin/plugin.json $PKG_DIR/.codex-plugin/
 
-            # Copy .mcp.json to archive root
+            # Copy MCP configs to archive root
             cp plugin-src/.mcp.json $PKG_DIR/
+            cp plugin-src/.codex-mcp.json $PKG_DIR/
 
             # Rewrite paths in archive manifests to flat layout
             jq '.commands |= map(gsub("\\./plugin-src/commands/"; "./commands/"))' \
               $PKG_DIR/.claude-plugin/plugin.json \
               > $PKG_DIR/.claude-plugin/plugin.json.tmp
             mv $PKG_DIR/.claude-plugin/plugin.json.tmp $PKG_DIR/.claude-plugin/plugin.json
+            jq '.skills = "./skills/" | .mcpServers = "./.codex-mcp.json"' \
+              $PKG_DIR/.codex-plugin/plugin.json \
+              > $PKG_DIR/.codex-plugin/plugin.json.tmp
+            mv $PKG_DIR/.codex-plugin/plugin.json.tmp $PKG_DIR/.codex-plugin/plugin.json
             jq '.plugins[0].source = "." | .plugins[0].commands |= map(gsub("\\./plugin-src/commands/"; "./commands/"))' \
               $PKG_DIR/.claude-plugin/marketplace.json \
               > $PKG_DIR/.claude-plugin/marketplace.json.tmp
@@ -226,6 +233,9 @@ jobs:
               if [ -f "$PACKAGE" ]; then
                 echo "✓ Package exists: $PACKAGE"
                 tar -tzf "$PACKAGE" | head -20
+                tar -tzf "$PACKAGE" | grep -q ".codex-plugin/plugin.json"
+                tar -tzf "$PACKAGE" | grep -q ".codex-mcp.json"
+                tar -tzf "$PACKAGE" | grep -q "skills/prompt-find/SKILL.md"
                 echo "✓ Package structure verified"
               else
                 echo "❌ ERROR: Package missing: $PACKAGE"

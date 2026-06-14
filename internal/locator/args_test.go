@@ -3,6 +3,7 @@ package locator
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yaleh/meta-cc/internal/testutil"
@@ -10,6 +11,9 @@ import (
 
 func setupProjectsRoot(t *testing.T) string {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv(codexHomeEnv, filepath.Join(t.TempDir(), "codex-home"))
+
 	dir, err := os.MkdirTemp("", "meta-cc-projects-*")
 	if err != nil {
 		t.Fatalf("failed to create temp projects dir: %v", err)
@@ -47,11 +51,84 @@ func TestFromSessionID_Success(t *testing.T) {
 }
 
 func TestFromSessionID_NotFound(t *testing.T) {
+	setupProjectsRoot(t)
 	locator := NewSessionLocator()
 	_, err := locator.FromSessionID("nonexistent-session-id")
 
 	if err == nil {
 		t.Error("Expected error for nonexistent session ID")
+	}
+}
+
+func TestFromSessionID_CodexHomeSessions(t *testing.T) {
+	t.Setenv(projectsRootEnv, "")
+	home := t.TempDir()
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("HOME", home)
+	t.Setenv(codexHomeEnv, codexHome)
+
+	sessionID := "codex-session-123"
+	sessionDir := filepath.Join(codexHome, "sessions")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatalf("failed to create Codex sessions dir: %v", err)
+	}
+	sessionFile := filepath.Join(sessionDir, sessionID+".jsonl")
+	if err := os.WriteFile(sessionFile, []byte(`{"type":"codex-test"}`), 0644); err != nil {
+		t.Fatalf("failed to write Codex session file: %v", err)
+	}
+
+	locator := NewSessionLocator()
+	path, err := locator.FromSessionID(sessionID)
+	if err != nil {
+		t.Fatalf("Expected Codex session lookup to succeed, got: %v", err)
+	}
+	if path != sessionFile {
+		t.Errorf("Expected Codex session %s, got %s", sessionFile, path)
+	}
+}
+
+func TestFromSessionID_DefaultCodexSessions(t *testing.T) {
+	t.Setenv(projectsRootEnv, "")
+	t.Setenv(codexHomeEnv, "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	sessionID := "default-codex-session"
+	sessionDir := filepath.Join(home, ".codex", "sessions")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatalf("failed to create default Codex sessions dir: %v", err)
+	}
+	sessionFile := filepath.Join(sessionDir, sessionID+".jsonl")
+	if err := os.WriteFile(sessionFile, []byte(`{"type":"codex-test"}`), 0644); err != nil {
+		t.Fatalf("failed to write Codex session file: %v", err)
+	}
+
+	locator := NewSessionLocator()
+	path, err := locator.FromSessionID(sessionID)
+	if err != nil {
+		t.Fatalf("Expected default Codex session lookup to succeed, got: %v", err)
+	}
+	if path != sessionFile {
+		t.Errorf("Expected Codex session %s, got %s", sessionFile, path)
+	}
+}
+
+func TestFromSessionID_MissingErrorNamesHosts(t *testing.T) {
+	t.Setenv(projectsRootEnv, "")
+	t.Setenv(codexHomeEnv, "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	locator := NewSessionLocator()
+	_, err := locator.FromSessionID("missing-session")
+	if err == nil {
+		t.Fatal("Expected error for missing session")
+	}
+	msg := err.Error()
+	for _, want := range []string{HostClaudeCode, HostCodex, ".claude", ".codex"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("missing-session error %q should mention %q", msg, want)
+		}
 	}
 }
 
@@ -145,11 +222,49 @@ func TestFromProjectPath_Success(t *testing.T) {
 }
 
 func TestFromProjectPath_NoSessions(t *testing.T) {
+	setupProjectsRoot(t)
 	locator := NewSessionLocator()
 	_, err := locator.FromProjectPath("/nonexistent/project")
 
 	if err == nil {
 		t.Error("Expected error for project with no sessions")
+	}
+}
+
+func TestFromProjectPath_CodexSessionsFallback(t *testing.T) {
+	t.Setenv(projectsRootEnv, "")
+	home := t.TempDir()
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("HOME", home)
+	t.Setenv(codexHomeEnv, codexHome)
+	projectPath := t.TempDir()
+
+	sessionDir := filepath.Join(codexHome, "sessions", "nested")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatalf("failed to create Codex sessions dir: %v", err)
+	}
+	oldSession := filepath.Join(sessionDir, "old.jsonl")
+	newSession := filepath.Join(sessionDir, "new.jsonl")
+	if err := os.WriteFile(oldSession, []byte(`{"cwd":"`+projectPath+`"}`), 0644); err != nil {
+		t.Fatalf("failed to write old session: %v", err)
+	}
+	if err := os.WriteFile(newSession, []byte(`{"cwd":"`+projectPath+`"}`), 0644); err != nil {
+		t.Fatalf("failed to write new session: %v", err)
+	}
+	if err := os.Chtimes(oldSession, testutil.TimeFromUnix(1000), testutil.TimeFromUnix(1000)); err != nil {
+		t.Fatalf("failed to set old session times: %v", err)
+	}
+	if err := os.Chtimes(newSession, testutil.TimeFromUnix(2000), testutil.TimeFromUnix(2000)); err != nil {
+		t.Fatalf("failed to set new session times: %v", err)
+	}
+
+	locator := NewSessionLocator()
+	path, err := locator.FromProjectPath(projectPath)
+	if err != nil {
+		t.Fatalf("Expected Codex sessions fallback to succeed, got: %v", err)
+	}
+	if path != newSession {
+		t.Errorf("Expected newest Codex session %s, got %s", newSession, path)
 	}
 }
 
@@ -262,6 +377,7 @@ func TestAllSessionsFromProject_Success(t *testing.T) {
 }
 
 func TestAllSessionsFromProject_NoSessions(t *testing.T) {
+	setupProjectsRoot(t)
 	locator := NewSessionLocator()
 	sessions, err := locator.AllSessionsFromProject("/nonexistent/project")
 

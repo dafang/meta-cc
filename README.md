@@ -6,7 +6,7 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/yaleh/meta-cc)](go.mod)
 [![Plugin Marketplace](https://img.shields.io/badge/Claude_Code-Plugin_Marketplace-blue)](https://github.com/yaleh/meta-cc)
 
-**Meta-cognition tool for Claude Code** - Analyze session history, detect patterns, optimize workflows.
+**Meta-cognition tool for Claude Code and Codex** - Analyze session history, detect patterns, optimize workflows.
 
 > **Note**: Skills and agents from previous versions have been moved to [yaleh/baime](https://github.com/yaleh/baime). meta-cc 3.0.0 focuses exclusively on session history analysis via MCP tools.
 
@@ -14,34 +14,34 @@
 
 ## What is meta-cc?
 
-meta-cc helps you understand and improve your Claude Code workflows through:
+meta-cc helps you understand and improve your Claude Code and Codex workflows through:
 
-- **Autonomous analysis** - Claude automatically queries session data via MCP tools
+- **Autonomous analysis** - Claude Code or Codex can query session data via MCP tools
 - **21 MCP tools** - Error analysis, quality scanning, work patterns, timelines, bug detection, and more
-- **Prompt library** - Save, search, and reuse optimized prompts with 3 slash commands
+- **Prompt library** - Save, search, and reuse optimized prompts with Claude Code slash commands or Codex skills
 
-**Zero configuration required** - works out of the box with Claude Code.
+**Native host integrations** - Claude Code marketplace/archive support plus Codex plugin and skills packaging.
 
 ---
 
 ## Quick Install
 
-### Method 1: Plugin Marketplace (Recommended)
+### Method 1: Claude Code Plugin Marketplace (Recommended for Claude Code)
 
 ```bash
 /plugin marketplace add yaleh/meta-cc
 /plugin install meta-cc
 ```
 
-Restart Claude Code — that's it. The MCP server is automatically configured via `.mcp.json` bundled in the plugin.
+Restart Claude Code. The MCP server is automatically configured via `.mcp.json` bundled in the plugin.
 
 The meta-cc plugin includes:
 - **3 Slash Commands** - `/prompt-find`, `/prompt-list`, `/prompt-show` for prompt library management
 - **21 MCP Tools** - Session data analysis with two-stage query architecture (v2.1)
 
-### Method 2: Archive Install (Alternative)
+### Method 2: Archive Install (Claude Code + Codex)
 
-**Full install** (MCP server + slash commands):
+**Full install** (MCP server + Claude Code commands + Codex skills):
 
 ```bash
 # Linux/macOS (one-liner)
@@ -50,15 +50,17 @@ cd meta-cc-plugin-linux-amd64
 ./install.sh
 ```
 
-The archive installer copies the binary and integration files, and automatically merges the MCP server configuration into `~/.claude/mcp.json`.
+The archive installer copies the binary and integration files, installs Claude Code commands under `~/.claude/commands/`, installs Codex skills under `~/.codex/skills/`, and merges the Claude Code MCP server configuration into `~/.claude/mcp.json`. Codex users can use the bundled `.codex-plugin/plugin.json` and `.codex-mcp.json`.
 
-**Slash commands only** (no binary required, any platform):
+**Prompt-library commands/skills only** (no binary required, any platform):
 
 ```bash
 curl -L https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-skills-latest.tar.gz | tar xz
 cd meta-cc-skills-*/
 ./install-skills.sh
 ```
+
+Use `INSTALL_CLAUDE=0` or `INSTALL_CODEX=0` to install one host only.
 
 **MCP server binary only** (for CI/Docker/PATH installs):
 
@@ -73,7 +75,7 @@ INSTALL_DIR=~/.local/bin bash scripts/install/install-mcp.sh meta-cc-mcp-linux-a
 
 ### Verify Installation
 
-In Claude Code, ask naturally:
+In Claude Code or Codex, ask naturally:
 
 ```
 "Show me all Bash errors in this project"
@@ -236,7 +238,8 @@ make push          # Full check before push (all checks + lint, <120s)
 
 ```bash
 make test           # Unit tests (fast)
-make test-all       # Including E2E tests (~30s)
+make test-e2e-codex # Codex install/session E2E
+make test-all       # Including MCP and Codex E2E tests (~30s)
 make test-coverage  # With coverage report
 ```
 

@@ -1057,21 +1057,13 @@ func TestExecuteToolE2E_AllTools(t *testing.T) {
 		t.Skip("Skipping E2E test in short mode (takes ~22s)")
 	}
 
-	// Save and restore working directory
-	originalDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get current directory: %v", err)
-	}
-	defer func() {
-		if err := os.Chdir(originalDir); err != nil {
-			t.Errorf("failed to restore directory: %v", err)
-		}
-	}()
-
-	// Change to project root (two levels up from cmd/mcp-server)
-	if err := os.Chdir("../.."); err != nil {
-		t.Fatalf("failed to change to project root: %v", err)
-	}
+	projectsRoot := t.TempDir()
+	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+	projectPath := t.TempDir()
+	writeSessionFixture(t, projectPath, testSessionID, strings.Join([]string{
+		`{"type":"user","timestamp":"2026-01-01T00:00:00Z","sessionId":"test-session","message":{"role":"user","content":"test prompt"}}`,
+		`{"type":"assistant","timestamp":"2026-01-01T00:00:01Z","sessionId":"test-session","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","id":"tool-1","input":{"file_path":"test.go"}}]}}`,
+	}, "\n")+"\n")
 
 	executor := NewToolExecutor()
 
@@ -1084,17 +1076,19 @@ func TestExecuteToolE2E_AllTools(t *testing.T) {
 			name:     "query_tools",
 			toolName: "query_tools",
 			args: map[string]interface{}{
-				"limit": 10,
-				"scope": "project",
+				"limit":       10,
+				"scope":       "project",
+				"working_dir": projectPath,
 			},
 		},
 		{
 			name:     "query_user_messages",
 			toolName: "query_user_messages",
 			args: map[string]interface{}{
-				"pattern": "test",
-				"limit":   5,
-				"scope":   "project",
+				"pattern":     "test",
+				"limit":       5,
+				"scope":       "project",
+				"working_dir": projectPath,
 			},
 		},
 	}
