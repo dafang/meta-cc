@@ -827,7 +827,7 @@ func TestStatsDispatch(t *testing.T) {
 	// User-message tools should use timestamp stats (output should have "hour" key)
 	for _, toolName := range []string{"query_user_messages", "query_conversation_flow", "query_timestamps", "query_summaries"} {
 		t.Run(toolName+"_uses_timestamp_stats", func(t *testing.T) {
-			output, err := pipelinepkg.BuildStatsOnlyResponse(userRecords, toolName, "turn")
+			output, err := pipelinepkg.BuildStatsOnlyResponse(userRecords, true, "turn")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -843,7 +843,7 @@ func TestStatsDispatch(t *testing.T) {
 	// Tool-record tools should use tool-name stats (output should have "key" field, not "hour")
 	for _, toolName := range []string{"query_tools", "query_tool_errors"} {
 		t.Run(toolName+"_uses_tool_stats", func(t *testing.T) {
-			output, err := pipelinepkg.BuildStatsOnlyResponse(toolRecords, toolName, "turn")
+			output, err := pipelinepkg.BuildStatsOnlyResponse(toolRecords, false, "turn")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}

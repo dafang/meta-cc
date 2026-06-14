@@ -165,7 +165,7 @@ func TestConvenienceTool_HandlesSliceReturnType(t *testing.T) {
 	}
 
 	// Use session scope since we've set up CLAUDE_SESSION_DIR
-	result, err := executor.handleQueryUserMessages(nil, "session", args)
+	result, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "session", args)
 
 	// Assert: Should successfully return results
 	require.NoError(t, err, "handleQueryUserMessages should not return error")
@@ -493,7 +493,7 @@ func TestHandleQueryUserMessagesSince(t *testing.T) {
 		"working_dir": projectDir,
 	}
 
-	result, err := executor.handleQueryUserMessages(nil, "project", args)
+	result, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "project", args)
 	require.NoError(t, err)
 	// only the entry 12h ago should match (the 2d and 3d old ones are filtered)
 	assert.Len(t, result.Entries, 1, "since=T-24h should return only the 12h-ago entry")
@@ -507,7 +507,7 @@ func TestHandleQueryUserMessagesBadSince(t *testing.T) {
 	args := map[string]interface{}{
 		"since": "2026-03-07",
 	}
-	_, err := executor.handleQueryUserMessages(nil, "project", args)
+	_, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "project", args)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid since value")
 
@@ -515,7 +515,7 @@ func TestHandleQueryUserMessagesBadSince(t *testing.T) {
 	args2 := map[string]interface{}{
 		"since": "not-a-date",
 	}
-	_, err2 := executor.handleQueryUserMessages(nil, "project", args2)
+	_, err2 := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "project", args2)
 	require.Error(t, err2)
 	assert.Contains(t, err2.Error(), "invalid since value")
 }
@@ -668,7 +668,7 @@ func TestExcludeSystemMessages(t *testing.T) {
 		"exclude_system_messages": false,
 		"working_dir":             projectDir,
 	}
-	result, err := executor.handleQueryUserMessages(nil, "project", args)
+	result, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "project", args)
 	require.NoError(t, err)
 	assert.Len(t, result.Entries, 6, "without exclusion, all 6 user messages should be returned")
 
@@ -678,7 +678,7 @@ func TestExcludeSystemMessages(t *testing.T) {
 		"exclude_system_messages": true,
 		"working_dir":             projectDir,
 	}
-	result2, err := executor.handleQueryUserMessages(nil, "project", args2)
+	result2, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "project", args2)
 	require.NoError(t, err)
 	assert.Len(t, result2.Entries, 2, "with exclusion, only 2 real user messages should be returned")
 }
@@ -805,7 +805,7 @@ func TestExcludeSystemMessages_NoErrorOnArrayType(t *testing.T) {
 		"exclude_system_messages": true,
 		"working_dir":             projectDir,
 	}
-	result, err := executor.handleQueryUserMessages(nil, "project", args)
+	result, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "project", args)
 	require.NoError(t, err)
 	assert.Len(t, result.Entries, 2, "array-type content should not be filtered by exclude_system_messages")
 }

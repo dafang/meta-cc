@@ -134,7 +134,7 @@ func TestDataToJSONL_MultipleRecords(t *testing.T) {
 
 func TestBuildStatsOnlyResponse_Empty(t *testing.T) {
 	// Should not error on empty data
-	out, err := pipeline.BuildStatsOnlyResponse(nil, "query_tools", "turn")
+	out, err := pipeline.BuildStatsOnlyResponse(nil, false, "turn")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestBuildStatsOnlyResponse_TimestampTool(t *testing.T) {
 	data := []interface{}{
 		map[string]interface{}{"timestamp": "2024-01-01T10:00:00Z", "role": "user", "content": "hello"},
 	}
-	out, err := pipeline.BuildStatsOnlyResponse(data, "query_user_messages", "turn")
+	out, err := pipeline.BuildStatsOnlyResponse(data, true, "turn")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestBuildStatsOnlyResponse_SessionLevel(t *testing.T) {
 	data := []interface{}{
 		map[string]interface{}{"sessionId": "abc123", "role": "user", "content": "hello"},
 	}
-	out, err := pipeline.BuildStatsOnlyResponse(data, "query_user_messages", "session")
+	out, err := pipeline.BuildStatsOnlyResponse(data, true, "session")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestBuildStatsOnlyResponse_StandardTool(t *testing.T) {
 		map[string]interface{}{"tool_name": "Bash", "status": "success"},
 		map[string]interface{}{"tool_name": "Read", "status": "error"},
 	}
-	out, err := pipeline.BuildStatsOnlyResponse(data, "query_tools", "turn")
+	out, err := pipeline.BuildStatsOnlyResponse(data, false, "turn")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestBuildStatsFirstResponse_Basic(t *testing.T) {
 		testConfig(),
 		rawData, parsedData,
 		map[string]interface{}{},
-		"query_tools", "turn",
+		"query_tools", false, "turn",
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -226,7 +226,7 @@ func TestBuildStatsFirstResponse_TimestampTool(t *testing.T) {
 		testConfig(),
 		rawData, rawData,
 		map[string]interface{}{},
-		"query_user_messages", "turn",
+		"query_user_messages", true, "turn",
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -242,7 +242,7 @@ func TestBuildStatsFirstResponse_SessionLevel(t *testing.T) {
 		testConfig(),
 		rawData, rawData,
 		map[string]interface{}{},
-		"query_user_messages", "session",
+		"query_user_messages", true, "session",
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -355,6 +355,38 @@ func TestBuildResponse_StatsFirst(t *testing.T) {
 	}
 	if !strings.Contains(out, "---") {
 		t.Errorf("expected '---' separator in stats_first output, got: %s", out)
+	}
+}
+
+// ─── UseTimestampStats / ApplyMessageFilters fields ──────────────────────────
+
+func TestPipelineConfig_NewFields(t *testing.T) {
+	pc := pipeline.PipelineConfig{
+		UseTimestampStats:   true,
+		ApplyMessageFilters: true,
+	}
+	if !pc.UseTimestampStats {
+		t.Error("UseTimestampStats should be settable to true")
+	}
+	if !pc.ApplyMessageFilters {
+		t.Error("ApplyMessageFilters should be settable to true")
+	}
+}
+
+func TestBuildStatsOnlyResponse_UseTimestampStats_DifferentOutput(t *testing.T) {
+	data := []interface{}{
+		map[string]interface{}{"timestamp": "2024-01-01T10:00:00Z", "key": "val"},
+	}
+	outTS, err := pipeline.BuildStatsOnlyResponse(data, true, "turn")
+	if err != nil {
+		t.Fatalf("unexpected error with useTimestampStats=true: %v", err)
+	}
+	outStd, err := pipeline.BuildStatsOnlyResponse(data, false, "turn")
+	if err != nil {
+		t.Fatalf("unexpected error with useTimestampStats=false: %v", err)
+	}
+	if outTS == outStd {
+		t.Error("expected different output for useTimestampStats=true vs false")
 	}
 }
 

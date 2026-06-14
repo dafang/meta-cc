@@ -31,18 +31,20 @@ func NewToolExecutor() *ToolExecutor {
 }
 
 // NewToolPipelineConfig creates a PipelineConfig from args map.
-func NewToolPipelineConfig(args map[string]interface{}) pipelinepkg.PipelineConfig {
+func NewToolPipelineConfig(toolName string, args map[string]interface{}) pipelinepkg.PipelineConfig {
 	return pipelinepkg.PipelineConfig{
-		JQFilter:         GetStringParam(args, "jq_filter", ".[]"),
-		StatsOnly:        GetBoolParam(args, "stats_only", false),
-		StatsFirst:       GetBoolParam(args, "stats_first", false),
-		OutputFormat:     GetStringParam(args, "output_format", "jsonl"),
-		MaxMessageLength: GetIntParam(args, "max_message_length", 0),
-		ContentSummary:   GetBoolParam(args, "content_summary", false),
-		PreviewLength:    GetIntParam(args, "preview_length", pipelinepkg.DefaultPreviewLength),
-		GroupBySession:   GetBoolParam(args, "group_by_session", false),
-		StatsLevel:       GetStringParam(args, "stats_level", "turn"),
-		ContextTurns:     GetIntParam(args, "context_turns", 0),
+		JQFilter:            GetStringParam(args, "jq_filter", ".[]"),
+		StatsOnly:           GetBoolParam(args, "stats_only", false),
+		StatsFirst:          GetBoolParam(args, "stats_first", false),
+		OutputFormat:        GetStringParam(args, "output_format", "jsonl"),
+		MaxMessageLength:    GetIntParam(args, "max_message_length", 0),
+		ContentSummary:      GetBoolParam(args, "content_summary", false),
+		PreviewLength:       GetIntParam(args, "preview_length", pipelinepkg.DefaultPreviewLength),
+		GroupBySession:      GetBoolParam(args, "group_by_session", false),
+		StatsLevel:          GetStringParam(args, "stats_level", "turn"),
+		ContextTurns:        GetIntParam(args, "context_turns", 0),
+		UseTimestampStats:   pipelinepkg.TimestampStatsTools[toolName],
+		ApplyMessageFilters: toolName == "query_user_messages",
 	}
 }
 
@@ -86,6 +88,16 @@ func (e *ToolExecutor) ExecuteSpecialTool(cfg *config.Config, toolName, scope st
 	return output, true, nil
 }
 
+// ExecuteToolQuery runs a convenience (query) tool and returns the raw QueryResult.
+// Intended for testing and callers that need structured data before serialization.
+func (e *ToolExecutor) ExecuteToolQuery(toolName, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	handler, ok := queryHandlerRegistry[toolName]
+	if !ok {
+		return mcquery.QueryResult{}, fmt.Errorf("unknown tool: %s", toolName)
+	}
+	return handler(e, scope, args)
+}
+
 // ExecuteTool executes a meta-cc command and returns the formatted output.
 func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map[string]interface{}) (string, error) {
 	scope := DetermineScope(toolName, args)
@@ -126,7 +138,7 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 		return "", err
 	}
 
-	pipeline := NewToolPipelineConfig(args)
+	pipeline := NewToolPipelineConfig(toolName, args)
 	output, err := pipelinepkg.BuildResponse(cfg, queryResult, args, toolName, pipeline)
 	if err != nil {
 		return "", err

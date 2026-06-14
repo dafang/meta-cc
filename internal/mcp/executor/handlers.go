@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/config"
 	mcquery "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
@@ -43,48 +42,6 @@ func init() {
 	registerQueryHandler("query_tool_blocks", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
 		return handleQueryToolBlocks(e, scope, args)
 	})
-}
-
-// ─── Exported methods (backward compat with cmd/mcp-server) ──────────────────
-
-func (e *ToolExecutor) HandleQueryUserMessages(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQueryUserMessages(e, scope, args)
-}
-
-func (e *ToolExecutor) HandleQueryTools(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQueryTools(e, scope, args)
-}
-
-func (e *ToolExecutor) HandleQueryToolErrors(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQueryToolErrors(e, scope, args)
-}
-
-func (e *ToolExecutor) HandleQueryTokenUsage(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQueryTokenUsage(e, scope, args)
-}
-
-func (e *ToolExecutor) HandleQueryConversationFlow(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQueryConversationFlow(e, scope, args)
-}
-
-func (e *ToolExecutor) HandleQuerySystemErrors(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQuerySystemErrors(e, scope, args)
-}
-
-func (e *ToolExecutor) HandleQueryFileSnapshots(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQueryFileSnapshots(e, scope, args)
-}
-
-func (e *ToolExecutor) HandleQueryTimestamps(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQueryTimestamps(e, scope, args)
-}
-
-func (e *ToolExecutor) HandleQuerySummaries(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQuerySummaries(e, scope, args)
-}
-
-func (e *ToolExecutor) HandleQueryToolBlocks(_ *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
-	return handleQueryToolBlocks(e, scope, args)
 }
 
 // ─── Private implementations ──────────────────────────────────────────────────

@@ -21,16 +21,18 @@ const DefaultPreviewLength = 100
 
 // PipelineConfig holds configuration for a tool execution pipeline.
 type PipelineConfig struct {
-	JQFilter         string
-	StatsOnly        bool
-	StatsFirst       bool
-	OutputFormat     string
-	MaxMessageLength int
-	ContentSummary   bool
-	PreviewLength    int
-	GroupBySession   bool
-	StatsLevel       string // "turn" (default) or "session"
-	ContextTurns     int
+	JQFilter            string
+	StatsOnly           bool
+	StatsFirst          bool
+	OutputFormat        string
+	MaxMessageLength    int
+	ContentSummary      bool
+	PreviewLength       int
+	GroupBySession      bool
+	StatsLevel          string // "turn" (default) or "session"
+	ContextTurns        int
+	UseTimestampStats   bool // use time-bucketed stats instead of key-count stats
+	ApplyMessageFilters bool // apply message length / content-summary filters
 }
 
 func (c PipelineConfig) requiresMessageFilters() bool {
@@ -51,7 +53,7 @@ func BuildResponse(cfg *config.Config, result mcquerypkg.QueryResult, args map[s
 	}
 
 	if pc.StatsOnly {
-		output, err := BuildStatsOnlyResponse(rawData, toolName, pc.StatsLevel)
+		output, err := BuildStatsOnlyResponse(rawData, pc.UseTimestampStats, pc.StatsLevel)
 		if err != nil {
 			return "", err
 		}
@@ -59,11 +61,11 @@ func BuildResponse(cfg *config.Config, result mcquerypkg.QueryResult, args map[s
 	}
 
 	parsedData := rawData
-	if toolName == "query_user_messages" && pc.requiresMessageFilters() {
+	if pc.ApplyMessageFilters && pc.requiresMessageFilters() {
 		parsedData = filterspkg.ApplyMessageFiltersToData(rawData, pc.MaxMessageLength, pc.ContentSummary, pc.PreviewLength)
 	}
 
-	if pc.ContextTurns > 0 && toolName == "query_user_messages" &&
+	if pc.ContextTurns > 0 && pc.ApplyMessageFilters &&
 		pipelineStringArg(args, "content_type") != "array" {
 		baseDir, err := mcquerypkg.GetQueryBaseDir(
 			pipelineStringArg(args, "scope", "project"),
@@ -78,14 +80,14 @@ func BuildResponse(cfg *config.Config, result mcquerypkg.QueryResult, args map[s
 		}
 	}
 
-	if pc.GroupBySession && toolName == "query_user_messages" {
+	if pc.GroupBySession && pc.ApplyMessageFilters {
 		parsedData = querypkg.GroupBySession(parsedData)
 	}
 
 	var output string
 	var err error
 	if pc.StatsFirst {
-		output, err = BuildStatsFirstResponse(cfg, rawData, parsedData, args, toolName, pc.StatsLevel)
+		output, err = BuildStatsFirstResponse(cfg, rawData, parsedData, args, toolName, pc.UseTimestampStats, pc.StatsLevel)
 	} else {
 		output, err = BuildStandardResponse(cfg, parsedData, args, toolName)
 	}
@@ -163,11 +165,11 @@ func DataToJSONL(data []interface{}) (string, error) {
 
 // BuildStatsOnlyResponse generates a stats-only response for the given data.
 // statsLevel may be "turn" (default) or "session".
-func BuildStatsOnlyResponse(parsedData []interface{}, toolName string, statsLevel string) (string, error) {
+// useTimestampStats selects time-bucketed stats; when false, key-count stats are used.
+func BuildStatsOnlyResponse(parsedData []interface{}, useTimestampStats bool, statsLevel string) (string, error) {
 	jsonlData, err := DataToJSONL(parsedData)
 	if err != nil {
 		slog.Error("DataToJSONL conversion failed (stats_only)",
-			"tool_name", toolName,
 			"error", err.Error(),
 			"error_type", "parse_error",
 		)
@@ -175,16 +177,15 @@ func BuildStatsOnlyResponse(parsedData []interface{}, toolName string, statsLeve
 	}
 
 	var output string
-	if statsLevel == "session" && toolName == "query_user_messages" {
+	if statsLevel == "session" && useTimestampStats {
 		output, err = querypkg.GenerateSessionStats(jsonlData)
-	} else if TimestampStatsTools[toolName] {
+	} else if useTimestampStats {
 		output, err = querypkg.GenerateTimestampStats(jsonlData)
 	} else {
 		output, err = querypkg.GenerateStats(jsonlData)
 	}
 	if err != nil {
 		slog.Error("stats generation failed",
-			"tool_name", toolName,
 			"error", err.Error(),
 			"error_type", "execution_error",
 		)
@@ -196,12 +197,15 @@ func BuildStatsOnlyResponse(parsedData []interface{}, toolName string, statsLeve
 
 // BuildStatsFirstResponse generates a stats-first response: stats header followed by
 // serialized detail data.
+// useTimestampStats selects time-bucketed stats; when false, key-count stats are used.
+// toolName is passed through to AdaptResponse for output formatting only.
 func BuildStatsFirstResponse(
 	cfg *config.Config,
 	rawData []interface{},
 	parsedData []interface{},
 	args map[string]interface{},
 	toolName string,
+	useTimestampStats bool,
 	statsLevel string,
 ) (string, error) {
 	// Use rawData for stats (sessionId field preserved, not renamed by content_summary)
@@ -216,9 +220,9 @@ func BuildStatsFirstResponse(
 	}
 
 	var stats string
-	if statsLevel == "session" && toolName == "query_user_messages" {
+	if statsLevel == "session" && useTimestampStats {
 		stats, _ = querypkg.GenerateSessionStats(jsonlData)
-	} else if TimestampStatsTools[toolName] {
+	} else if useTimestampStats {
 		stats, _ = querypkg.GenerateTimestampStats(jsonlData)
 	} else {
 		stats, _ = querypkg.GenerateStats(jsonlData)
