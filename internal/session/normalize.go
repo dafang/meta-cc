@@ -47,10 +47,6 @@ func (n *Normalizer) NormalizeRecord(record map[string]interface{}) []map[string
 	}
 
 	n.captureCodexContext(record)
-	if recordType != "response_item" {
-		return nil
-	}
-
 	payload, ok := asMap(record["payload"])
 	if !ok {
 		return nil
@@ -58,9 +54,18 @@ func (n *Normalizer) NormalizeRecord(record map[string]interface{}) []map[string
 
 	timestamp, _ := record["timestamp"].(string)
 	payloadType, _ := payload["type"].(string)
+	if recordType == "event_msg" && payloadType == "token_count" {
+		return []map[string]interface{}{n.normalizeCodexTokenCount(timestamp, payload)}
+	}
+	if recordType != "response_item" {
+		return nil
+	}
+
 	switch payloadType {
 	case "message":
 		return n.normalizeCodexMessage(timestamp, payload)
+	case "token_count":
+		return []map[string]interface{}{n.normalizeCodexTokenCount(timestamp, payload)}
 	case "function_call", "custom_tool_call":
 		return []map[string]interface{}{n.normalizeCodexToolUse(timestamp, payload, payloadType)}
 	case "function_call_output", "custom_tool_call_output":
@@ -128,6 +133,33 @@ func (n *Normalizer) normalizeCodexMessage(timestamp string, payload map[string]
 	default:
 		return nil
 	}
+}
+
+func (n *Normalizer) normalizeCodexTokenCount(timestamp string, payload map[string]interface{}) map[string]interface{} {
+	usage := map[string]interface{}{}
+	if info, ok := asMap(payload["info"]); ok {
+		if last, ok := asMap(info["last_token_usage"]); ok {
+			for key, value := range last {
+				usage[key] = value
+			}
+		}
+		if total, ok := asMap(info["total_token_usage"]); ok {
+			usage["total_token_usage"] = total
+		}
+		if window, ok := info["model_context_window"]; ok {
+			usage["model_context_window"] = window
+		}
+	}
+	if rateLimits, ok := asMap(payload["rate_limits"]); ok {
+		usage["rate_limits"] = rateLimits
+	}
+
+	return n.baseEntry("assistant", timestamp, map[string]interface{}{
+		"role":    "assistant",
+		"model":   n.Model,
+		"content": []interface{}{},
+		"usage":   usage,
+	}, payload)
 }
 
 func (n *Normalizer) normalizeCodexToolUse(timestamp string, payload map[string]interface{}, payloadType string) map[string]interface{} {

@@ -178,6 +178,7 @@ cat > "$SESSION_FILE" <<EOF
 {"timestamp":"2026-06-14T06:00:04Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_codex_e2e_1","output":"ok"}}
 {"timestamp":"2026-06-14T06:00:05Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","call_id":"call_codex_e2e_2","input":"*** Begin Patch\n*** End Patch"}}
 {"timestamp":"2026-06-14T06:00:06Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_codex_e2e_2","status":"failed","output":"$UNIQUE_ERROR"}}
+{"timestamp":"2026-06-14T06:00:07Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":3,"reasoning_output_tokens":1,"total_tokens":13},"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":30,"reasoning_output_tokens":10,"total_tokens":130},"model_context_window":200000},"rate_limits":{"limit_id":"codex-e2e-limit"}}}
 EOF
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
@@ -219,7 +220,16 @@ echo "$RESPONSE" | jq -e '.result.content[0].text | contains("'"$UNIQUE_ERROR"'"
 pass "query_tool_errors returned Codex failed tool output"
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
-    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_work_patterns","arguments":{"scope":"project","working_dir":$cwd}}}')
+    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"query_token_usage","arguments":{"scope":"project","working_dir":$cwd,"limit":5}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    send_request "$REQUEST")
+[ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_token_usage"
+echo "$RESPONSE" | jq -e '.result.content[0].text | fromjson | .data[] | select(.message.usage.input_tokens == 10 and .message.usage.output_tokens == 3)' >/dev/null \
+    || fail "query_token_usage did not return Codex token_count usage"
+pass "query_token_usage returned Codex token_count usage"
+
+REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
+    '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_work_patterns","arguments":{"scope":"project","working_dir":$cwd}}}')
 RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for get_work_patterns"

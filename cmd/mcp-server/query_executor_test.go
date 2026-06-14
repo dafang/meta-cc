@@ -370,6 +370,7 @@ func TestProcessFile_NormalizesCodexJSONL(t *testing.T) {
 		`{"timestamp":"2026-06-14T06:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"codex user query"}]}}`,
 		`{"timestamp":"2026-06-14T06:00:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_1","arguments":"{\"cmd\":\"go test ./...\"}"}}`,
 		`{"timestamp":"2026-06-14T06:00:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":"ok"}}`,
+		`{"timestamp":"2026-06-14T06:00:04Z","type":"response_item","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":3,"total_tokens":13},"total_token_usage":{"input_tokens":100,"output_tokens":30,"total_tokens":130},"model_context_window":200000}}}`,
 	}, "\n") + "\n"
 	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
@@ -398,6 +399,18 @@ func TestProcessFile_NormalizesCodexJSONL(t *testing.T) {
 	}
 	if len(toolResults) != 1 {
 		t.Fatalf("expected 1 tool result, got %d", len(toolResults))
+	}
+
+	tokenCode, err := executor.CompileExpression(`select(.type == "assistant" and has("message")) | select(.message | has("usage"))`)
+	if err != nil {
+		t.Fatalf("CompileExpression token: %v", err)
+	}
+	tokenResults, err := executor.ProcessFile(context.Background(), file, tokenCode)
+	if err != nil {
+		t.Fatalf("ProcessFile token failed: %v", err)
+	}
+	if len(tokenResults) != 1 {
+		t.Fatalf("expected 1 token usage result, got %d", len(tokenResults))
 	}
 }
 

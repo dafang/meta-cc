@@ -14,6 +14,7 @@ func TestNormalizerConvertsCodexMessagesAndTools(t *testing.T) {
 		`{"timestamp":"2026-06-14T06:00:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":"ok"}}`,
 		`{"timestamp":"2026-06-14T06:00:04Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","call_id":"call_2","input":"*** Begin Patch\n*** End Patch"}}`,
 		`{"timestamp":"2026-06-14T06:00:05Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_2","status":"failed","output":"patch failed"}}`,
+		`{"timestamp":"2026-06-14T06:00:06Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":3,"reasoning_output_tokens":1,"total_tokens":13},"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":30,"reasoning_output_tokens":10,"total_tokens":130},"model_context_window":200000},"rate_limits":{"limit_id":"primary"}}}`,
 	}
 
 	var entries []map[string]interface{}
@@ -25,8 +26,8 @@ func TestNormalizerConvertsCodexMessagesAndTools(t *testing.T) {
 		entries = append(entries, normalized...)
 	}
 
-	if len(entries) != 5 {
-		t.Fatalf("expected 5 normalized entries, got %d", len(entries))
+	if len(entries) != 6 {
+		t.Fatalf("expected 6 normalized entries, got %d", len(entries))
 	}
 	seenUUIDs := map[string]bool{}
 	for _, entry := range entries {
@@ -81,6 +82,16 @@ func TestNormalizerConvertsCodexMessagesAndTools(t *testing.T) {
 	failedResult := contentBlock(t, entries[4])
 	if failedResult["is_error"] != true || failedResult["status"] != "error" {
 		t.Fatalf("expected failed custom tool output to become error result, got %#v", failedResult)
+	}
+
+	tokenEntry := entries[5]
+	tokenMessage := tokenEntry["message"].(map[string]interface{})
+	usage := tokenMessage["usage"].(map[string]interface{})
+	if usage["input_tokens"] != float64(10) || usage["output_tokens"] != float64(3) {
+		t.Fatalf("expected last token usage on message.usage, got %#v", usage)
+	}
+	if _, ok := usage["total_token_usage"].(map[string]interface{}); !ok {
+		t.Fatalf("expected total_token_usage to be preserved, got %#v", usage)
 	}
 }
 

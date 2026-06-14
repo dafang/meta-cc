@@ -90,14 +90,15 @@ func TestParseEntriesFromContent_CodexJSONL(t *testing.T) {
 		`{"timestamp":"2026-06-14T06:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"codex parity"}]}}`,
 		`{"timestamp":"2026-06-14T06:00:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_1","arguments":"{\"cmd\":\"go test ./...\",\"workdir\":\"/tmp/project\"}"}}`,
 		`{"timestamp":"2026-06-14T06:00:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":"ok"}}`,
+		`{"timestamp":"2026-06-14T06:00:04Z","type":"response_item","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":3,"total_tokens":13}}}}`,
 	}, "\n")
 
 	entries, err := ParseEntriesFromContent(content)
 	if err != nil {
 		t.Fatalf("ParseEntriesFromContent failed: %v", err)
 	}
-	if len(entries) != 3 {
-		t.Fatalf("expected 3 message entries, got %d", len(entries))
+	if len(entries) != 4 {
+		t.Fatalf("expected 4 message entries, got %d", len(entries))
 	}
 	if entries[0].Type != "user" || entries[0].Message.Content[0].Text != "codex parity" {
 		t.Fatalf("unexpected user entry: %#v", entries[0])
@@ -109,6 +110,9 @@ func TestParseEntriesFromContent_CodexJSONL(t *testing.T) {
 	}
 	if toolCalls[0].ToolName != "exec_command" || toolCalls[0].Input["cmd"] != "go test ./..." {
 		t.Fatalf("unexpected tool call: %#v", toolCalls[0])
+	}
+	if entries[3].Message.Usage["input_tokens"] != float64(10) {
+		t.Fatalf("expected token usage entry, got %#v", entries[3].Message.Usage)
 	}
 }
 
