@@ -66,11 +66,19 @@ The archive installer:
 - Copies Codex skills to `~/.codex/skills/`
 - Copies Codex plugin metadata to `~/.codex/plugins/meta-cc/`
 - Automatically merges Claude Code MCP server configuration into `~/.claude/mcp.json`
+- Includes `.codex-mcp.json` for Codex MCP configuration
 
 Use temp or custom destinations when testing:
 
 ```bash
 INSTALL_DIR=/tmp/bin CLAUDE_DIR=/tmp/claude CODEX_HOME=/tmp/codex ./install.sh
+```
+
+Use host flags when you only want one integration:
+
+```bash
+INSTALL_CLAUDE=0 ./install.sh  # Codex files only
+INSTALL_CODEX=0 ./install.sh   # Claude Code files only
 ```
 
 ## Manual Installation
@@ -148,6 +156,8 @@ cp -R .codex-plugin ~/.codex/plugins/meta-cc/
 cp .codex-mcp.json ~/.codex/plugins/meta-cc/
 ```
 
+Codex session discovery reads JSONL transcripts from `$CODEX_HOME/sessions` when `CODEX_HOME` is set, otherwise from `~/.codex/sessions`. meta-cc normalizes Codex `response_item` and `event_msg` records into the same internal message/tool schema used for Claude Code, so the common MCP tools work across both hosts.
+
 ## Verification
 
 After installation, verify the setup:
@@ -169,6 +179,14 @@ ls -l ~/.local/bin/meta-cc-mcp
 
 1. **Test MCP Tools**: Ask "What are my recent tool usage patterns?"
 2. **Test Skills**: Ask Codex to use the `prompt-list` skill
+
+Useful smoke-test prompts for either host:
+
+```text
+Find user messages mentioning "refactor"
+Which tools do I use most often?
+Show token usage for recent assistant turns
+```
 
 ## Troubleshooting
 
@@ -253,6 +271,23 @@ source ~/.bash_profile
    ```bash
    CODEX_HOME=/tmp/codex ./install-skills.sh
    ```
+
+### Codex sessions not found
+
+**Issue**: MCP tools return no sessions for a Codex project.
+
+**Solutions**:
+
+1. **Check the Codex session root**:
+   ```bash
+   echo "${CODEX_HOME:-$HOME/.codex}"
+   find "${CODEX_HOME:-$HOME/.codex}/sessions" -name '*.jsonl' | tail
+   ```
+2. **Pass the project explicitly** when asking through MCP:
+   ```json
+   {"working_dir": "/absolute/path/to/project", "scope": "project"}
+   ```
+3. **Verify the transcript references the project path**. Codex stores sessions in date directories rather than Claude Code's project-hash directories, so meta-cc matches Codex project sessions by transcript content.
 
 ### Installation fails on macOS
 

@@ -1,18 +1,35 @@
-# Claude Code Session JSONL Schema
+# Session JSONL Schema
 
-This document describes the complete schema for Claude Code session history JSONL files stored in `~/.claude/projects/<project-hash>/`.
+This document describes the session history JSONL schemas supported by meta-cc:
+
+- **Claude Code** transcripts stored in `~/.claude/projects/<project-hash>/`
+- **Codex** transcripts stored in `$CODEX_HOME/sessions` or `~/.codex/sessions`
+
+Internally, meta-cc normalizes both hosts into a Claude-like message/tool schema before running MCP queries and analysis. Existing jq filters that target `.type`, `.message.content`, tool blocks, and `.message.usage` work across both hosts for the supported common events.
 
 ## Overview
 
-Claude Code session files use **newline-delimited JSON (JSONL)** format, where each line is a complete, self-contained JSON record. Each record represents an event in the conversation history, forming a directed acyclic graph (DAG) through parent-child relationships.
+Claude Code and Codex session files use **newline-delimited JSON (JSONL)** format, where each line is a complete, self-contained JSON record. Claude Code records form a directed acyclic graph (DAG) through parent-child relationships. Codex records use event records with a top-level `payload`; meta-cc builds equivalent parent links during normalization.
 
 **Key characteristics:**
 - One JSON object per line
 - Records linked via `uuid` and `parentUuid` fields
 - Chronologically ordered by `timestamp`
-- Five main record types: `user`, `assistant`, `system`, `file-history-snapshot`, `summary`
+- Claude Code has five main record types: `user`, `assistant`, `system`, `file-history-snapshot`, `summary`
+- Codex has top-level event types such as `session_meta`, `response_item`, `event_msg`, `turn_context`, and `compacted`
+
+## Host Storage
+
+| Host | Default transcript root | Project matching |
+|------|--------------------------|------------------|
+| Claude Code | `~/.claude/projects/<project-hash>/` | Project path hash directory |
+| Codex | `$CODEX_HOME/sessions` or `~/.codex/sessions` | Recursive JSONL scan, matched by project path in transcript content |
+
+`META_CC_PROJECTS_ROOT` can still override the Claude-style project-hash root for tests and custom layouts.
 
 ## Record Types
+
+The first five record types below describe Claude Code's native schema and the normalized schema that Codex records are converted into.
 
 ### 1. User Entry
 
@@ -483,6 +500,139 @@ Assistant entries include detailed token usage:
 - `ephemeral_5m_input_tokens` - 5-minute cache
 - `ephemeral_1h_input_tokens` - 1-hour cache
 
+## Codex Native Records
+
+Codex stores most data under a top-level `payload` object. meta-cc currently normalizes the common analysis events listed below.
+
+### Session Metadata
+
+```json
+{
+  "timestamp": "2026-06-14T06:00:00Z",
+  "type": "session_meta",
+  "payload": {
+    "id": "codex-session-id",
+    "cwd": "/absolute/project/path",
+    "model": "gpt-5"
+  }
+}
+```
+
+`session_meta` provides session context for later records in the same file. It is not returned directly by message queries.
+
+### Messages
+
+```json
+{
+  "timestamp": "2026-06-14T06:00:01Z",
+  "type": "response_item",
+  "payload": {
+    "type": "message",
+    "role": "user",
+    "content": [
+      {"type": "input_text", "text": "Fix the parser"}
+    ]
+  }
+}
+```
+
+Normalization:
+
+- `payload.role == "user"` becomes a `type: "user"` entry with `message.content` as a string.
+- `payload.role == "assistant"` becomes a `type: "assistant"` entry with text content blocks.
+- `developer` and `system` messages become `type: "system"` entries.
+
+### Tool Calls
+
+Codex function tool calls:
+
+```json
+{
+  "timestamp": "2026-06-14T06:00:02Z",
+  "type": "response_item",
+  "payload": {
+    "type": "function_call",
+    "name": "exec_command",
+    "call_id": "call_1",
+    "arguments": "{\"cmd\":\"go test ./...\"}"
+  }
+}
+```
+
+Codex custom tool calls:
+
+```json
+{
+  "timestamp": "2026-06-14T06:00:03Z",
+  "type": "response_item",
+  "payload": {
+    "type": "custom_tool_call",
+    "name": "apply_patch",
+    "call_id": "call_2",
+    "input": "*** Begin Patch\n*** End Patch"
+  }
+}
+```
+
+Both normalize to assistant `tool_use` content blocks. `arguments` is parsed as JSON when possible; otherwise raw text is preserved under `arguments` or `input`.
+
+### Tool Outputs
+
+```json
+{
+  "timestamp": "2026-06-14T06:00:04Z",
+  "type": "response_item",
+  "payload": {
+    "type": "function_call_output",
+    "call_id": "call_1",
+    "output": "ok"
+  }
+}
+```
+
+`function_call_output` and `custom_tool_call_output` normalize to user `tool_result` content blocks. Non-success statuses and explicit error fields set `is_error: true`, which powers `query_tool_errors`, `analyze_errors`, and related analysis tools.
+
+### Token Counts
+
+Codex token usage is emitted as an `event_msg`:
+
+```json
+{
+  "timestamp": "2026-06-14T06:00:05Z",
+  "type": "event_msg",
+  "payload": {
+    "type": "token_count",
+    "info": {
+      "last_token_usage": {
+        "input_tokens": 18818,
+        "cached_input_tokens": 4480,
+        "output_tokens": 152,
+        "reasoning_output_tokens": 58,
+        "total_tokens": 18970
+      },
+      "total_token_usage": {
+        "input_tokens": 18818,
+        "cached_input_tokens": 4480,
+        "output_tokens": 152,
+        "reasoning_output_tokens": 58,
+        "total_tokens": 18970
+      },
+      "model_context_window": 258400
+    }
+  }
+}
+```
+
+Normalization creates an assistant entry with `message.usage`, so `query_token_usage` works for Codex as well as Claude Code.
+
+### Host-Specific Gaps
+
+Some Claude Code records do not have Codex equivalents and therefore remain empty for Codex sessions:
+
+- `file-history-snapshot` records used by `query_file_snapshots`
+- top-level `summary` records used by `query_summaries`
+- Claude Code `system` records with `subtype: "api_error"` used by `query_system_errors`
+
 ## Common Field Patterns
 
 ### UUID Fields
@@ -511,16 +661,18 @@ Common boolean fields across record types:
 When parsing JSONL session files:
 
 1. **Type discrimination:** Always check `type` field first
-2. **Optional fields:** Not all optional fields present in every record
-3. **Content polymorphism:** `message.content` can be string or array (check type)
-4. **Null parents:** Only first entry has `parentUuid=null`
-5. **Missing fields:** `file-history-snapshot` and `summary` lack standard fields
-6. **Array vs Object:** Content blocks always in array for assistant messages
+2. **Host discrimination:** Codex records usually require checking `payload.type`
+3. **Optional fields:** Not all optional fields present in every record
+4. **Content polymorphism:** `message.content` can be string or array (check type)
+5. **Null parents:** Only first Claude Code entry has `parentUuid=null`; Codex normalized UUIDs are synthesized
+6. **Missing fields:** `file-history-snapshot` and `summary` lack standard fields
+7. **Array vs Object:** Content blocks always in array for assistant messages
 
 ## Examples
 
 See the following files for complete examples:
-- **Simple session:** `~/.claude/projects/<project-hash>/*.jsonl` (small files)
+- **Claude Code session:** `~/.claude/projects/<project-hash>/*.jsonl`
+- **Codex session:** `$CODEX_HOME/sessions/**/*.jsonl` or `~/.codex/sessions/**/*.jsonl`
 - **Complex session:** Session files with tool executions, thinking blocks, and errors
 - **Query examples:**
   - `docs/examples/jq-query-examples.md` - Single-file query patterns (19 examples)
@@ -537,6 +689,6 @@ See the following files for complete examples:
 
 ---
 
-**Document Status:** ✓ Validated against 95,259 records across multiple sessions
-**Schema Coverage:** 5 record types, 3 content block types, 100% field coverage
-**Last Updated:** 2025-10-24
+**Document Status:** Covers Claude Code native records and Codex records normalized by meta-cc
+**Schema Coverage:** Claude Code message/tool records plus Codex message/tool/token records
+**Last Updated:** 2026-06-14

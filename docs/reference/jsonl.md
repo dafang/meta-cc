@@ -2,6 +2,8 @@
 
 Understanding meta-cc's JSONL (JSON Lines) output structure is crucial for processing data with tools like `jq`.
 
+meta-cc reads both Claude Code and Codex transcript JSONL. Query and analysis outputs use a normalized schema: Codex `response_item`/`event_msg` records are converted into the same user, assistant, tool, and usage shapes used for Claude Code. See [JSONL Schema](jsonl-schema.md) for host-specific input schemas.
+
 ## What is JSONL?
 
 JSONL (JSON Lines) is a format where each line is a valid JSON object. Unlike standard JSON arrays, JSONL is:
@@ -37,6 +39,8 @@ Different commands return different JSON structures:
 | `query tools` | **Stream** | One tool object per line |
 | `query user-messages` | **Stream** | One message object per line |
 | `analyze errors` | **Stream** | One error pattern per line (or empty) |
+
+For MCP tools, small results are returned inline as JSON and large results are returned as file references containing JSONL. `execute_stage2_query` runs jq against normalized records, so filters such as `select(.type == "user")` work for both Claude Code and Codex sessions.
 
 ## Common Mistakes and Solutions
 
