@@ -94,3 +94,42 @@ func TestGetToolSchemaByName(t *testing.T) {
 		t.Errorf("expected 'unknown tool' in error, got: %v", err)
 	}
 }
+
+func TestValidateToolArgs_ValidTool_ValidArgs(t *testing.T) {
+	err := tools.ValidateToolArgs("query_user_messages", map[string]interface{}{
+		"pattern": "error",
+		"limit":   float64(10),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error for valid tool+args: %v", err)
+	}
+}
+
+func TestValidateToolArgs_ValidTool_EmptyArgs(t *testing.T) {
+	err := tools.ValidateToolArgs("query_tool_errors", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("unexpected error for empty args: %v", err)
+	}
+}
+
+func TestValidateToolArgs_ValidTool_InvalidArgKey(t *testing.T) {
+	err := tools.ValidateToolArgs("query_user_messages", map[string]interface{}{
+		"unknown_key": "value",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid arg key")
+	}
+	if !strings.Contains(err.Error(), "unknown_key") {
+		t.Errorf("expected 'unknown_key' in error, got: %v", err)
+	}
+}
+
+func TestValidateToolArgs_UnknownTool(t *testing.T) {
+	err := tools.ValidateToolArgs("no_such_tool", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("expected error for unknown tool")
+	}
+	if !strings.Contains(err.Error(), "no_such_tool") {
+		t.Errorf("expected tool name in error, got: %v", err)
+	}
+}

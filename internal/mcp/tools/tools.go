@@ -446,6 +446,16 @@ func GetToolDefinitions() []Tool {
 	}
 }
 
+// ValidateToolArgs checks that toolName is known and all provided arg keys are declared in its schema.
+func ValidateToolArgs(toolName string, args map[string]interface{}) error {
+	index := BuildToolSchemaIndex()
+	s, err := GetToolSchemaByName(index, toolName)
+	if err != nil {
+		return err
+	}
+	return schema.ValidateArgKeys(args, s)
+}
+
 // BuildToolSchemaIndex builds the index from tool definitions.
 func BuildToolSchemaIndex() map[string]ToolSchema {
 	return schema.BuildSchemaIndex(GetToolDefinitions())

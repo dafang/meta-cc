@@ -96,9 +96,9 @@ func (e *ToolExecutor) parseJSONL(jsonlData string) ([]interface{}, error) {
 	return e.ToolExecutor.ParseJSONL(jsonlData)
 }
 
-// applyMessageFiltersToData is a lowercase wrapper for test backward compatibility.
+// applyMessageFiltersToData delegates to filterspkg directly.
 func (e *ToolExecutor) applyMessageFiltersToData(messages []interface{}, maxMessageLength int, contentSummary bool, previewLength int) []interface{} {
-	return e.ToolExecutor.ApplyMessageFiltersToData(messages, maxMessageLength, contentSummary, previewLength)
+	return filterspkg.ApplyMessageFiltersToData(messages, maxMessageLength, contentSummary, previewLength)
 }
 
 // Ensure imports are used

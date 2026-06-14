@@ -7,6 +7,7 @@ import (
 
 	"github.com/yaleh/meta-cc/internal/config"
 	"github.com/yaleh/meta-cc/internal/mcp/pipeline"
+	mcquery "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
 // testConfig returns a minimal config suitable for pipeline tests.
@@ -266,5 +267,113 @@ func TestBuildStandardResponse_Basic(t *testing.T) {
 	}
 	if !strings.Contains(out, "inline") {
 		t.Errorf("expected 'inline' in output, got: %s", out)
+	}
+}
+
+// ─── PipelineConfig ───────────────────────────────────────────────────────────
+
+func TestPipelineConfig_Defaults(t *testing.T) {
+	pc := pipeline.PipelineConfig{}
+	if pc.StatsOnly {
+		t.Error("expected StatsOnly=false by default")
+	}
+	if pc.StatsFirst {
+		t.Error("expected StatsFirst=false by default")
+	}
+	if pc.GroupBySession {
+		t.Error("expected GroupBySession=false by default")
+	}
+}
+
+func TestPipelineConfig_DefaultPreviewLength(t *testing.T) {
+	if pipeline.DefaultPreviewLength <= 0 {
+		t.Errorf("expected positive DefaultPreviewLength, got %d", pipeline.DefaultPreviewLength)
+	}
+}
+
+// ─── BuildResponse ────────────────────────────────────────────────────────────
+
+func makeQueryResult(entries ...interface{}) mcquery.QueryResult {
+	return mcquery.QueryResult{Entries: entries}
+}
+
+func TestBuildResponse_StatsOnly(t *testing.T) {
+	pc := pipeline.PipelineConfig{StatsOnly: true, StatsLevel: "turn"}
+	result := makeQueryResult(
+		map[string]interface{}{"tool_name": "Bash", "status": "success"},
+	)
+	out, err := pipeline.BuildResponse(testConfig(), result, map[string]interface{}{}, "query_tools", pc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	_ = out
+}
+
+func TestBuildResponse_InvalidStatsLevel(t *testing.T) {
+	pc := pipeline.PipelineConfig{StatsOnly: true, StatsLevel: "invalid"}
+	result := makeQueryResult()
+	_, err := pipeline.BuildResponse(testConfig(), result, map[string]interface{}{}, "query_tools", pc)
+	if err == nil {
+		t.Fatal("expected error for invalid stats_level")
+	}
+	if !strings.Contains(err.Error(), "stats_level") {
+		t.Errorf("expected 'stats_level' in error, got: %v", err)
+	}
+}
+
+func TestBuildResponse_GroupBySessionAndStatsOnlyExclusive(t *testing.T) {
+	pc := pipeline.PipelineConfig{StatsOnly: true, GroupBySession: true}
+	result := makeQueryResult()
+	_, err := pipeline.BuildResponse(testConfig(), result, map[string]interface{}{}, "query_user_messages", pc)
+	if err == nil {
+		t.Fatal("expected error for mutually exclusive flags")
+	}
+}
+
+func TestBuildResponse_Standard(t *testing.T) {
+	pc := pipeline.PipelineConfig{}
+	result := makeQueryResult(
+		map[string]interface{}{"tool_name": "Bash", "status": "success"},
+	)
+	out, err := pipeline.BuildResponse(testConfig(), result, map[string]interface{}{}, "query_tools", pc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "inline") {
+		t.Errorf("expected 'inline' in output, got: %s", out)
+	}
+}
+
+func TestBuildResponse_StatsFirst(t *testing.T) {
+	pc := pipeline.PipelineConfig{StatsFirst: true, StatsLevel: "turn"}
+	result := makeQueryResult(
+		map[string]interface{}{"tool_name": "Bash", "status": "success"},
+	)
+	out, err := pipeline.BuildResponse(testConfig(), result, map[string]interface{}{}, "query_tools", pc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "---") {
+		t.Errorf("expected '---' separator in stats_first output, got: %s", out)
+	}
+}
+
+func TestBuildResponse_WithWarnings(t *testing.T) {
+	pc := pipeline.PipelineConfig{}
+	result := mcquery.QueryResult{
+		Entries:  []interface{}{map[string]interface{}{"x": 1}},
+		Warnings: []string{"test warning"},
+	}
+	out, err := pipeline.BuildResponse(testConfig(), result, map[string]interface{}{}, "query_tools", pc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	warns, ok := parsed["warnings"].([]interface{})
+	if !ok || len(warns) == 0 {
+		t.Errorf("expected non-empty warnings in output, got: %v", parsed["warnings"])
 	}
 }

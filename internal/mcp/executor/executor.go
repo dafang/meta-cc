@@ -11,14 +11,11 @@ import (
 	"github.com/yaleh/meta-cc/internal/analysis"
 	"github.com/yaleh/meta-cc/internal/config"
 	mcerrors "github.com/yaleh/meta-cc/internal/errors"
-	filterspkg "github.com/yaleh/meta-cc/internal/mcp/filters"
 	"github.com/yaleh/meta-cc/internal/mcp/metrics"
 	obspkg "github.com/yaleh/meta-cc/internal/mcp/observability"
 	pipelinepkg "github.com/yaleh/meta-cc/internal/mcp/pipeline"
 	mcquery "github.com/yaleh/meta-cc/internal/mcp/query"
-	schemapkg "github.com/yaleh/meta-cc/internal/mcp/schema"
 	toolspkg "github.com/yaleh/meta-cc/internal/mcp/tools"
-	internalquery "github.com/yaleh/meta-cc/internal/query"
 )
 
 // ToolExecutor executes MCP tools for session history analysis.
@@ -26,44 +23,26 @@ type ToolExecutor struct {
 	AnalysisSvc analysis.AnalysisService
 }
 
-// ToolPipelineConfig holds configuration for a tool execution pipeline.
-type ToolPipelineConfig struct {
-	JQFilter         string
-	StatsOnly        bool
-	StatsFirst       bool
-	OutputFormat     string
-	MaxMessageLength int
-	ContentSummary   bool
-	PreviewLength    int
-	GroupBySession   bool
-	StatsLevel       string // "turn" (default) or "session"
-	ContextTurns     int
+// NewToolExecutor creates a new ToolExecutor.
+func NewToolExecutor() *ToolExecutor {
+	return &ToolExecutor{
+		AnalysisSvc: analysis.New(),
+	}
 }
 
-// NewToolPipelineConfig creates a ToolPipelineConfig from args map.
-func NewToolPipelineConfig(args map[string]interface{}) ToolPipelineConfig {
-	return ToolPipelineConfig{
+// NewToolPipelineConfig creates a PipelineConfig from args map.
+func NewToolPipelineConfig(args map[string]interface{}) pipelinepkg.PipelineConfig {
+	return pipelinepkg.PipelineConfig{
 		JQFilter:         GetStringParam(args, "jq_filter", ".[]"),
 		StatsOnly:        GetBoolParam(args, "stats_only", false),
 		StatsFirst:       GetBoolParam(args, "stats_first", false),
 		OutputFormat:     GetStringParam(args, "output_format", "jsonl"),
 		MaxMessageLength: GetIntParam(args, "max_message_length", 0),
 		ContentSummary:   GetBoolParam(args, "content_summary", false),
-		PreviewLength:    GetIntParam(args, "preview_length", filterspkg.DefaultPreviewLength),
+		PreviewLength:    GetIntParam(args, "preview_length", pipelinepkg.DefaultPreviewLength),
 		GroupBySession:   GetBoolParam(args, "group_by_session", false),
 		StatsLevel:       GetStringParam(args, "stats_level", "turn"),
 		ContextTurns:     GetIntParam(args, "context_turns", 0),
-	}
-}
-
-func (c ToolPipelineConfig) requiresMessageFilters() bool {
-	return c.MaxMessageLength > 0 || c.ContentSummary
-}
-
-// NewToolExecutor creates a new ToolExecutor.
-func NewToolExecutor() *ToolExecutor {
-	return &ToolExecutor{
-		AnalysisSvc: analysis.New(),
 	}
 }
 
@@ -107,7 +86,7 @@ func (e *ToolExecutor) ExecuteSpecialTool(cfg *config.Config, toolName, scope st
 	return output, true, nil
 }
 
-// ExecuteTool executes a meta-cc command and applies jq filtering.
+// ExecuteTool executes a meta-cc command and returns the formatted output.
 func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map[string]interface{}) (string, error) {
 	scope := DetermineScope(toolName, args)
 	start := time.Now()
@@ -116,57 +95,26 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 		return output, err
 	}
 
-	// Validate scope value before any further processing
 	if scope != "project" && scope != "session" {
 		RecordToolFailure(toolName, scope, start, "validation_error")
 		return "", fmt.Errorf("invalid scope %q: must be \"project\" or \"session\"", scope)
 	}
 
-	// Validate tool exists via schema lookup before dispatch
-	schemaIndex := toolspkg.BuildToolSchemaIndex()
-	schema, schemaErr := toolspkg.GetToolSchemaByName(schemaIndex, toolName)
-	if schemaErr != nil {
+	if err := toolspkg.ValidateToolArgs(toolName, args); err != nil {
+		RecordToolFailure(toolName, scope, start, "validation_error")
+		if strings.Contains(err.Error(), "unknown tool") {
+			return "", fmt.Errorf("unknown tool %s in executor: %w", toolName, mcerrors.ErrUnknownTool)
+		}
+		return "", err
+	}
+
+	handler, ok := queryHandlerRegistry[toolName]
+	if !ok {
 		RecordToolFailure(toolName, scope, start, "validation_error")
 		return "", fmt.Errorf("unknown tool %s in executor: %w", toolName, mcerrors.ErrUnknownTool)
 	}
 
-	// Validate that all provided argument keys are declared in the tool schema
-	if validationErr := schemapkg.ValidateArgKeys(args, schema); validationErr != nil {
-		RecordToolFailure(toolName, scope, start, "validation_error")
-		return "", validationErr
-	}
-
-	pipeline := NewToolPipelineConfig(args)
-	var queryResult mcquery.QueryResult
-	var err error
-
-	switch toolName {
-	// Phase 27 Stage 27.1: query and query_raw tools removed
-	// Use the 10 shortcut query tools instead
-
-	// Layer 1: Convenience Tools (10 high-frequency queries)
-	case "query_user_messages":
-		queryResult, err = e.HandleQueryUserMessages(cfg, scope, args)
-	case "query_tools":
-		queryResult, err = e.HandleQueryTools(cfg, scope, args)
-	case "query_tool_errors":
-		queryResult, err = e.HandleQueryToolErrors(cfg, scope, args)
-	case "query_token_usage":
-		queryResult, err = e.HandleQueryTokenUsage(cfg, scope, args)
-	case "query_conversation_flow":
-		queryResult, err = e.HandleQueryConversationFlow(cfg, scope, args)
-	case "query_system_errors":
-		queryResult, err = e.HandleQuerySystemErrors(cfg, scope, args)
-	case "query_file_snapshots":
-		queryResult, err = e.HandleQueryFileSnapshots(cfg, scope, args)
-	case "query_timestamps":
-		queryResult, err = e.HandleQueryTimestamps(cfg, scope, args)
-	case "query_summaries":
-		queryResult, err = e.HandleQuerySummaries(cfg, scope, args)
-	case "query_tool_blocks":
-		queryResult, err = e.HandleQueryToolBlocks(cfg, scope, args)
-	}
-
+	queryResult, err := handler(e, scope, args)
 	if err != nil {
 		errorType := obspkg.ClassifyError(err)
 		slog.Error("tool execution failed",
@@ -178,7 +126,8 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 		return "", err
 	}
 
-	output, err := e.BuildResponse(cfg, queryResult, args, toolName, pipeline)
+	pipeline := NewToolPipelineConfig(args)
+	output, err := pipelinepkg.BuildResponse(cfg, queryResult, args, toolName, pipeline)
 	if err != nil {
 		return "", err
 	}
@@ -192,67 +141,37 @@ func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map
 	return output, nil
 }
 
-// BuildResponse constructs the final response for a query result.
-func (e *ToolExecutor) BuildResponse(cfg *config.Config, result mcquery.QueryResult, args map[string]interface{}, toolName string, pipeline ToolPipelineConfig) (string, error) {
-	rawData := result.Entries
+// ExecuteQuery is an internal helper for convenience tools.
+func (e *ToolExecutor) ExecuteQuery(scope string, jqFilter string, limit int, workingDir string) (mcquery.QueryResult, error) {
+	return e.ExecuteQueryWithTimeRange(scope, jqFilter, limit, workingDir, mcquery.ParsedTimeRange{})
+}
 
-	var output string
-	var err error
-
-	if pipeline.StatsLevel != "" && pipeline.StatsLevel != "turn" && pipeline.StatsLevel != "session" {
-		return "", fmt.Errorf("invalid stats_level: must be 'turn' or 'session'")
-	}
-
-	if pipeline.GroupBySession && pipeline.StatsOnly {
-		return "", fmt.Errorf("group_by_session and stats_only are mutually exclusive")
-	}
-
-	if pipeline.StatsOnly {
-		output, err = pipelinepkg.BuildStatsOnlyResponse(rawData, toolName, pipeline.StatsLevel)
-		if err != nil {
-			return "", err
-		}
-		return pipelinepkg.InjectWarnings(output, result.Warnings)
-	}
-
-	// Apply message filters for detail rendering AFTER stats path
-	parsedData := rawData
-	if toolName == "query_user_messages" && pipeline.requiresMessageFilters() {
-		parsedData = e.ApplyMessageFiltersToData(rawData, pipeline.MaxMessageLength, pipeline.ContentSummary, pipeline.PreviewLength)
-	}
-
-	// Expand context turns
-	if pipeline.ContextTurns > 0 && toolName == "query_user_messages" &&
-		GetStringParam(args, "content_type", "string") != "array" {
-		baseDir, err := mcquery.GetQueryBaseDir(
-			GetStringParam(args, "scope", "project"),
-			GetStringParam(args, "working_dir", ""),
-		)
-		if err != nil {
-			return "", err
-		}
-		parsedData, err = e.ExpandContextTurns(parsedData, pipeline.ContextTurns, baseDir)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	// Group by session after message filters
-	if pipeline.GroupBySession && toolName == "query_user_messages" {
-		parsedData = internalquery.GroupBySession(parsedData)
-	}
-
-	if pipeline.StatsFirst {
-		output, err = pipelinepkg.BuildStatsFirstResponse(cfg, rawData, parsedData, args, toolName, pipeline.StatsLevel)
-	} else {
-		output, err = pipelinepkg.BuildStandardResponse(cfg, parsedData, args, toolName)
-	}
-
+// ExecuteQueryWithTimeRange is like ExecuteQuery but applies time-range filtering.
+func (e *ToolExecutor) ExecuteQueryWithTimeRange(scope string, jqFilter string, limit int, workingDir string, tr mcquery.ParsedTimeRange) (mcquery.QueryResult, error) {
+	baseDir, err := mcquery.GetQueryBaseDir(scope, workingDir)
 	if err != nil {
-		return "", err
+		return mcquery.QueryResult{}, fmt.Errorf("failed to get base directory: %w", err)
 	}
 
-	return pipelinepkg.InjectWarnings(output, result.Warnings)
+	executor := mcquery.NewQueryExecutor(baseDir)
+
+	code, err := executor.CompileExpression(jqFilter)
+	if err != nil {
+		return mcquery.QueryResult{}, fmt.Errorf("invalid jq expression: %w", err)
+	}
+
+	files, err := mcquery.GetJSONLFiles(baseDir)
+	if err != nil {
+		return mcquery.QueryResult{}, fmt.Errorf("failed to list JSONL files: %w", err)
+	}
+
+	if len(files) == 0 {
+		return mcquery.QueryResult{}, fmt.Errorf("no JSONL files found in %s", baseDir)
+	}
+
+	ctx := context.Background()
+	result := executor.StreamFilesWithTimeRange(ctx, files, code, limit, tr)
+	return result, nil
 }
 
 // ParseJSONL parses JSONL string into array of interfaces.
@@ -292,47 +211,4 @@ func (e *ToolExecutor) ParseJSONL(jsonlData string) ([]interface{}, error) {
 	)
 
 	return data, nil
-}
-
-// ApplyMessageFiltersToData applies content truncation or summary mode to user messages.
-func (e *ToolExecutor) ApplyMessageFiltersToData(messages []interface{}, maxMessageLength int, contentSummary bool, previewLength int) []interface{} {
-	return filterspkg.ApplyMessageFiltersToData(messages, maxMessageLength, contentSummary, previewLength)
-}
-
-// ExpandContextTurns expands matched turns by including N surrounding turns.
-func (e *ToolExecutor) ExpandContextTurns(rawData []interface{}, N int, baseDir string) ([]interface{}, error) {
-	return filterspkg.ExpandContextTurns(rawData, N, baseDir)
-}
-
-// ExecuteQuery is an internal helper for convenience tools.
-func (e *ToolExecutor) ExecuteQuery(scope string, jqFilter string, limit int, workingDir string) (mcquery.QueryResult, error) {
-	return e.ExecuteQueryWithTimeRange(scope, jqFilter, limit, workingDir, mcquery.ParsedTimeRange{})
-}
-
-// ExecuteQueryWithTimeRange is like ExecuteQuery but applies time-range filtering.
-func (e *ToolExecutor) ExecuteQueryWithTimeRange(scope string, jqFilter string, limit int, workingDir string, tr mcquery.ParsedTimeRange) (mcquery.QueryResult, error) {
-	baseDir, err := mcquery.GetQueryBaseDir(scope, workingDir)
-	if err != nil {
-		return mcquery.QueryResult{}, fmt.Errorf("failed to get base directory: %w", err)
-	}
-
-	executor := mcquery.NewQueryExecutor(baseDir)
-
-	code, err := executor.CompileExpression(jqFilter)
-	if err != nil {
-		return mcquery.QueryResult{}, fmt.Errorf("invalid jq expression: %w", err)
-	}
-
-	files, err := mcquery.GetJSONLFiles(baseDir)
-	if err != nil {
-		return mcquery.QueryResult{}, fmt.Errorf("failed to list JSONL files: %w", err)
-	}
-
-	if len(files) == 0 {
-		return mcquery.QueryResult{}, fmt.Errorf("no JSONL files found in %s", baseDir)
-	}
-
-	ctx := context.Background()
-	result := executor.StreamFilesWithTimeRange(ctx, files, code, limit, tr)
-	return result, nil
 }
