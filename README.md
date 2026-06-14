@@ -127,8 +127,8 @@ get_tech_debt({})            // TODO/FIXME markers and unresolved errors
 ```
 
 **Key Features**:
-- **Claude Code + Codex support**: Reads Claude transcripts from `~/.claude/projects/` and Codex transcripts from `$CODEX_HOME/sessions` or `~/.codex/sessions`
-- **Codex normalization**: Codex `response_item` and `event_msg` records are normalized so `query_user_messages`, `query_tools`, `query_tool_errors`, `query_token_usage`, `get_work_patterns`, and `execute_stage2_query` work through the same MCP surface
+- **Claude Code + Codex support**: Reads Claude transcripts from `~/.claude/projects/` and Codex conversations from `${META_CC_CODEX_ROOT:-~/.codex}/state_5.sqlite` plus rollout JSONL files
+- **Provider-aware normalization**: Use `provider: "claude" | "codex" | "all"` on convenience query and analysis tools; Codex `response_item`, `event_msg`, function/custom tool calls, tool outputs, and token counts are normalized through the same MCP surface
 - **Hybrid Output Mode**: Auto-switches between inline (<8KB) and file_ref (≥8KB)
 - **jq Integration**: Native jq filtering for complex queries
 - **No Limits by Default**: Returns all results, relies on hybrid mode

@@ -4,8 +4,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/yaleh/meta-cc/internal/config"
 )
 
 // TestHandleQueryUserMessagesContentLengthFiltering tests min/max content length filtering
@@ -34,10 +32,9 @@ func TestHandleQueryUserMessagesContentLengthFiltering(t *testing.T) {
 	}
 
 	executor := NewToolExecutor()
-	cfg := &config.Config{}
 
 	t.Run("min_content_length_only", func(t *testing.T) {
-		result, err := executor.handleQueryUserMessages(cfg, "session", map[string]interface{}{
+		result, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "session", map[string]interface{}{
 			"min_content_length": 10,
 		})
 		if err != nil {
@@ -60,7 +57,7 @@ func TestHandleQueryUserMessagesContentLengthFiltering(t *testing.T) {
 	})
 
 	t.Run("max_content_length_only", func(t *testing.T) {
-		result, err := executor.handleQueryUserMessages(cfg, "session", map[string]interface{}{
+		result, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "session", map[string]interface{}{
 			"max_content_length": 30,
 		})
 		if err != nil {
@@ -73,7 +70,7 @@ func TestHandleQueryUserMessagesContentLengthFiltering(t *testing.T) {
 	})
 
 	t.Run("both_min_and_max", func(t *testing.T) {
-		result, err := executor.handleQueryUserMessages(cfg, "session", map[string]interface{}{
+		result, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "session", map[string]interface{}{
 			"min_content_length": 10,
 			"max_content_length": 30,
 		})
@@ -87,7 +84,7 @@ func TestHandleQueryUserMessagesContentLengthFiltering(t *testing.T) {
 	})
 
 	t.Run("neither_length_filter", func(t *testing.T) {
-		result, err := executor.handleQueryUserMessages(cfg, "session", map[string]interface{}{})
+		result, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "session", map[string]interface{}{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -98,7 +95,7 @@ func TestHandleQueryUserMessagesContentLengthFiltering(t *testing.T) {
 	})
 
 	t.Run("array_content_type_with_length_filter_returns_error", func(t *testing.T) {
-		_, err := executor.handleQueryUserMessages(cfg, "session", map[string]interface{}{
+		_, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "session", map[string]interface{}{
 			"content_type":       "array",
 			"min_content_length": 2,
 		})
@@ -108,7 +105,7 @@ func TestHandleQueryUserMessagesContentLengthFiltering(t *testing.T) {
 	})
 
 	t.Run("array_content_type_with_max_length_filter_returns_error", func(t *testing.T) {
-		_, err := executor.handleQueryUserMessages(cfg, "session", map[string]interface{}{
+		_, err := executor.ToolExecutor.ExecuteToolQuery("query_user_messages", "session", map[string]interface{}{
 			"content_type":       "array",
 			"max_content_length": 100,
 		})
@@ -197,10 +194,9 @@ func TestHandleQueryTools_ToolParamFilters(t *testing.T) {
 	}
 
 	executor := NewToolExecutor()
-	cfg := &config.Config{}
 
 	t.Run("filter_by_tool_param_returns_only_matching", func(t *testing.T) {
-		result, err := executor.handleQueryTools(cfg, "session", map[string]interface{}{
+		result, err := executor.ToolExecutor.ExecuteToolQuery("query_tools", "session", map[string]interface{}{
 			"tool": "Read",
 		})
 		if err != nil {
@@ -212,7 +208,7 @@ func TestHandleQueryTools_ToolParamFilters(t *testing.T) {
 	})
 
 	t.Run("no_filter_returns_all", func(t *testing.T) {
-		result, err := executor.handleQueryTools(cfg, "session", map[string]interface{}{})
+		result, err := executor.ToolExecutor.ExecuteToolQuery("query_tools", "session", map[string]interface{}{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

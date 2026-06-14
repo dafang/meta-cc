@@ -1,42 +1,18 @@
-package query
+// Package stats provides JSONL statistics generation functions extracted from
+// internal/query. These are pure stdlib functions with no internal dependencies.
+package stats
 
 import (
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/itchyny/gojq"
-
-	mcerrors "github.com/yaleh/meta-cc/internal/errors"
 )
-
-// ApplyJQFilter applies a jq expression to JSONL data.
-func ApplyJQFilter(jsonlData string, jqExpr string) (string, error) {
-	normalizedExpr := defaultJQExpression(jqExpr)
-	query, err := parseJQExpression(normalizedExpr)
-	if err != nil {
-		return "", err
-	}
-
-	records, err := parseJSONLRecords(jsonlData)
-	if err != nil {
-		return "", err
-	}
-
-	results, err := runJQQuery(query, records)
-	if err != nil {
-		return "", err
-	}
-
-	return encodeJQResults(results)
-}
 
 // GenerateStats generates simple statistics from JSONL data grouped by tool name.
 func GenerateStats(jsonlData string) (string, error) {
 	lines := strings.Split(strings.TrimSpace(jsonlData), "\n")
-	stats := make(map[string]int)
+	counts := make(map[string]int)
 
 	for _, line := range lines {
 		if line == "" {
@@ -55,11 +31,11 @@ func GenerateStats(jsonlData string) (string, error) {
 			key = toolName
 		}
 
-		stats[key]++
+		counts[key]++
 	}
 
 	var output strings.Builder
-	for key, count := range stats {
+	for key, count := range counts {
 		statObj := map[string]interface{}{
 			"key":   key,
 			"count": count,
@@ -130,7 +106,6 @@ func GenerateTimestampStats(jsonlData string) (string, error) {
 
 	var output strings.Builder
 
-	// Line 1: summary
 	summary := map[string]interface{}{
 		"total":         total,
 		"session_count": len(sessions),
@@ -143,7 +118,6 @@ func GenerateTimestampStats(jsonlData string) (string, error) {
 	output.Write(summaryBytes)
 	output.WriteString("\n")
 
-	// Lines 2+: hourly buckets sorted chronologically
 	hours := make([]string, 0, len(hourCounts))
 	for h := range hourCounts {
 		hours = append(hours, h)
@@ -186,7 +160,6 @@ func GroupBySession(entries []interface{}) []interface{} {
 			continue
 		}
 
-		// Support both camelCase (raw) and snake_case (post-summary)
 		sessionID, _ := obj["session_id"].(string)
 		if sessionID == "" {
 			sessionID, _ = obj["sessionId"].(string)
@@ -207,8 +180,6 @@ func GroupBySession(entries []interface{}) []interface{} {
 		}
 
 		g := groups[sessionID]
-		// When context_turns is active, entries with "context":true are surrounding
-		// context turns — don't count them as matches.
 		if ctx, _ := obj["context"].(bool); !ctx {
 			g.MatchCount++
 		}
@@ -271,12 +242,11 @@ func GenerateSessionStats(jsonlData string) (string, error) {
 			continue
 		}
 
-		sessionID, _ := obj["sessionId"].(string) // rawData always camelCase
+		sessionID, _ := obj["sessionId"].(string)
 		tsStr, _ := obj["timestamp"].(string)
 
 		ts, err := time.Parse(time.RFC3339, tsStr)
 		if err != nil {
-			// Try with milliseconds
 			ts, err = time.Parse("2006-01-02T15:04:05.000Z", tsStr)
 		}
 		if err != nil {
@@ -309,12 +279,10 @@ func GenerateSessionStats(jsonlData string) (string, error) {
 		return "", nil
 	}
 
-	// Sort order by first_match ascending
 	sort.Slice(order, func(i, j int) bool {
 		return sessions[order[i]].First.Before(sessions[order[j]].First)
 	})
 
-	// Count total matches
 	totalMatches := 0
 	for _, s := range sessions {
 		totalMatches += s.Count
@@ -322,7 +290,6 @@ func GenerateSessionStats(jsonlData string) (string, error) {
 
 	var output strings.Builder
 
-	// Summary line
 	summary := map[string]interface{}{
 		"total_sessions": len(sessions),
 		"total_matches":  totalMatches,
@@ -335,7 +302,6 @@ func GenerateSessionStats(jsonlData string) (string, error) {
 	output.Write(summaryBytes)
 	output.WriteString("\n")
 
-	// Per-session lines
 	for _, id := range order {
 		s := sessions[id]
 		durationMin := int(s.Last.Sub(s.First).Minutes())
@@ -351,83 +317,5 @@ func GenerateSessionStats(jsonlData string) (string, error) {
 		output.WriteString("\n")
 	}
 
-	return output.String(), nil
-}
-
-func defaultJQExpression(expr string) string {
-	if expr == "" {
-		return ".[]"
-	}
-	return expr
-}
-
-func parseJQExpression(expr string) (*gojq.Query, error) {
-	query, err := gojq.Parse(expr)
-	if err != nil {
-		if isLikelyQuoted(expr) {
-			return nil, fmt.Errorf("jq filter error: '%s' appears to be quoted. Remove outer quotes: use '.[] | {field: .field}' not \"%s\"", expr, expr)
-		}
-		return nil, fmt.Errorf("invalid jq expression '%s': %w", expr, mcerrors.ErrParseError)
-	}
-	return query, nil
-}
-
-func isLikelyQuoted(expr string) bool {
-	if len(expr) <= 2 {
-		return false
-	}
-	return (strings.HasPrefix(expr, "'") && strings.HasSuffix(expr, "'")) ||
-		(strings.HasPrefix(expr, `"`) && strings.HasSuffix(expr, `"`))
-}
-
-func parseJSONLRecords(jsonlData string) ([]interface{}, error) {
-	lines := strings.Split(strings.TrimSpace(jsonlData), "\n")
-	var records []interface{}
-
-	for lineNum, line := range lines {
-		if line == "" {
-			continue
-		}
-
-		var obj interface{}
-		if err := json.Unmarshal([]byte(line), &obj); err != nil {
-			return nil, fmt.Errorf("invalid JSON at line %d: %w", lineNum+1, mcerrors.ErrParseError)
-		}
-		records = append(records, obj)
-	}
-
-	return records, nil
-}
-
-func runJQQuery(query *gojq.Query, data []interface{}) ([]interface{}, error) {
-	var results []interface{}
-	iter := query.Run(data)
-
-	for {
-		value, ok := iter.Next()
-		if !ok {
-			break
-		}
-
-		if err, ok := value.(error); ok {
-			return nil, err
-		}
-
-		results = append(results, value)
-	}
-
-	return results, nil
-}
-
-func encodeJQResults(results []interface{}) (string, error) {
-	var output strings.Builder
-	for _, result := range results {
-		jsonBytes, err := json.Marshal(result)
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal jq filter result to JSON: %w", mcerrors.ErrParseError)
-		}
-		output.Write(jsonBytes)
-		output.WriteString("\n")
-	}
 	return output.String(), nil
 }

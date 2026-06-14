@@ -1,0 +1,22 @@
+{
+  "diagrams": [
+    {
+      "name": "architecture",
+      "sources": ["."],
+      "level": "package",
+      "language": "go",
+      "languageSpecific": {
+        "atlas": {
+          "functionBodyStrategy": "selective",
+          "entryPoints": [
+            { "function": "handleToolsCall", "protocol": "mcp" },
+            { "function": "handleInitialize", "protocol": "mcp" },
+            { "function": "handleToolsList", "protocol": "mcp" }
+          ],
+          "followIndirectCalls": true,
+          "maxCallDepth": 3
+        }
+      }
+    }
+  ]
+}

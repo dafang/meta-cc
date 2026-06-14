@@ -1,4 +1,4 @@
-package query
+package pipeline
 
 import (
 	"regexp"
@@ -7,15 +7,11 @@ import (
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
-// ApplyFilter applies filter conditions to resources
-// Returns filtered slice of the same type as input
+// ApplyFilter applies filter conditions to resources.
 func ApplyFilter(resources interface{}, filter FilterSpec) interface{} {
-	// If filter is empty, return all resources
 	if filter.IsEmpty() {
 		return resources
 	}
-
-	// Handle different resource types
 	switch r := resources.(type) {
 	case []types.SessionEntry:
 		return filterEntries(r, filter)
@@ -24,12 +20,10 @@ func ApplyFilter(resources interface{}, filter FilterSpec) interface{} {
 	case []types.ToolCall:
 		return filterTools(r, filter)
 	default:
-		// Unknown type, return as is
 		return resources
 	}
 }
 
-// filterEntries filters SessionEntry slice
 func filterEntries(entries []types.SessionEntry, filter FilterSpec) []types.SessionEntry {
 	var result []types.SessionEntry
 	for _, entry := range entries {
@@ -40,7 +34,6 @@ func filterEntries(entries []types.SessionEntry, filter FilterSpec) []types.Sess
 	return result
 }
 
-// filterMessages filters MessageView slice
 func filterMessages(messages []MessageView, filter FilterSpec) []MessageView {
 	var result []MessageView
 	for _, msg := range messages {
@@ -51,7 +44,6 @@ func filterMessages(messages []MessageView, filter FilterSpec) []MessageView {
 	return result
 }
 
-// filterTools filters ToolCall slice
 func filterTools(tools []types.ToolCall, filter FilterSpec) []types.ToolCall {
 	var result []types.ToolCall
 	for _, tool := range tools {
@@ -62,10 +54,7 @@ func filterTools(tools []types.ToolCall, filter FilterSpec) []types.ToolCall {
 	return result
 }
 
-// matchesFilter checks if a resource matches filter conditions
-// Supports SessionEntry, MessageView, and ToolCall
 func matchesFilter(resource interface{}, filter FilterSpec) bool {
-	// Entry-level filters
 	if filter.Type != "" {
 		if entry, ok := resource.(types.SessionEntry); ok {
 			if entry.Type != filter.Type {
@@ -73,66 +62,48 @@ func matchesFilter(resource interface{}, filter FilterSpec) bool {
 			}
 		}
 	}
-
 	if filter.UUID != "" {
-		uuid := extractUUID(resource)
-		if uuid != filter.UUID {
+		if extractUUID(resource) != filter.UUID {
 			return false
 		}
 	}
-
 	if filter.SessionID != "" {
-		sessionID := extractSessionID(resource)
-		if sessionID != filter.SessionID {
+		if extractSessionID(resource) != filter.SessionID {
 			return false
 		}
 	}
-
 	if filter.ParentUUID != "" {
-		parentUUID := extractParentUUID(resource)
-		if parentUUID != filter.ParentUUID {
+		if extractParentUUID(resource) != filter.ParentUUID {
 			return false
 		}
 	}
-
 	if filter.GitBranch != "" {
-		gitBranch := extractGitBranch(resource)
-		if gitBranch != filter.GitBranch {
+		if extractGitBranch(resource) != filter.GitBranch {
 			return false
 		}
 	}
-
-	// Time range filter
 	if filter.TimeRange != nil {
-		timestamp := extractTimestamp(resource)
-		if !matchesTimeRange(timestamp, filter.TimeRange) {
+		if !matchesTimeRange(extractTimestamp(resource), filter.TimeRange) {
 			return false
 		}
 	}
-
-	// Message-level filters
 	if filter.Role != "" {
 		if msg, ok := resource.(MessageView); ok {
 			if msg.Role != filter.Role {
 				return false
 			}
 		}
-		// Also check entries with messages
 		if entry, ok := resource.(types.SessionEntry); ok {
 			if entry.Message != nil && entry.Message.Role != filter.Role {
 				return false
 			}
 		}
 	}
-
 	if filter.ContentMatch != "" {
-		content := extractContent(resource)
-		if !matchesPattern(content, filter.ContentMatch) {
+		if !matchesPattern(extractContent(resource), filter.ContentMatch) {
 			return false
 		}
 	}
-
-	// Tool-level filters
 	if filter.ToolName != "" {
 		if tool, ok := resource.(types.ToolCall); ok {
 			if !matchesPattern(tool.ToolName, filter.ToolName) {
@@ -140,7 +111,6 @@ func matchesFilter(resource interface{}, filter FilterSpec) bool {
 			}
 		}
 	}
-
 	if filter.ToolStatus != "" {
 		if tool, ok := resource.(types.ToolCall); ok {
 			if tool.Status != filter.ToolStatus {
@@ -148,20 +118,15 @@ func matchesFilter(resource interface{}, filter FilterSpec) bool {
 			}
 		}
 	}
-
 	if filter.HasError != nil {
 		if tool, ok := resource.(types.ToolCall); ok {
-			hasError := tool.Error != ""
-			if hasError != *filter.HasError {
+			if (tool.Error != "") != *filter.HasError {
 				return false
 			}
 		}
 	}
-
 	return true
 }
-
-// Field extraction functions
 
 func extractUUID(resource interface{}) string {
 	switch r := resource.(type) {
@@ -235,7 +200,6 @@ func extractContent(resource interface{}) string {
 	return ""
 }
 
-// matchesTimeRange checks if timestamp is within time range
 func matchesTimeRange(timestamp string, timeRange *TimeRange) bool {
 	if timeRange.Start != "" && timestamp < timeRange.Start {
 		return false
@@ -246,12 +210,9 @@ func matchesTimeRange(timestamp string, timeRange *TimeRange) bool {
 	return true
 }
 
-// matchesPattern checks if value matches pattern (supports regex or simple string match)
 func matchesPattern(value, pattern string) bool {
-	// Try regex match first
 	if re, err := regexp.Compile(pattern); err == nil {
 		return re.MatchString(value)
 	}
-	// Fallback to simple string match
 	return value == pattern
 }

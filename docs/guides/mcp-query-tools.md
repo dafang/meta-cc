@@ -1,20 +1,45 @@
 # MCP Query Tools Reference
 
-meta-cc exposes 21 MCP tools for Claude Code and Codex session analysis. Claude Code transcripts are read from `~/.claude/projects/`; Codex transcripts are read from `$CODEX_HOME/sessions` or `~/.codex/sessions` and normalized into the same message/tool schema before queries run.
+meta-cc exposes MCP tools for Claude Code and Codex session analysis. Claude Code transcripts are read from `~/.claude/projects/`; Codex history is read through the provider layer from Codex local state and rollout JSONL files. Query results are normalized into a shared message/tool schema before filtering and response rendering.
 
-## Host Support
+## Provider Support
 
-| Host | Session root | Notes |
-|------|--------------|-------|
-| Claude Code | `~/.claude/projects/<project-hash>/` | Native schema already matches meta-cc message/tool records |
-| Codex | `$CODEX_HOME/sessions` or `~/.codex/sessions` | Date-based JSONL files matched by project path in transcript content |
+Convenience query tools accept a standard `provider` parameter:
 
-Codex normalization covers:
+| Provider | Meaning |
+|----------|---------|
+| `claude` | Query Claude Code sessions. This is the default for backward compatibility. |
+| `codex` | Query Codex local history and rollout JSONL files. |
+| `all` | Query both providers and include a `provider` field on returned records. |
 
-- `response_item.payload.type == "message"` -> user/assistant entries
-- `function_call` and `custom_tool_call` -> assistant `tool_use` blocks
-- `function_call_output` and `custom_tool_call_output` -> user `tool_result` blocks
-- `event_msg.payload.type == "token_count"` -> assistant entries with `message.usage`
+Use `provider: "all"` only when your filters can handle records from both providers.
+
+```javascript
+query_tools({
+  provider: "codex",
+  limit: 20
+})
+
+query_user_messages({
+  provider: "all",
+  pattern: "refactor",
+  limit: 20
+})
+```
+
+## Host Storage
+
+| Host | Session source | Notes |
+|------|----------------|-------|
+| Claude Code | `~/.claude/projects/<project-hash>/` | Native Claude Code JSONL schema |
+| Codex | `~/.codex/state_5.sqlite` plus rollout JSONL files | Project sessions are filtered by `cwd`; `~/.codex/history.jsonl` is intentionally excluded |
+
+Codex rollout normalization covers:
+
+- user and assistant messages
+- function/custom tool calls
+- function/custom tool outputs
+- token usage exposed through `query_token_usage`
 
 Claude-specific records without Codex equivalents remain host-specific: `file-history-snapshot`, top-level `summary`, and `system` records with `subtype: "api_error"`.
 
@@ -22,7 +47,7 @@ Claude-specific records without Codex equivalents remain host-specific: `file-hi
 
 ### Convenience Queries
 
-These tools scan the current project by default and accept `scope`, `working_dir`, `limit`, `stats_only`, `stats_first`, and output parameters where applicable.
+These tools scan the current project by default and accept `scope`, `provider`, `working_dir`, `limit`, `stats_only`, `stats_first`, and output parameters where applicable.
 
 | Tool | Purpose | Claude Code | Codex |
 |------|---------|-------------|-------|
@@ -41,23 +66,26 @@ Examples:
 
 ```javascript
 query_user_messages({
-  pattern: "refactor|migration",
-  scope: "project",
+  provider: "codex",
+  pattern: "migration",
   limit: 20
 })
 
 query_tools({
+  provider: "all",
   tool: "exec_command",
   working_dir: "/path/to/project",
   limit: 50
 })
 
 query_tool_errors({
+  provider: "claude",
   scope: "session",
   stats_first: true
 })
 
 query_token_usage({
+  provider: "codex",
   stats_first: true,
   limit: 20
 })
@@ -65,7 +93,7 @@ query_token_usage({
 
 ### Two-Stage Query Tools
 
-Use these when you need file selection control or custom jq.
+Use these when you need file selection control or custom jq over selected session files.
 
 | Tool | Purpose |
 |------|---------|
@@ -94,8 +122,6 @@ const results = await execute_stage2_query({
 })
 ```
 
-`execute_stage2_query` receives normalized records, so common filters such as `select(.type == "user")`, `select(.type == "assistant")`, and tool block queries work on both Claude Code and Codex transcripts.
-
 ### Analysis Tools
 
 | Tool | Purpose | Claude Code | Codex |
@@ -111,10 +137,12 @@ Example:
 
 ```javascript
 get_work_patterns({
+  provider: "codex",
   working_dir: "/path/to/project"
 })
 
 analyze_errors({
+  provider: "all",
   scope: "project",
   limit: 10
 })
@@ -135,6 +163,7 @@ Most query tools accept:
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `scope` | string | `project` (default) or `session` |
+| `provider` | string | `claude` (default), `codex`, or `all` |
 | `working_dir` | string | Override project path used for session lookup |
 | `limit` | number | Maximum results; default is no limit |
 | `stats_only` | boolean | Return aggregate statistics only |
@@ -155,25 +184,29 @@ This keeps MCP responses usable for both short interactive questions and large p
 
 ## Common Recipes
 
-Find user prompts about a topic:
+Find Codex user prompts about a topic:
 
 ```javascript
 query_user_messages({
+  provider: "codex",
   pattern: "release|deploy",
   limit: 20
 })
 ```
 
-Count tool usage:
+Count tool usage across providers:
 
 ```javascript
-get_work_patterns({})
+get_work_patterns({
+  provider: "all"
+})
 ```
 
 Inspect token usage:
 
 ```javascript
 query_token_usage({
+  provider: "codex",
   stats_first: true
 })
 ```

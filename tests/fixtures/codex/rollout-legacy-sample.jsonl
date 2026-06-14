@@ -1,0 +1,6 @@
+{"timestamp":"2026-06-14T11:07:06Z","type":"session_meta","payload":{"id":"sess-1","cwd":"/tmp/project","model_provider":"openai"}}
+{"timestamp":"2026-06-14T11:07:07Z","type":"turn_context","payload":{"turn_id":"turn-1"}}
+{"timestamp":"2026-06-14T11:07:08Z","type":"event_msg","payload":{"type":"user_message","message":"show history"}}
+{"timestamp":"2026-06-14T11:07:09Z","type":"event_msg","payload":{"type":"agent_message","message":"looking up history"}}
+{"timestamp":"2026-06-14T11:07:10Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"git log --oneline\"}","call_id":"call-1"}}
+{"timestamp":"2026-06-14T11:07:11Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call-1","output":"abc123 test"}}

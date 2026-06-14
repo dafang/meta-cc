@@ -90,6 +90,13 @@ if ! command -v jq >/dev/null 2>&1; then
     fail "jq is required"
 fi
 
+if ! python3 - <<'PY' >/dev/null 2>&1
+import sqlite3
+PY
+then
+    fail "python3 with sqlite3 module is required"
+fi
+
 echo "=========================================="
 echo "Codex E2E Test"
 echo "=========================================="
@@ -107,8 +114,8 @@ INSTALL_DIR="$TMP_DIR/bin"
 SESSION_ID="codex-e2e-session"
 UNIQUE_MESSAGE="codex-e2e-message-$RANDOM-$(date +%s)"
 UNIQUE_ERROR="codex-e2e-error-$RANDOM-$(date +%s)"
-SESSION_DIR="$CODEX_HOME/sessions/2026/06/14"
-SESSION_FILE="$SESSION_DIR/$SESSION_ID.jsonl"
+ROLLOUT_DIR="$CODEX_HOME/rollouts/2026/06/14"
+ROLLOUT_FILE="$ROLLOUT_DIR/$SESSION_ID.jsonl"
 
 echo -e "${BLUE}Test 1: Install Codex skills package into temp CODEX_HOME${NC}"
 rm -rf "$TMP_DIR/skills-package"
@@ -169,8 +176,8 @@ pass "Full archive installs Codex plugin manifest and MCP template"
 echo ""
 
 echo -e "${BLUE}Test 3: Query Codex transcript through real MCP JSON-RPC${NC}"
-mkdir -p "$SESSION_DIR"
-cat > "$SESSION_FILE" <<EOF
+mkdir -p "$ROLLOUT_DIR"
+cat > "$ROLLOUT_FILE" <<EOF
 {"timestamp":"2026-06-14T06:00:00Z","type":"session_meta","payload":{"id":"$SESSION_ID","cwd":"$PROJECT_DIR","model":"gpt-5"}}
 {"timestamp":"2026-06-14T06:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"$UNIQUE_MESSAGE"}]}}
 {"timestamp":"2026-06-14T06:00:02Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ack"}]}}
@@ -181,20 +188,62 @@ cat > "$SESSION_FILE" <<EOF
 {"timestamp":"2026-06-14T06:00:07Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":3,"reasoning_output_tokens":1,"total_tokens":13},"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":30,"reasoning_output_tokens":10,"total_tokens":130},"model_context_window":200000},"rate_limits":{"limit_id":"codex-e2e-limit"}}}
 EOF
 
-REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
-    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_session_directory","arguments":{"scope":"project","working_dir":$cwd}}}')
-RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
-    send_request "$REQUEST")
-[ -n "$RESPONSE" ] || fail "no JSON-RPC response for get_session_directory"
-DIR=$(echo "$RESPONSE" | jq -r '.result.content[0].text | fromjson | .directory')
-FILE_COUNT=$(echo "$RESPONSE" | jq -r '.result.content[0].text | fromjson | .file_count')
-[ "$DIR" = "$SESSION_DIR" ] || fail "expected Codex session dir $SESSION_DIR, got $DIR"
-[ "$FILE_COUNT" = "1" ] || fail "expected one Codex session file, got $FILE_COUNT"
-pass "get_session_directory resolved CODEX_HOME/sessions project transcript"
+CODEX_HOME="$CODEX_HOME" SESSION_ID="$SESSION_ID" ROLLOUT_FILE="$ROLLOUT_FILE" PROJECT_DIR="$PROJECT_DIR" python3 - <<'PY'
+import os
+import sqlite3
+
+db_path = os.path.join(os.environ["CODEX_HOME"], "state_5.sqlite")
+conn = sqlite3.connect(db_path)
+try:
+    conn.execute(
+        """
+        CREATE TABLE threads (
+            id TEXT PRIMARY KEY,
+            rollout_path TEXT,
+            cwd TEXT,
+            title TEXT,
+            model TEXT,
+            model_provider TEXT,
+            tokens_used INTEGER,
+            source TEXT,
+            created_at INTEGER
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO threads(id, rollout_path, cwd, title, model, model_provider, tokens_used, source, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            os.environ["SESSION_ID"],
+            os.environ["ROLLOUT_FILE"],
+            os.environ["PROJECT_DIR"],
+            "codex e2e",
+            "gpt-5",
+            "openai",
+            130,
+            "cli",
+            1781416800,
+        ),
+    )
+    conn.commit()
+finally:
+    conn.close()
+PY
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" --arg pattern "$UNIQUE_MESSAGE" \
-    '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"query_user_messages","arguments":{"scope":"project","working_dir":$cwd,"pattern":$pattern,"limit":5}}}')
-RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query_user_messages","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"pattern":$pattern,"limit":5}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    send_request "$REQUEST")
+[ -n "$RESPONSE" ] || fail "no JSON-RPC response for provider-backed query_user_messages"
+echo "$RESPONSE" | jq -e '.result.content[0].text | contains("'"$UNIQUE_MESSAGE"'")' >/dev/null \
+    || fail "provider-backed query_user_messages did not return the Codex rollout message"
+pass "provider-backed query_user_messages returned data from Codex SQLite + rollout"
+
+REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" --arg pattern "$UNIQUE_MESSAGE" \
+    '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"query_user_messages","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"pattern":$pattern,"limit":5}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_user_messages"
 echo "$RESPONSE" | jq -e '.result.content[0].text | contains("'"$UNIQUE_MESSAGE"'")' >/dev/null \
@@ -202,8 +251,8 @@ echo "$RESPONSE" | jq -e '.result.content[0].text | contains("'"$UNIQUE_MESSAGE"
 pass "query_user_messages returned data from the Codex transcript"
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
-    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query_tools","arguments":{"scope":"project","working_dir":$cwd,"tool":"exec_command","limit":5}}}')
-RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query_tools","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"tool":"exec_command","limit":5}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_tools"
 echo "$RESPONSE" | jq -e '.result.content[0].text | contains("exec_command")' >/dev/null \
@@ -211,8 +260,8 @@ echo "$RESPONSE" | jq -e '.result.content[0].text | contains("exec_command")' >/
 pass "query_tools returned Codex function_call data"
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" --arg error "$UNIQUE_ERROR" \
-    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"query_tool_errors","arguments":{"scope":"project","working_dir":$cwd,"limit":5}}}')
-RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"query_tool_errors","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"limit":5}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_tool_errors"
 echo "$RESPONSE" | jq -e '.result.content[0].text | contains("'"$UNIQUE_ERROR"'")' >/dev/null \
@@ -220,8 +269,8 @@ echo "$RESPONSE" | jq -e '.result.content[0].text | contains("'"$UNIQUE_ERROR"'"
 pass "query_tool_errors returned Codex failed tool output"
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
-    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"query_token_usage","arguments":{"scope":"project","working_dir":$cwd,"limit":5}}}')
-RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"query_token_usage","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"limit":5}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_token_usage"
 echo "$RESPONSE" | jq -e '.result.content[0].text | fromjson | .data[] | select(.message.usage.input_tokens == 10 and .message.usage.output_tokens == 3)' >/dev/null \
@@ -229,8 +278,8 @@ echo "$RESPONSE" | jq -e '.result.content[0].text | fromjson | .data[] | select(
 pass "query_token_usage returned Codex token_count usage"
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
-    '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_work_patterns","arguments":{"scope":"project","working_dir":$cwd}}}')
-RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_work_patterns","arguments":{"provider":"codex","scope":"project","working_dir":$cwd}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for get_work_patterns"
 echo "$RESPONSE" | jq -e '.result.content[0].text | fromjson | .tool_frequency[] | select(.tool_name == "exec_command" and .count == 1)' >/dev/null \

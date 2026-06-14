@@ -4,15 +4,50 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yaleh/meta-cc/internal/config"
 	mcquery "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
-// handlers.go implements the 10 convenience tools (Layer 1)
-// These tools wrap ExecuteQuery() with pre-configured jq expressions
+// handlers.go implements the 10 convenience tools (Layer 1).
+// Each tool is registered via init() so executor.go needs no switch statement.
+// Exported Handle* methods are kept for backward compatibility with cmd/mcp-server.
 
-// HandleQueryUserMessages implements query_user_messages convenience tool
-func (e *ToolExecutor) HandleQueryUserMessages(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func init() {
+	registerQueryHandler("query_user_messages", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQueryUserMessages(e, scope, args)
+	})
+	registerQueryHandler("query_tools", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQueryTools(e, scope, args)
+	})
+	registerQueryHandler("query_tool_errors", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQueryToolErrors(e, scope, args)
+	})
+	registerQueryHandler("query_token_usage", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQueryTokenUsage(e, scope, args)
+	})
+	registerQueryHandler("query_conversation_flow", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQueryConversationFlow(e, scope, args)
+	})
+	registerQueryHandler("query_system_errors", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQuerySystemErrors(e, scope, args)
+	})
+	registerQueryHandler("query_file_snapshots", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQueryFileSnapshots(e, scope, args)
+	})
+	registerQueryHandler("query_timestamps", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQueryTimestamps(e, scope, args)
+	})
+	registerQueryHandler("query_summaries", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQuerySummaries(e, scope, args)
+	})
+	registerQueryHandler("query_tool_blocks", func(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+		return handleQueryToolBlocks(e, scope, args)
+	})
+}
+
+// ─── Private implementations ──────────────────────────────────────────────────
+
+func handleQueryUserMessages(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	pattern := GetStringParam(args, "pattern", "")
 	contentType := GetStringParam(args, "content_type", "string")
 	limit := GetIntParam(args, "limit", 0)
@@ -23,18 +58,15 @@ func (e *ToolExecutor) HandleQueryUserMessages(cfg *config.Config, scope string,
 	untilStr := GetStringParam(args, "until", "")
 	excludeSystem := GetBoolParam(args, "exclude_system_messages", false)
 
-	// Parse time range before any session lookup (fail fast on bad input)
 	tr, err := mcquery.ParseTimeRange(sinceStr, untilStr)
 	if err != nil {
 		return mcquery.QueryResult{}, err
 	}
 
-	// Content length filtering only applies to string content type
 	if contentType != "string" && (minContentLength > 0 || maxContentLength > 0) {
 		return mcquery.QueryResult{}, fmt.Errorf("content length filtering (min_content_length/max_content_length) only applies to string content type, not %q", contentType)
 	}
 
-	// Build jq filter based on content type
 	var jqFilter string
 	if contentType == "string" {
 		jqFilter = `select(.type == "user" and (.message.content | type == "string"))`
@@ -42,13 +74,11 @@ func (e *ToolExecutor) HandleQueryUserMessages(cfg *config.Config, scope string,
 		jqFilter = `select(.type == "user" and (.message.content | type == "array"))`
 	}
 
-	// Add pattern filter if provided
 	if pattern != "" {
 		escapedPattern := EscapeJQ(pattern)
 		jqFilter = fmt.Sprintf(`%s | select(.message.content | test("%s"))`, jqFilter, escapedPattern)
 	}
 
-	// Add content length filters if provided (string content only)
 	if minContentLength > 0 {
 		jqFilter = fmt.Sprintf(`%s | select(.message.content | length >= %d)`, jqFilter, minContentLength)
 	}
@@ -56,55 +86,52 @@ func (e *ToolExecutor) HandleQueryUserMessages(cfg *config.Config, scope string,
 		jqFilter = fmt.Sprintf(`%s | select(.message.content | length <= %d)`, jqFilter, maxContentLength)
 	}
 
-	// Exclude Claude Code system-injected messages (only applies to string content type)
 	if excludeSystem && (contentType == "string" || contentType == "") {
 		jqFilter += ` | select(.message.content | (startswith("<local-command-caveat>") or startswith("<command-name>") or startswith("<local-command-stdout>") or startswith("<task-notification>")) | not)`
 	}
 
-	return e.ExecuteQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
+	return e.ExecuteQueryWithTimeRangeForProvider(providerName, scope, jqFilter, limit, workingDir, tr)
 }
 
-// HandleQueryTools implements query_tools convenience tool
-func (e *ToolExecutor) HandleQueryTools(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func handleQueryTools(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	toolName := GetStringParam(args, "tool", "")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 
-	// Base filter for all tool_use blocks
 	jqFilter := `select(.type == "assistant") | select(.message.content[] | .type == "tool_use")`
 
-	// Add tool name filter if provided
 	if toolName != "" {
 		escapedTool := EscapeJQ(toolName)
 		jqFilter = fmt.Sprintf(`%s | select(.message.content[] | select(.type == "tool_use" and .name == "%s"))`, jqFilter, escapedTool)
 	}
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
-// HandleQueryToolErrors implements query_tool_errors convenience tool
-func (e *ToolExecutor) HandleQueryToolErrors(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func handleQueryToolErrors(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 
 	jqFilter := `select(.type == "user" and (.message.content | type == "array")) | ` +
 		`select(.message.content[] | select(.type == "tool_result" and .is_error == true))`
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
-// HandleQueryTokenUsage implements query_token_usage convenience tool
-func (e *ToolExecutor) HandleQueryTokenUsage(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func handleQueryTokenUsage(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 
 	jqFilter := `select(.type == "assistant" and has("message")) | select(.message | has("usage"))`
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
-// HandleQueryConversationFlow implements query_conversation_flow convenience tool
-func (e *ToolExecutor) HandleQueryConversationFlow(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func handleQueryConversationFlow(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 	sinceStr := GetStringParam(args, "since", "")
@@ -117,31 +144,31 @@ func (e *ToolExecutor) HandleQueryConversationFlow(cfg *config.Config, scope str
 
 	jqFilter := `select(.type == "user" or .type == "assistant")`
 
-	return e.ExecuteQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
+	return e.ExecuteQueryWithTimeRangeForProvider(providerName, scope, jqFilter, limit, workingDir, tr)
 }
 
-// HandleQuerySystemErrors implements query_system_errors convenience tool
-func (e *ToolExecutor) HandleQuerySystemErrors(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func handleQuerySystemErrors(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 
 	jqFilter := `select(.type == "system" and .subtype == "api_error")`
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
-// HandleQueryFileSnapshots implements query_file_snapshots convenience tool
-func (e *ToolExecutor) HandleQueryFileSnapshots(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func handleQueryFileSnapshots(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 
 	jqFilter := `select(.type == "file-history-snapshot" and has("messageId"))`
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
-// HandleQueryTimestamps implements query_timestamps convenience tool
-func (e *ToolExecutor) HandleQueryTimestamps(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func handleQueryTimestamps(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 	sinceStr := GetStringParam(args, "since", "")
@@ -154,11 +181,11 @@ func (e *ToolExecutor) HandleQueryTimestamps(cfg *config.Config, scope string, a
 
 	jqFilter := `select(.timestamp != null)`
 
-	return e.ExecuteQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
+	return e.ExecuteQueryWithTimeRangeForProvider(providerName, scope, jqFilter, limit, workingDir, tr)
 }
 
-// HandleQuerySummaries implements query_summaries convenience tool
-func (e *ToolExecutor) HandleQuerySummaries(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func handleQuerySummaries(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	keyword := GetStringParam(args, "keyword", "")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
@@ -170,11 +197,11 @@ func (e *ToolExecutor) HandleQuerySummaries(cfg *config.Config, scope string, ar
 		jqFilter = fmt.Sprintf(`%s | select(.summary | test("%s"; "i"))`, jqFilter, escapedKeyword)
 	}
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
-// HandleQueryToolBlocks implements query_tool_blocks convenience tool
-func (e *ToolExecutor) HandleQueryToolBlocks(cfg *config.Config, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+func handleQueryToolBlocks(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	blockType := GetStringParam(args, "block_type", "tool_use")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
@@ -190,7 +217,7 @@ func (e *ToolExecutor) HandleQueryToolBlocks(cfg *config.Config, scope string, a
 		jqFilter = `select(.type == "user" and (.message.content | type == "array")) | .message.content[] | select(.type == "tool_result")`
 	}
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
 // EscapeJQ escapes special characters in strings for jq expressions.

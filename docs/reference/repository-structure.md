@@ -46,7 +46,10 @@ meta-cc/
 │       └── main.go
 │
 ├── internal/                  # Core logic (not imported by external projects)
+│   ├── conversation/         # Provider-agnostic session/turn/tool-call model
+│   ├── locator/              # Project and Codex path resolution
 │   ├── parser/               # JSONL session parser
+│   ├── provider/             # Claude/Codex provider adapters and registry
 │   ├── analyzer/             # Pattern detection
 │   ├── query/                # Query execution
 │   └── ...
@@ -164,7 +167,10 @@ make sync-plugin-files
 #### `internal/` - Core Logic (Private)
 - **Purpose**: Core implementation (not importable by external projects)
 - **Key packages**:
+  - `internal/conversation`: Provider-agnostic session/turn/tool-call model
+  - `internal/locator`: Session and Codex path resolution helpers
   - `internal/parser`: JSONL session parser
+  - `internal/provider`: Claude/Codex provider adapters and registry
   - `internal/analyzer`: Pattern detection
   - `internal/query`: Query execution engine
   - `internal/mcp`: MCP server handlers

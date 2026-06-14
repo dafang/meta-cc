@@ -20,6 +20,10 @@ func StandardToolParameters() map[string]Property {
 			Type:        "string",
 			Description: "Query scope: 'project' (default) or 'session'",
 		},
+		"provider": {
+			Type:        "string",
+			Description: `Provider filter: "claude" (default), "codex", or "all". Use "all" only when your jq filter is compatible with both providers.`,
+		},
 		"jq_filter": {
 			Type:        "string",
 			Description: "jq expression for filtering. Defaults to '.[]' when omitted. IMPORTANT: Do NOT wrap in quotes - use raw jq expression like: .[] | {field: .field}",
@@ -444,6 +448,16 @@ func GetToolDefinitions() []Tool {
 			},
 		}),
 	}
+}
+
+// ValidateToolArgs checks that toolName is known and all provided arg keys are declared in its schema.
+func ValidateToolArgs(toolName string, args map[string]interface{}) error {
+	index := BuildToolSchemaIndex()
+	s, err := GetToolSchemaByName(index, toolName)
+	if err != nil {
+		return err
+	}
+	return schema.ValidateArgKeys(args, s)
 }
 
 // BuildToolSchemaIndex builds the index from tool definitions.

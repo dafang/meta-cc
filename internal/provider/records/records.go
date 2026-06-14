@@ -1,0 +1,157 @@
+package records
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"time"
+
+	"github.com/yaleh/meta-cc/internal/conversation"
+	providerpkg "github.com/yaleh/meta-cc/internal/provider"
+)
+
+func Build(ctx context.Context, registry *providerpkg.Registry, filters []conversation.ProviderID, scope, projectPath string) ([]map[string]interface{}, []string, error) {
+	var (
+		out      []map[string]interface{}
+		warnings []string
+	)
+
+	for _, p := range registry.Providers(filters) {
+		if !p.IsAvailable(ctx) {
+			warnings = append(warnings, fmt.Sprintf("provider %s unavailable", p.ID()))
+			continue
+		}
+		sessions, err := p.ListSessions(ctx)
+		if err != nil {
+			return nil, warnings, err
+		}
+		sessions = FilterSessionsForScope(sessions, scope, projectPath, p.ID())
+		for _, session := range sessions {
+			turns, err := p.LoadTurns(ctx, session.ID)
+			if err != nil {
+				return nil, warnings, err
+			}
+			out = append(out, Normalize(session, turns)...)
+		}
+	}
+	return out, warnings, nil
+}
+
+func FilterSessionsForScope(sessions []conversation.Session, scope, projectPath string, providerID conversation.ProviderID) []conversation.Session {
+	filtered := sessions[:0]
+	for _, session := range sessions {
+		if providerID == conversation.ProviderCodex && scope == "project" && session.CWD != "" && projectPath != "" && session.CWD != projectPath {
+			continue
+		}
+		filtered = append(filtered, session)
+	}
+	if scope != "session" || len(filtered) <= 1 {
+		return filtered
+	}
+	slices.SortFunc(filtered, func(a, b conversation.Session) int {
+		if a.CreatedAt.Before(b.CreatedAt) {
+			return 1
+		}
+		if a.CreatedAt.After(b.CreatedAt) {
+			return -1
+		}
+		return 0
+	})
+	return filtered[:1]
+}
+
+func Normalize(session conversation.Session, turns []conversation.Turn) []map[string]interface{} {
+	var out []map[string]interface{}
+	for _, turn := range turns {
+		ts := turn.Timestamp.Format(time.RFC3339)
+		if turn.UserText != "" {
+			out = append(out, map[string]interface{}{
+				"type":       "user",
+				"provider":   session.Provider,
+				"session_id": session.ID,
+				"sessionId":  session.ID,
+				"cwd":        session.CWD,
+				"timestamp":  ts,
+				"message": map[string]interface{}{
+					"role":    "user",
+					"content": turn.UserText,
+				},
+			})
+		}
+		if turn.AssistantText != "" || len(turn.ToolCalls) > 0 || hasUsage(turn.TokenUsage) {
+			content := make([]interface{}, 0, len(turn.ToolCalls)+1)
+			if turn.AssistantText != "" {
+				content = append(content, map[string]interface{}{"type": "text", "text": turn.AssistantText})
+			}
+			for _, call := range turn.ToolCalls {
+				var input map[string]interface{}
+				_ = json.Unmarshal(call.Input, &input)
+				content = append(content, map[string]interface{}{
+					"type":  "tool_use",
+					"id":    call.ID,
+					"name":  call.Name,
+					"input": input,
+				})
+			}
+			message := map[string]interface{}{
+				"role":    "assistant",
+				"model":   session.Model,
+				"content": content,
+			}
+			if hasUsage(turn.TokenUsage) {
+				message["usage"] = map[string]interface{}{"input_tokens": turn.TokenUsage.InputTokens, "output_tokens": turn.TokenUsage.OutputTokens, "cache_tokens": turn.TokenUsage.CacheTokens}
+			} else if session.Provider != conversation.ProviderCodex && hasUsage(session.TokenUsage) {
+				message["usage"] = map[string]interface{}{"input_tokens": session.TokenUsage.InputTokens, "output_tokens": session.TokenUsage.OutputTokens, "cache_tokens": session.TokenUsage.CacheTokens}
+			}
+			out = append(out, map[string]interface{}{
+				"type":       "assistant",
+				"provider":   session.Provider,
+				"session_id": session.ID,
+				"sessionId":  session.ID,
+				"cwd":        session.CWD,
+				"timestamp":  ts,
+				"message":    message,
+			})
+		}
+		var toolResults []interface{}
+		for _, call := range turn.ToolCalls {
+			if call.Output == "" && !call.IsError {
+				continue
+			}
+			entry := map[string]interface{}{
+				"type":        "tool_result",
+				"tool_use_id": call.ID,
+				"content":     call.Output,
+			}
+			if call.IsError {
+				entry["is_error"] = true
+				entry["status"] = "error"
+				entry["error"] = call.Output
+			} else {
+				entry["is_error"] = false
+				entry["status"] = "success"
+			}
+			toolResults = append(toolResults, entry)
+		}
+		if len(toolResults) > 0 {
+			out = append(out, map[string]interface{}{
+				"type":       "user",
+				"provider":   session.Provider,
+				"session_id": session.ID,
+				"sessionId":  session.ID,
+				"cwd":        session.CWD,
+				"timestamp":  ts,
+				"message": map[string]interface{}{
+					"role":    "user",
+					"content": toolResults,
+				},
+			})
+		}
+	}
+	return out
+}
+
+func hasUsage(usage conversation.TokenUsage) bool {
+	return usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.CacheTokens != 0
+}

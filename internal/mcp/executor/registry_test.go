@@ -3,6 +3,8 @@ package executor
 import (
 	"context"
 	"testing"
+
+	mcquery "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
 func TestSpecialToolRegistry_AnalysisHandlers(t *testing.T) {
@@ -62,6 +64,57 @@ func TestRegisterHandler_AddsToRegistry(t *testing.T) {
 	}
 	if out != "ok" {
 		t.Errorf("expected 'ok', got %q", out)
+	}
+	if !called {
+		t.Error("handler was not called")
+	}
+}
+
+// ─── QueryHandlerRegistry ─────────────────────────────────────────────────────
+
+func TestQueryHandlerRegistry_AllConvenienceTools(t *testing.T) {
+	convenienceTools := []string{
+		"query_user_messages",
+		"query_tools",
+		"query_tool_errors",
+		"query_token_usage",
+		"query_conversation_flow",
+		"query_system_errors",
+		"query_file_snapshots",
+		"query_timestamps",
+		"query_summaries",
+		"query_tool_blocks",
+	}
+	for _, tool := range convenienceTools {
+		if _, ok := queryHandlerRegistry[tool]; !ok {
+			t.Errorf("query tool %q not registered in queryHandlerRegistry", tool)
+		}
+	}
+}
+
+func TestQueryHandlerRegistry_UnknownTool(t *testing.T) {
+	_, ok := queryHandlerRegistry["nonexistent_query_tool"]
+	if ok {
+		t.Error("expected nonexistent_query_tool to not be registered")
+	}
+}
+
+func TestRegisterQueryHandler_AddsToRegistry(t *testing.T) {
+	const testTool = "test_query_handler_unit"
+	called := false
+	registerQueryHandler(testTool, func(_ *ToolExecutor, _ string, _ map[string]interface{}) (mcquery.QueryResult, error) {
+		called = true
+		return mcquery.QueryResult{}, nil
+	})
+	defer delete(queryHandlerRegistry, testTool)
+
+	h, ok := queryHandlerRegistry[testTool]
+	if !ok {
+		t.Fatal("query handler not registered")
+	}
+	_, err := h(nil, "", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if !called {
 		t.Error("handler was not called")

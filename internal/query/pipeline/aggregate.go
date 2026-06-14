@@ -1,18 +1,13 @@
-package query
+package pipeline
 
-import (
-	"github.com/yaleh/meta-cc/internal/types"
-)
+import "github.com/yaleh/meta-cc/internal/types"
 
-// ApplyAggregate applies aggregation operations to resources
-// Returns []map[string]interface{} for aggregated results
+// ApplyAggregate applies aggregation operations to resources.
 func ApplyAggregate(resources interface{}, aggregate AggregateSpec) interface{} {
-	// If no aggregation, return as is
 	if aggregate.IsEmpty() {
 		return resources
 	}
 
-	// Convert resources to slice for aggregation
 	var items []interface{}
 	switch r := resources.(type) {
 	case []types.SessionEntry:
@@ -31,7 +26,6 @@ func ApplyAggregate(resources interface{}, aggregate AggregateSpec) interface{} 
 		return resources
 	}
 
-	// Apply aggregation function
 	switch aggregate.Function {
 	case "count":
 		return aggregateCount(items, aggregate.Field)
@@ -42,44 +36,27 @@ func ApplyAggregate(resources interface{}, aggregate AggregateSpec) interface{} 
 	}
 }
 
-// aggregateCount performs count aggregation
 func aggregateCount(items []interface{}, field string) []map[string]interface{} {
 	if field == "" {
-		// Simple count: return total count
-		return []map[string]interface{}{
-			{"count": len(items)},
-		}
+		return []map[string]interface{}{{"count": len(items)}}
 	}
-
-	// Count by field: group and count
 	counts := make(map[string]int)
 	for _, item := range items {
-		value := extractFieldValue(item, field)
-		counts[value]++
+		counts[extractFieldValue(item, field)]++
 	}
-
-	// Convert to result slice
 	var result []map[string]interface{}
 	for value, count := range counts {
-		result = append(result, map[string]interface{}{
-			field:   value,
-			"count": count,
-		})
+		result = append(result, map[string]interface{}{field: value, "count": count})
 	}
-
 	return result
 }
 
-// aggregateGroup performs grouping aggregation
 func aggregateGroup(items []interface{}, field string) []map[string]interface{} {
-	// Group items by field value
 	groups := make(map[string][]interface{})
 	for _, item := range items {
 		value := extractFieldValue(item, field)
 		groups[value] = append(groups[value], item)
 	}
-
-	// Convert to result slice
 	var result []map[string]interface{}
 	for value, groupItems := range groups {
 		result = append(result, map[string]interface{}{
@@ -88,11 +65,9 @@ func aggregateGroup(items []interface{}, field string) []map[string]interface{} 
 			"items": groupItems,
 		})
 	}
-
 	return result
 }
 
-// extractFieldValue extracts field value from resource
 func extractFieldValue(resource interface{}, field string) string {
 	switch field {
 	case "tool_name":

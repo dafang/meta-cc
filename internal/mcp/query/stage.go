@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"github.com/yaleh/meta-cc/internal/locator"
-	internalquery "github.com/yaleh/meta-cc/internal/query"
+	"github.com/yaleh/meta-cc/internal/query/catalog"
+	"github.com/yaleh/meta-cc/internal/query/engine"
 	queryfiles "github.com/yaleh/meta-cc/internal/query/files"
 )
 
@@ -213,7 +214,7 @@ func HandleExecuteStage2Query(ctx context.Context, args map[string]interface{}) 
 		}
 	}
 
-	stage2Query := &internalquery.Stage2Query{
+	stage2Query := &engine.Stage2Query{
 		Files:     files,
 		Filter:    filter,
 		Sort:      sort,
@@ -221,7 +222,7 @@ func HandleExecuteStage2Query(ctx context.Context, args map[string]interface{}) 
 		Limit:     limit,
 	}
 
-	result, err := internalquery.ExecuteStage2Query(stage2Query)
+	result, err := engine.ExecuteStage2Query(stage2Query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute stage 2 query: %w", err)
 	}
@@ -311,9 +312,9 @@ func HandleGetSessionMetadata(ctx context.Context, args map[string]interface{}) 
 	}
 
 	// Load query templates
-	templateMap, err := internalquery.LoadTemplates()
+	templateMap, err := catalog.LoadTemplates()
 	if err != nil {
-		templateMap = make(map[string]internalquery.QueryTemplate)
+		templateMap = make(map[string]catalog.QueryTemplate)
 	}
 
 	queryTemplates := make(map[string]interface{})

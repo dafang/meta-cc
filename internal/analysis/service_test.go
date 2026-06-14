@@ -1,6 +1,7 @@
 package analysis_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/yaleh/meta-cc/internal/analysis"
 	"github.com/yaleh/meta-cc/internal/analyzer"
 	"github.com/yaleh/meta-cc/internal/parser"
+	_ "modernc.org/sqlite"
 )
 
 var _ analysis.AnalysisService = (*analysis.Service)(nil)
@@ -127,6 +129,48 @@ func setupCodexProjectDir(t *testing.T) string {
 	return resolvedProject
 }
 
+func setupCodexProviderProject(t *testing.T) string {
+	t.Helper()
+	t.Setenv("META_CC_PROJECTS_ROOT", filepath.Join(t.TempDir(), "missing-claude-root"))
+	t.Setenv("HOME", t.TempDir())
+
+	projectPath := t.TempDir()
+	resolvedProject, err := filepath.EvalSymlinks(projectPath)
+	require.NoError(t, err)
+
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("META_CC_CODEX_ROOT", codexHome)
+	require.NoError(t, os.MkdirAll(codexHome, 0o755))
+
+	rolloutPath := filepath.Join(codexHome, "rollout-rich.jsonl")
+	fixture, err := os.ReadFile(filepath.Join("..", "..", "tests", "fixtures", "codex", "rollout-legacy-rich-sample.jsonl"))
+	require.NoError(t, err)
+	fixture = []byte(strings.ReplaceAll(string(fixture), "/tmp/project", resolvedProject))
+	require.NoError(t, os.WriteFile(rolloutPath, fixture, 0o644))
+
+	db, err := sql.Open("sqlite", filepath.Join(codexHome, "state_5.sqlite"))
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(`CREATE TABLE threads (
+		id TEXT PRIMARY KEY,
+		rollout_path TEXT,
+		cwd TEXT,
+		title TEXT,
+		model TEXT,
+		model_provider TEXT,
+		tokens_used INTEGER,
+		source TEXT,
+		created_at INTEGER
+	)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO threads(id, rollout_path, cwd, title, model, model_provider, tokens_used, source, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"codex-provider-session", rolloutPath, resolvedProject, "provider test", "gpt-5", "openai", 140, "cli", int64(1700000000))
+	require.NoError(t, err)
+
+	return resolvedProject
+}
+
 func TestService_AnalyzeBugs(t *testing.T) {
 	projectPath := setupEmptyProjectDir(t)
 
@@ -217,11 +261,11 @@ func TestService_GetWorkPatterns(t *testing.T) {
 	assert.Contains(t, result, "tool_frequency")
 }
 
-func TestService_GetWorkPatterns_CodexJSONL(t *testing.T) {
-	projectPath := setupCodexProjectDir(t)
+func TestService_GetWorkPatterns_CodexProvider(t *testing.T) {
+	projectPath := setupCodexProviderProject(t)
 	svc := analysis.New()
 
-	out, err := svc.GetWorkPatterns(map[string]interface{}{"working_dir": projectPath})
+	out, err := svc.GetWorkPatterns(map[string]interface{}{"provider": "codex", "working_dir": projectPath})
 	require.NoError(t, err)
 
 	var result analyzer.WorkPatternsResult

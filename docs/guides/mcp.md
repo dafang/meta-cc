@@ -1,15 +1,31 @@
 # MCP Server Guide
 
-meta-cc provides a Model Context Protocol (MCP) server for Claude Code and Codex session analysis. It exposes 21 tools for querying transcript history, running jq over selected session files, and computing higher-level analysis such as error patterns and work patterns.
+meta-cc provides a Model Context Protocol (MCP) server for local coding-agent history analysis. It supports Claude Code and Codex through a provider-aware conversation layer, then exposes normalized records to convenience query tools, two-stage jq queries, and higher-level analysis tools.
 
-## Host Support
+## Provider Support
 
-| Host | Transcript root | Integration files |
-|------|-----------------|-------------------|
-| Claude Code | `~/.claude/projects/<project-hash>/` | `.mcp.json`, `.claude-plugin/plugin.json`, slash commands |
-| Codex | `$CODEX_HOME/sessions` or `~/.codex/sessions` | `.codex-mcp.json`, `.codex-plugin/plugin.json`, skills |
+| Provider | Local source | Notes |
+|----------|--------------|-------|
+| `claude` | `~/.claude/projects/<project-hash>/*.jsonl` | Default provider for backward compatibility. |
+| `codex` | `${META_CC_CODEX_ROOT:-~/.codex}/state_5.sqlite` plus rollout JSONL paths from the `threads` table | `~/.codex/history.jsonl` is intentionally excluded. |
+| `all` | Claude Code and Codex | Returned records include a `provider` field. |
 
-Codex uses a different JSONL schema from Claude Code. The MCP server normalizes Codex messages, tool calls, tool outputs, and token counts into the same message/tool shape used by the existing query and analysis tools.
+Convenience query and analysis tools accept the standard `provider` parameter:
+
+```javascript
+query_user_messages({
+  provider: "codex",
+  pattern: "migration",
+  limit: 20
+})
+
+get_work_patterns({
+  provider: "all",
+  working_dir: "/path/to/project"
+})
+```
+
+If `provider` is omitted, meta-cc uses `claude` to preserve existing behavior.
 
 ## Configuration
 
@@ -34,114 +50,91 @@ Manual configuration:
 
 The release archive includes `.codex-plugin/plugin.json` and `.codex-mcp.json`. The installer copies them under `~/.codex/plugins/meta-cc/`.
 
-Use `CODEX_HOME` to target a custom Codex home:
+Use `CODEX_HOME` for installation targets and `META_CC_CODEX_ROOT` when you need the MCP provider to read a non-default Codex state directory:
 
 ```bash
 CODEX_HOME=/tmp/codex ./install.sh
+META_CC_CODEX_ROOT=/tmp/codex meta-cc-mcp
 ```
 
 ## Tool Catalog
 
-### Convenience Query Tools
+### Convenience Queries
 
-| Tool | Purpose | Codex support |
-|------|---------|---------------|
-| `query_user_messages` | Search user messages by regex | Yes |
-| `query_tools` | Query assistant tool calls | Yes |
-| `query_tool_errors` | Query failed tool results | Yes |
-| `query_token_usage` | Query token usage | Yes |
-| `query_conversation_flow` | Query user/assistant flow | Yes |
-| `query_tool_blocks` | Query `tool_use` or `tool_result` blocks | Yes |
-| `query_timestamps` | Query timestamped records | Yes |
-| `query_system_errors` | Query Claude Code API system errors | Host-specific empty |
-| `query_file_snapshots` | Query Claude Code file snapshots | Host-specific empty |
-| `query_summaries` | Query Claude Code summaries | Host-specific empty |
+| Tool | Purpose | Claude Code | Codex |
+|------|---------|-------------|-------|
+| `query_user_messages` | Search user messages by regex | Yes | Yes |
+| `query_tools` | Query assistant tool calls | Yes | Yes |
+| `query_tool_errors` | Query failed tool results | Yes | Yes |
+| `query_token_usage` | Query assistant token usage | Yes | Yes |
+| `query_conversation_flow` | Query user/assistant flow | Yes | Yes |
+| `query_tool_blocks` | Query `tool_use` or `tool_result` blocks | Yes | Yes |
+| `query_timestamps` | Query timestamped records | Yes | Yes |
+| `query_system_errors` | Query Claude Code API system errors | Yes | Host-specific empty |
+| `query_file_snapshots` | Query Claude Code file snapshots | Yes | Host-specific empty |
+| `query_summaries` | Query Claude Code summaries | Yes | Host-specific empty |
 
 Examples:
 
 ```javascript
-query_user_messages({
-  pattern: "bug|fix",
-  limit: 20
-})
-
 query_tools({
+  provider: "codex",
   tool: "exec_command",
   working_dir: "/path/to/project",
   limit: 50
 })
 
 query_token_usage({
+  provider: "codex",
   stats_first: true,
   limit: 20
 })
 ```
 
+### Analysis Tools
+
+| Tool | Purpose | Claude Code | Codex |
+|------|---------|-------------|-------|
+| `analyze_errors` | Aggregate tool errors by tool and type | Yes | Yes |
+| `analyze_bugs` | Detect error-fix pairs and recurring bug patterns | Yes | Yes |
+| `quality_scan` | Compute quality dimensions | Yes | Yes |
+| `get_work_patterns` | Tool frequency, hourly activity, and context switches | Yes | Yes |
+| `get_timeline` | Chronological session events | Yes | Yes |
+| `get_tech_debt` | TODO/FIXME/HACK markers and unresolved errors | Yes | Yes |
+
 ### Two-Stage Query Tools
 
-Use these for large sessions, targeted file selection, or custom jq:
+Use these when you need file selection control or custom jq over selected JSONL files:
 
 | Tool | Purpose |
 |------|---------|
-| `get_session_directory` | Locate the session directory and aggregate file metadata |
-| `inspect_session_files` | Inspect selected JSONL files |
+| `get_session_directory` | Locate a transcript directory and aggregate file metadata |
+| `inspect_session_files` | Inspect selected JSONL files for record counts, time ranges, and samples |
 | `execute_stage2_query` | Run jq-style filter/sort/transform on selected files |
 | `get_session_metadata` | Return schema hints, file info, and query templates |
 
-Example:
+Two-stage tools operate on selected files. They retain raw-file compatibility, including normalized Codex JSONL records when a Codex rollout/session file is selected directly. Provider-aware cross-host querying is handled by the convenience query and analysis tools through the `provider` parameter.
 
-```javascript
-const dir = await get_session_directory({scope: "project"})
+## Codex Normalization
 
-const results = await execute_stage2_query({
-  files: ["/path/to/session.jsonl"],
-  filter: 'select(.type == "assistant") | select(.message | has("usage"))',
-  transform: '{timestamp, usage: .message.usage}',
-  limit: 20
-})
-```
+The Codex provider reads session metadata from `state_5.sqlite` and follows each thread's `rollout_path`. It normalizes:
 
-`execute_stage2_query` runs after host normalization, so filters written for normalized message/tool records work on both Claude Code and Codex sessions.
+- legacy `response_item` messages with `input_text` / `output_text`
+- `function_call` and `function_call_output`
+- `custom_tool_call` and `custom_tool_call_output`
+- `event_msg` `token_count` usage
+- newer dotted schema events such as `turn.started`, `item.message`, `item.tool_call`, and `item.tool_result`
 
-### Analysis Tools
-
-| Tool | Purpose |
-|------|---------|
-| `analyze_errors` | Aggregate tool errors by tool and type |
-| `analyze_bugs` | Detect error-fix pairs and recurring bug patterns |
-| `quality_scan` | Compute quality dimensions |
-| `get_work_patterns` | Tool frequency, hourly activity, and context switches |
-| `get_timeline` | Chronological session events |
-| `get_tech_debt` | TODO/FIXME/HACK markers and unresolved errors |
-
-Examples:
-
-```javascript
-get_work_patterns({
-  working_dir: "/path/to/project"
-})
-
-analyze_errors({
-  scope: "project",
-  limit: 10
-})
-```
-
-### Utility Tools
-
-| Tool | Purpose |
-|------|---------|
-| `cleanup_temp_files` | Remove old temporary MCP output files |
-| `list_capabilities` | List prompt/command capabilities |
-| `get_capability` | Retrieve one capability by name/type |
+Codex `tokens_used` from SQLite is retained as session metadata, but `query_token_usage(provider: "codex")` reports per-turn usage only when the rollout contains a `token_count` event.
 
 ## Standard Parameters
 
-Most query tools accept:
+Most query and analysis tools accept:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `scope` | string | `project` (default) or `session` |
+| `provider` | string | `claude` (default), `codex`, or `all` |
 | `working_dir` | string | Override project path used for session lookup |
 | `limit` | number | Maximum results; default is no limit |
 | `stats_only` | boolean | Return aggregate statistics only |
@@ -155,10 +148,8 @@ Time-aware tools also accept RFC3339 `since` and `until`.
 
 The MCP server uses hybrid output:
 
-- Inline responses for small results.
-- `file_ref` responses for large results written to temporary JSONL files.
-
-This lets the host inspect summaries first and read large result files only when needed.
+- Small responses are returned inline.
+- Large responses are written to a temporary file and returned as `file_ref`.
 
 ## Verification
 
@@ -170,15 +161,15 @@ Find user messages mentioning "refactor"
 Show token usage for recent turns
 ```
 
-For Codex-specific verification, `query_tools`, `query_user_messages`, `query_tool_errors`, `query_token_usage`, `get_work_patterns`, and `execute_stage2_query` are covered by `make test-e2e-codex`.
+For Codex-specific verification, `make test-e2e-codex` creates a temporary Codex home with a real `state_5.sqlite` and rollout JSONL, then calls the MCP server over JSON-RPC with `provider: "codex"`.
 
 ## Troubleshooting
 
 ### No sessions found
 
-- Check `working_dir` points at the project whose transcripts you want.
+- Check `working_dir` points at the project whose history you want.
 - For Claude Code, verify `~/.claude/projects/<project-hash>/` exists.
-- For Codex, verify `${CODEX_HOME:-$HOME/.codex}/sessions` contains JSONL files and that the transcript references the project path.
+- For Codex, verify `${META_CC_CODEX_ROOT:-$HOME/.codex}/state_5.sqlite` has a `threads` row whose `cwd` matches the project and whose `rollout_path` points to a readable JSONL file.
 
 ### Tool returns empty on Codex
 
@@ -188,7 +179,7 @@ Some tools query Claude Code-only record types:
 - `query_summaries`
 - `query_system_errors`
 
-Empty results are expected for Codex unless Codex adds equivalent transcript records.
+Empty results are expected for Codex unless Codex adds equivalent local records.
 
 ## See Also
 
