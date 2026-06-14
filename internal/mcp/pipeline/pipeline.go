@@ -13,7 +13,7 @@ import (
 	filterspkg "github.com/yaleh/meta-cc/internal/mcp/filters"
 	mcquerypkg "github.com/yaleh/meta-cc/internal/mcp/query"
 	responsepkg "github.com/yaleh/meta-cc/internal/mcp/response"
-	querypkg "github.com/yaleh/meta-cc/internal/query"
+	querypkg "github.com/yaleh/meta-cc/internal/query/stats"
 )
 
 // DefaultPreviewLength is the default rune count for content_preview in content_summary mode.
