@@ -29,6 +29,7 @@ type Turn struct {
 	UserText      string          `json:"user_text,omitempty"`
 	AssistantText string          `json:"assistant_text,omitempty"`
 	ToolCalls     []ToolCall      `json:"tool_calls,omitempty"`
+	TokenUsage    TokenUsage      `json:"token_usage,omitempty"`
 	Timestamp     time.Time       `json:"timestamp"`
 	Extensions    json.RawMessage `json:"extensions,omitempty"`
 }

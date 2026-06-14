@@ -45,5 +45,6 @@ func (p *Provider) LoadTurns(ctx context.Context, sessionID string) ([]conversat
 	if err != nil {
 		return nil, err
 	}
-	return loadTurnsFromSession(session, p.maxLines)
+	turns, _, err := loadTurnsFromSession(session, p.maxLines)
+	return turns, err
 }

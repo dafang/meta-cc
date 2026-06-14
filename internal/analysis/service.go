@@ -5,13 +5,20 @@
 package analysis
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/yaleh/meta-cc/internal/analyzer"
+	"github.com/yaleh/meta-cc/internal/conversation"
 	"github.com/yaleh/meta-cc/internal/locator"
 	"github.com/yaleh/meta-cc/internal/parser"
+	providerpkg "github.com/yaleh/meta-cc/internal/provider"
+	claudeprovider "github.com/yaleh/meta-cc/internal/provider/claude"
+	codexprovider "github.com/yaleh/meta-cc/internal/provider/codex"
+	providerrecords "github.com/yaleh/meta-cc/internal/provider/records"
 	"github.com/yaleh/meta-cc/internal/types"
 )
 
@@ -82,6 +89,11 @@ func (s *Service) loadData(args map[string]interface{}) ([]types.SessionEntry, [
 		}
 	}
 
+	providerName := stringArg(args, "provider")
+	if providerName != "" && providerName != "claude" {
+		return s.loadProviderData(scope, workingDir, providerName)
+	}
+
 	loc := locator.NewSessionLocator()
 	var files []string
 	if scope == "session" {
@@ -110,6 +122,66 @@ func (s *Service) loadData(args map[string]interface{}) ([]types.SessionEntry, [
 
 	toolCalls := types.ExtractToolCalls(allEntries)
 	return allEntries, toolCalls, nil
+}
+
+func (s *Service) loadProviderData(scope, workingDir, providerName string) ([]types.SessionEntry, []types.ToolCall, error) {
+	projectPath, err := filepath.Abs(workingDir)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to resolve project path: %w", err)
+	}
+	filters, err := providerFilter(providerName)
+	if err != nil {
+		return nil, nil, err
+	}
+	registry := providerpkg.NewRegistry(
+		claudeprovider.NewProvider(locator.NewSessionLocator(), projectPath),
+		codexprovider.NewProvider(locator.NewCodexLocator()),
+	)
+	records, _, err := providerrecords.Build(context.Background(), registry, filters, scope, projectPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	entries, err := entriesFromRecords(records)
+	if err != nil {
+		return nil, nil, err
+	}
+	return entries, types.ExtractToolCalls(entries), nil
+}
+
+func providerFilter(providerName string) ([]conversation.ProviderID, error) {
+	switch providerName {
+	case "codex":
+		return []conversation.ProviderID{conversation.ProviderCodex}, nil
+	case "all":
+		return []conversation.ProviderID{conversation.ProviderClaude, conversation.ProviderCodex}, nil
+	default:
+		return nil, fmt.Errorf("invalid provider %q: must be \"claude\", \"codex\", or \"all\"", providerName)
+	}
+}
+
+func entriesFromRecords(records []map[string]interface{}) ([]types.SessionEntry, error) {
+	entries := make([]types.SessionEntry, 0, len(records))
+	for _, record := range records {
+		data, err := json.Marshal(record)
+		if err != nil {
+			return nil, err
+		}
+		var entry types.SessionEntry
+		if err := json.Unmarshal(data, &entry); err != nil {
+			return nil, err
+		}
+		if entry.IsMessage() {
+			entries = append(entries, entry)
+		}
+	}
+	return entries, nil
+}
+
+func stringArg(args map[string]interface{}, key string) string {
+	if v, ok := args[key].(string); ok {
+		return v
+	}
+	return ""
 }
 
 func intArg(args map[string]interface{}, key string) int {

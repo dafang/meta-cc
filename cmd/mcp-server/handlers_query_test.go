@@ -265,6 +265,9 @@ func TestHybridOutputMode(t *testing.T) {
 
 // TestGetQueryBaseDir tests that getQueryBaseDir correctly locates session directories
 func TestGetQueryBaseDir(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex-home"))
+
 	tests := []struct {
 		name              string
 		scope             string
@@ -327,6 +330,7 @@ func TestGetQueryBaseDirIntegration(t *testing.T) {
 	// Setup: Create a fake .claude/projects structure
 	homeDir := t.TempDir()
 	_ = filepath.Join(homeDir, ".claude", "projects") // projectsDir for future use
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex-home"))
 
 	// Save original HOME
 	originalHome := os.Getenv("HOME")
@@ -434,10 +438,7 @@ func setupTimeFilterFixture(t *testing.T) (string, *ToolExecutor, func()) {
 
 	// Use a stable project path (a temp dir that will be the "project root")
 	projectDir := t.TempDir()
-
-	// Compute hash the same way pathToHash does: replace / with -
-	absPath := projectDir
-	hash := strings.ReplaceAll(absPath, "/", "-")
+	hash := testProjectHash(projectDir)
 
 	// Create META_CC_PROJECTS_ROOT structure
 	projectsRoot := t.TempDir()
@@ -621,8 +622,7 @@ func setupExcludeSystemFixture(t *testing.T) (string, *ToolExecutor, func()) {
 	t.Helper()
 
 	projectDir := t.TempDir()
-	absPath := projectDir
-	hash := strings.ReplaceAll(absPath, "/", "-")
+	hash := testProjectHash(projectDir)
 
 	projectsRoot := t.TempDir()
 	sessionDir := filepath.Join(projectsRoot, hash)
@@ -774,8 +774,7 @@ func TestLoadTurnsForSession_MultipleFiles(t *testing.T) {
 // is silently ignored when content_type is "array".
 func TestExcludeSystemMessages_NoErrorOnArrayType(t *testing.T) {
 	projectDir := t.TempDir()
-	absPath := projectDir
-	hash := strings.ReplaceAll(absPath, "/", "-")
+	hash := testProjectHash(projectDir)
 
 	projectsRoot := t.TempDir()
 	sessionDir := filepath.Join(projectsRoot, hash)

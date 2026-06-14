@@ -25,7 +25,8 @@ error_exit() {
 
 # Detect installation directory
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
-CLAUDE_DIR="${HOME}/.claude"
+CLAUDE_DIR="${CLAUDE_DIR:-${HOME}/.claude}"
+CODEX_HOME="${CODEX_HOME:-${CODEX_DIR:-${HOME}/.codex}}"
 
 echo "Uninstalling meta-cc..."
 echo ""
@@ -74,8 +75,29 @@ else
     warn "No agents found in $CLAUDE_DIR/agents"
 fi
 
+# Remove Codex skills and plugin files
+CODEX_SKILLS_REMOVED=0
+for skill in prompt-find prompt-list prompt-show; do
+    if [ -d "$CODEX_HOME/skills/${skill}" ]; then
+        rm -rf "$CODEX_HOME/skills/${skill}" 2>/dev/null || true
+        CODEX_SKILLS_REMOVED=$((CODEX_SKILLS_REMOVED + 1))
+    fi
+done
+if [ "$CODEX_SKILLS_REMOVED" -gt 0 ]; then
+    info "Codex skills removed ($CODEX_SKILLS_REMOVED directories) from $CODEX_HOME/skills"
+else
+    warn "No Codex skills found in $CODEX_HOME/skills"
+fi
+
+if [ -d "$CODEX_HOME/plugins/meta-cc" ]; then
+    rm -rf "$CODEX_HOME/plugins/meta-cc" 2>/dev/null || true
+    info "Codex plugin files removed from $CODEX_HOME/plugins/meta-cc"
+else
+    info "No Codex plugin files found at $CODEX_HOME/plugins/meta-cc"
+fi
+
 # Remove MCP server registration from ~/.claude/mcp.json
-MCP_CONFIG="${HOME}/.claude/mcp.json"
+MCP_CONFIG="${CLAUDE_DIR}/mcp.json"
 if [ -f "$MCP_CONFIG" ]; then
     if command -v jq >/dev/null 2>&1; then
         if jq -e '.mcpServers["meta-cc"]' "$MCP_CONFIG" > /dev/null 2>&1; then
@@ -94,7 +116,7 @@ else
 fi
 
 # Remove plugin cache entry (created by Claude Code plugin system)
-PLUGIN_CACHE_DIR="${HOME}/.claude/plugins/cache/meta-cc-marketplace/meta-cc"
+PLUGIN_CACHE_DIR="${CLAUDE_DIR}/plugins/cache/meta-cc-marketplace/meta-cc"
 if [ -d "$PLUGIN_CACHE_DIR" ]; then
     rm -rf "$PLUGIN_CACHE_DIR" 2>/dev/null || true
     info "Plugin cache removed from $PLUGIN_CACHE_DIR"

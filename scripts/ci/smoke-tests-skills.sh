@@ -76,6 +76,10 @@ echo "=== Test 1: Package Structure ==="
     && test_result "lib/ directory exists" "pass" \
     || test_result "lib/ directory exists" "fail"
 
+[ -d "$PKG_DIR/skills" ] \
+    && test_result "skills/ directory exists" "pass" \
+    || test_result "skills/ directory exists" "fail"
+
 [ -f "$PKG_DIR/install-skills.sh" ] \
     && test_result "install-skills.sh exists" "pass" \
     || test_result "install-skills.sh exists" "fail"
@@ -95,13 +99,23 @@ for cmd in prompt-find prompt-list prompt-show; do
 done
 
 echo ""
-echo "=== Test 3: Lib Files ==="
+echo "=== Test 3: Codex Skill Files ==="
+for skill in prompt-find prompt-list prompt-show; do
+    if [ -f "$PKG_DIR/skills/${skill}/SKILL.md" ]; then
+        test_result "skills/${skill}/SKILL.md exists" "pass"
+    else
+        test_result "skills/${skill}/SKILL.md exists" "fail"
+    fi
+done
+
+echo ""
+echo "=== Test 4: Lib Files ==="
 [ -f "$PKG_DIR/lib/meta-utils.sh" ] \
     && test_result "lib/meta-utils.sh exists" "pass" \
     || test_result "lib/meta-utils.sh exists" "fail"
 
 echo ""
-echo "=== Test 4: No Binary Files ==="
+echo "=== Test 5: No Binary Files ==="
 if find "$PKG_DIR" -name "meta-cc-mcp*" 2>/dev/null | grep -q .; then
     test_result "No MCP binary in package (skills-only)" "fail" "Found unexpected binary"
 else
@@ -109,11 +123,12 @@ else
 fi
 
 echo ""
-echo "=== Test 5: Installation ==="
+echo "=== Test 6: Installation ==="
 INSTALL_TEST_DIR="$(mktemp -d)"
-trap "rm -rf $TEMP_DIR $INSTALL_TEST_DIR" EXIT
+CODEX_TEST_DIR="$(mktemp -d)"
+trap "rm -rf $TEMP_DIR $INSTALL_TEST_DIR $CODEX_TEST_DIR" EXIT
 
-if env CLAUDE_DIR="$INSTALL_TEST_DIR" bash "$PKG_DIR/install-skills.sh" >/dev/null 2>&1; then
+if env CLAUDE_DIR="$INSTALL_TEST_DIR" CODEX_HOME="$CODEX_TEST_DIR" bash "$PKG_DIR/install-skills.sh" >/dev/null 2>&1; then
     test_result "install-skills.sh runs without error" "pass"
 else
     test_result "install-skills.sh runs without error" "fail"
@@ -130,6 +145,14 @@ done
 [ -f "$INSTALL_TEST_DIR/lib/meta-utils.sh" ] \
     && test_result "Installed: lib/meta-utils.sh" "pass" \
     || test_result "Installed: lib/meta-utils.sh" "fail"
+
+for skill in prompt-find prompt-list prompt-show; do
+    if [ -f "$CODEX_TEST_DIR/skills/${skill}/SKILL.md" ]; then
+        test_result "Installed: Codex skills/${skill}/SKILL.md" "pass"
+    else
+        test_result "Installed: Codex skills/${skill}/SKILL.md" "fail"
+    fi
+done
 
 echo ""
 echo "========================================="

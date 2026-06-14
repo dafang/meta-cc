@@ -34,7 +34,11 @@ func TestIsAvailable(t *testing.T) {
 func TestListSessionsAndLoadTurns(t *testing.T) {
 	root := t.TempDir()
 	project := t.TempDir()
-	projectDir := filepath.Join(root, strings.NewReplacer("\\", "-", "/", "-", ":", "-").Replace(project))
+	resolvedProject, err := filepath.EvalSymlinks(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectDir := filepath.Join(root, strings.NewReplacer("\\", "-", "/", "-", ":", "-").Replace(resolvedProject))
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -22,7 +22,7 @@ fi
 
 if [ "$VERIFY_MODE" = true ]; then
     # VERIFY MODE: Check that sync was done correctly
-    echo "[1/3] Verifying dist/ structure..."
+    echo "[1/4] Verifying dist/ structure..."
     if [ ! -d "$DIST_DIR/commands" ]; then
         echo "❌ ERROR: Plugin file sync failed - dist/commands/ directory not created"
         exit 1
@@ -30,7 +30,7 @@ if [ "$VERIFY_MODE" = true ]; then
     echo "✓ dist/ structure verified"
     echo ""
 
-    echo "[2/3] Checking file count..."
+    echo "[2/4] Checking file count..."
     DIST_CMD_COUNT=$(find "$DIST_DIR/commands" -name "*.md" 2>/dev/null | wc -l)
     EXPECTED_COUNT=3
 
@@ -41,7 +41,7 @@ if [ "$VERIFY_MODE" = true ]; then
     echo "✓ File count verified: $DIST_CMD_COUNT command file(s)"
     echo ""
 
-    echo "[3/3] Verifying file content..."
+    echo "[3/4] Verifying command file content..."
     for cmd in prompt-find prompt-list prompt-show; do
         if [ ! -f "$DIST_DIR/commands/${cmd}.md" ]; then
             echo "❌ ERROR: ${cmd}.md not found in dist/commands/"
@@ -49,6 +49,23 @@ if [ "$VERIFY_MODE" = true ]; then
         fi
     done
     echo "✓ All 3 commands verified"
+    echo ""
+
+    echo "[4/4] Verifying Codex plugin source files..."
+    for path in \
+        "plugin-src/.codex-plugin/plugin.json" \
+        "plugin-src/.codex-mcp.json" \
+        "plugin-src/skills/prompt-find/SKILL.md" \
+        "plugin-src/skills/prompt-list/SKILL.md" \
+        "plugin-src/skills/prompt-show/SKILL.md"; do
+        if [ ! -f "$PROJECT_ROOT/$path" ]; then
+            echo "❌ ERROR: Codex plugin file missing: $path"
+            exit 1
+        fi
+    done
+    jq . "$PROJECT_ROOT/plugin-src/.codex-plugin/plugin.json" >/dev/null
+    jq -e '.mcpServers["meta-cc"]' "$PROJECT_ROOT/plugin-src/.codex-mcp.json" >/dev/null
+    echo "✓ Codex plugin source files verified"
     echo ""
 
     echo "✅ Plugin file sync verification passed"

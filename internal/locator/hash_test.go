@@ -68,9 +68,10 @@ func TestLocate_Priority(t *testing.T) {
 
 	// 由于需要复杂的环境准备，此测试将在集成测试中验证
 	// 这里提供占位符测试，验证方法存在且签名正确
+	setupProjectsRoot(t)
 	locator := NewSessionLocator()
 
-	_, err := locator.Locate(LocateOptions{})
+	_, err := locator.Locate(LocateOptions{SessionOnly: true})
 	if err == nil {
 		t.Log("Locate method exists and is callable")
 	}

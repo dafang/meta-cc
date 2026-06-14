@@ -37,6 +37,7 @@ func TestLocate_WithSessionID(t *testing.T) {
 }
 
 func TestLocate_SessionIDNotFound(t *testing.T) {
+	setupProjectsRoot(t)
 	locator := NewSessionLocator()
 	opts := LocateOptions{
 		SessionID: "nonexistent-session-id",
@@ -86,6 +87,7 @@ func TestLocate_WithProjectPath(t *testing.T) {
 }
 
 func TestLocate_ProjectPathNotFound(t *testing.T) {
+	setupProjectsRoot(t)
 	locator := NewSessionLocator()
 	opts := LocateOptions{
 		ProjectPath: "/nonexistent/project/path",
@@ -126,6 +128,7 @@ func TestLocate_DefaultCWD(t *testing.T) {
 }
 
 func TestLocate_SessionOnlyMode(t *testing.T) {
+	setupProjectsRoot(t)
 	locator := NewSessionLocator()
 	opts := LocateOptions{
 		SessionOnly: true,

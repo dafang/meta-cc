@@ -1,6 +1,7 @@
 package analysis_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/yaleh/meta-cc/internal/analysis"
 	"github.com/yaleh/meta-cc/internal/analyzer"
 	"github.com/yaleh/meta-cc/internal/parser"
+	_ "modernc.org/sqlite"
 )
 
 var _ analysis.AnalysisService = (*analysis.Service)(nil)
@@ -81,16 +83,92 @@ func setupEmptyProjectDir(t *testing.T) string {
 	t.Helper()
 	projectsRoot := t.TempDir()
 	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex-home"))
 	projectPath := t.TempDir()
 	absProject, err := filepath.Abs(projectPath)
 	require.NoError(t, err)
-	hash := strings.ReplaceAll(absProject, "/", "-")
+	resolvedProject, err := filepath.EvalSymlinks(absProject)
+	require.NoError(t, err)
+	hash := strings.ReplaceAll(resolvedProject, "\\", "-")
+	hash = strings.ReplaceAll(hash, "/", "-")
+	hash = strings.ReplaceAll(hash, ":", "-")
 	sessionDir := filepath.Join(projectsRoot, hash)
 	require.NoError(t, os.MkdirAll(sessionDir, 0o755))
 	// Create an empty JSONL file so the locator finds at least one session file.
 	emptyFile := filepath.Join(sessionDir, "empty-session.jsonl")
 	require.NoError(t, os.WriteFile(emptyFile, []byte{}, 0o644))
 	return projectPath
+}
+
+func setupCodexProjectDir(t *testing.T) string {
+	t.Helper()
+	t.Setenv("META_CC_PROJECTS_ROOT", filepath.Join(t.TempDir(), "missing-claude-root"))
+	t.Setenv("HOME", t.TempDir())
+
+	projectPath := t.TempDir()
+	absProject, err := filepath.Abs(projectPath)
+	require.NoError(t, err)
+	resolvedProject, err := filepath.EvalSymlinks(absProject)
+	require.NoError(t, err)
+
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("CODEX_HOME", codexHome)
+	sessionDir := filepath.Join(codexHome, "sessions", "2026", "06", "14")
+	require.NoError(t, os.MkdirAll(sessionDir, 0o755))
+	sessionFile := filepath.Join(sessionDir, "codex-session.jsonl")
+	content := strings.Join([]string{
+		`{"timestamp":"2026-06-14T06:00:00Z","type":"session_meta","payload":{"id":"codex-session","cwd":"` + resolvedProject + `","model":"gpt-5"}}`,
+		`{"timestamp":"2026-06-14T06:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"codex parity"}]}}`,
+		`{"timestamp":"2026-06-14T06:00:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_1","arguments":"{\"cmd\":\"go test ./...\",\"workdir\":\"` + resolvedProject + `\"}"}}`,
+		`{"timestamp":"2026-06-14T06:00:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":"ok"}}`,
+		`{"timestamp":"2026-06-14T06:00:04Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","call_id":"call_2","input":"*** Begin Patch\n*** End Patch"}}`,
+		`{"timestamp":"2026-06-14T06:00:05Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_2","output":"ok"}}`,
+	}, "\n") + "\n"
+	require.NoError(t, os.WriteFile(sessionFile, []byte(content), 0o644))
+	return resolvedProject
+}
+
+func setupCodexProviderProject(t *testing.T) string {
+	t.Helper()
+	t.Setenv("META_CC_PROJECTS_ROOT", filepath.Join(t.TempDir(), "missing-claude-root"))
+	t.Setenv("HOME", t.TempDir())
+
+	projectPath := t.TempDir()
+	resolvedProject, err := filepath.EvalSymlinks(projectPath)
+	require.NoError(t, err)
+
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("META_CC_CODEX_ROOT", codexHome)
+	require.NoError(t, os.MkdirAll(codexHome, 0o755))
+
+	rolloutPath := filepath.Join(codexHome, "rollout-rich.jsonl")
+	fixture, err := os.ReadFile(filepath.Join("..", "..", "tests", "fixtures", "codex", "rollout-legacy-rich-sample.jsonl"))
+	require.NoError(t, err)
+	fixture = []byte(strings.ReplaceAll(string(fixture), "/tmp/project", resolvedProject))
+	require.NoError(t, os.WriteFile(rolloutPath, fixture, 0o644))
+
+	db, err := sql.Open("sqlite", filepath.Join(codexHome, "state_5.sqlite"))
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec(`CREATE TABLE threads (
+		id TEXT PRIMARY KEY,
+		rollout_path TEXT,
+		cwd TEXT,
+		title TEXT,
+		model TEXT,
+		model_provider TEXT,
+		tokens_used INTEGER,
+		source TEXT,
+		created_at INTEGER
+	)`)
+	require.NoError(t, err)
+	_, err = db.Exec(`INSERT INTO threads(id, rollout_path, cwd, title, model, model_provider, tokens_used, source, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		"codex-provider-session", rolloutPath, resolvedProject, "provider test", "gpt-5", "openai", 140, "cli", int64(1700000000))
+	require.NoError(t, err)
+
+	return resolvedProject
 }
 
 func TestService_AnalyzeBugs(t *testing.T) {
@@ -181,6 +259,20 @@ func TestService_GetWorkPatterns(t *testing.T) {
 	var result map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(out), &result))
 	assert.Contains(t, result, "tool_frequency")
+}
+
+func TestService_GetWorkPatterns_CodexProvider(t *testing.T) {
+	projectPath := setupCodexProviderProject(t)
+	svc := analysis.New()
+
+	out, err := svc.GetWorkPatterns(map[string]interface{}{"provider": "codex", "working_dir": projectPath})
+	require.NoError(t, err)
+
+	var result analyzer.WorkPatternsResult
+	require.NoError(t, json.Unmarshal([]byte(out), &result))
+	require.Len(t, result.ToolFrequency, 2)
+	assert.Equal(t, "apply_patch", result.ToolFrequency[0].ToolName)
+	assert.Equal(t, "exec_command", result.ToolFrequency[1].ToolName)
 }
 
 func TestService_GetTimeline(t *testing.T) {

@@ -4,9 +4,9 @@
 [![License](https://img.shields.io/github/license/yaleh/meta-cc)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/yaleh/meta-cc)](https://github.com/yaleh/meta-cc/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/yaleh/meta-cc)](go.mod)
-[![Plugin Marketplace](https://img.shields.io/badge/Claude_Code-Plugin_Marketplace-blue)](https://github.com/yaleh/meta-cc)
+[![Host Support](https://img.shields.io/badge/Hosts-Claude_Code%20%2B%20Codex-blue)](https://github.com/yaleh/meta-cc)
 
-**Meta-cognition tool for Claude Code** - Analyze session history, detect patterns, optimize workflows.
+**Meta-cognition tool for Claude Code and Codex** - Analyze session history, detect patterns, optimize workflows.
 
 > **Note**: Skills and agents from previous versions have been moved to [yaleh/baime](https://github.com/yaleh/baime). meta-cc 3.0.0 focuses exclusively on session history analysis via MCP tools.
 
@@ -14,34 +14,34 @@
 
 ## What is meta-cc?
 
-meta-cc helps you understand and improve your Claude Code workflows through:
+meta-cc helps you understand and improve your Claude Code and Codex workflows through:
 
-- **Autonomous analysis** - Claude automatically queries session data via MCP tools
+- **Autonomous analysis** - Claude Code or Codex can query session data via MCP tools
 - **21 MCP tools** - Error analysis, quality scanning, work patterns, timelines, bug detection, and more
-- **Prompt library** - Save, search, and reuse optimized prompts with 3 slash commands
+- **Prompt library** - Save, search, and reuse optimized prompts with Claude Code slash commands or Codex skills
 
-**Zero configuration required** - works out of the box with Claude Code.
+**Native host integrations** - Claude Code marketplace/archive support plus Codex plugin and skills packaging.
 
 ---
 
 ## Quick Install
 
-### Method 1: Plugin Marketplace (Recommended)
+### Method 1: Claude Code Plugin Marketplace (Recommended for Claude Code)
 
 ```bash
 /plugin marketplace add yaleh/meta-cc
 /plugin install meta-cc
 ```
 
-Restart Claude Code — that's it. The MCP server is automatically configured via `.mcp.json` bundled in the plugin.
+Restart Claude Code. The MCP server is automatically configured via `.mcp.json` bundled in the plugin.
 
 The meta-cc plugin includes:
 - **3 Slash Commands** - `/prompt-find`, `/prompt-list`, `/prompt-show` for prompt library management
 - **21 MCP Tools** - Session data analysis with two-stage query architecture (v2.1)
 
-### Method 2: Archive Install (Alternative)
+### Method 2: Archive Install (Claude Code + Codex)
 
-**Full install** (MCP server + slash commands):
+**Full install** (MCP server + Claude Code commands + Codex skills):
 
 ```bash
 # Linux/macOS (one-liner)
@@ -50,15 +50,17 @@ cd meta-cc-plugin-linux-amd64
 ./install.sh
 ```
 
-The archive installer copies the binary and integration files, and automatically merges the MCP server configuration into `~/.claude/mcp.json`.
+The archive installer copies the binary and integration files, installs Claude Code commands under `~/.claude/commands/`, installs Codex skills under `~/.codex/skills/`, and merges the Claude Code MCP server configuration into `~/.claude/mcp.json`. Codex users get plugin metadata under `~/.codex/plugins/meta-cc/` with bundled `.codex-plugin/plugin.json` and `.codex-mcp.json`.
 
-**Slash commands only** (no binary required, any platform):
+**Prompt-library commands/skills only** (no binary required, any platform):
 
 ```bash
 curl -L https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-skills-latest.tar.gz | tar xz
 cd meta-cc-skills-*/
 ./install-skills.sh
 ```
+
+Use `INSTALL_CLAUDE=0` or `INSTALL_CODEX=0` to install one host only.
 
 **MCP server binary only** (for CI/Docker/PATH installs):
 
@@ -73,7 +75,7 @@ INSTALL_DIR=~/.local/bin bash scripts/install/install-mcp.sh meta-cc-mcp-linux-a
 
 ### Verify Installation
 
-In Claude Code, ask naturally:
+In Claude Code or Codex, ask naturally:
 
 ```
 "Show me all Bash errors in this project"
@@ -89,7 +91,7 @@ In Claude Code, ask naturally:
 
 ### Autonomous Analysis (MCP)
 
-Just ask Claude naturally - MCP tools are invoked automatically:
+Ask Claude Code or Codex naturally - MCP tools are invoked automatically:
 
 ```
 "Show me all Bash errors in this project"
@@ -100,27 +102,22 @@ Just ask Claude naturally - MCP tools are invoked automatically:
 "Find bug fix pairs in my session"
 ```
 
-**Unified query interface with 21 MCP tools and jq filtering**:
+**21 MCP tools with convenience queries, two-stage jq, and analysis tools**:
 
 ```javascript
-// Core query tool - unified interface
-query({
-  resource: "tools",
-  filter: {tool_status: "error"},
-  jq_filter: '.[] | select(.tool_name == "Bash")'
-})
-
 // Convenience tools - optimized for common queries
 query_tool_errors({limit: 10})
 query_token_usage({stats_first: true})
 query_conversation_flow({scope: "session"})
 
-// Raw jq - maximum flexibility for power users
-query_raw({
-  jq_expression: '.[] | group_by(.tool_name) | map({tool: .[0].tool_name, count: length})'
+// Two-stage jq - maximum flexibility for power users
+execute_stage2_query({
+  files: ["/path/to/session.jsonl"],
+  filter: 'select(.type == "assistant")',
+  transform: '{timestamp, usage: .message.usage}'
 })
 
-// New analysis tools (3.0.0)
+// Analysis tools
 analyze_errors({})          // Aggregate errors by tool and type
 quality_scan({})             // Compute error/retry/diversity scores
 get_work_patterns({})        // Hourly activity and context switches
@@ -130,19 +127,21 @@ get_tech_debt({})            // TODO/FIXME markers and unresolved errors
 ```
 
 **Key Features**:
+- **Claude Code + Codex support**: Reads Claude transcripts from `~/.claude/projects/` and Codex conversations from `${META_CC_CODEX_ROOT:-~/.codex}/state_5.sqlite` plus rollout JSONL files
+- **Provider-aware normalization**: Use `provider: "claude" | "codex" | "all"` on convenience query and analysis tools; Codex `response_item`, `event_msg`, function/custom tool calls, tool outputs, and token counts are normalized through the same MCP surface
 - **Hybrid Output Mode**: Auto-switches between inline (<8KB) and file_ref (≥8KB)
 - **jq Integration**: Native jq filtering for complex queries
 - **No Limits by Default**: Returns all results, relies on hybrid mode
-- **21 Tools**: 2 core + 8 convenience + 7 legacy + 3 utility + 6 analysis tools
+- **21 Tools**: 10 convenience + 4 session/query utility + 1 cleanup + 6 analysis tools
 
 **Resources**:
 - [MCP Query Tools Reference](docs/guides/mcp-query-tools.md) - Complete tool documentation
 - [MCP Query Cookbook](docs/examples/mcp-query-cookbook.md) - 25+ practical examples
 - [MCP v2.0 Migration Guide](docs/guides/mcp-v2-migration.md) - Upgrade from v1.x
 
-### Prompt Library (Slash Commands)
+### Prompt Library (Slash Commands / Codex Skills)
 
-Save and reuse your best prompts with 3 built-in commands:
+Save and reuse your best prompts with 3 built-in Claude Code slash commands or Codex skills:
 
 ```bash
 /prompt-find phase execution      # Search by keywords
@@ -175,11 +174,12 @@ Save and reuse your best prompts with 3 built-in commands:
 - **[Contributing Guide](CONTRIBUTING.md)** - Development workflow and guidelines
 - **[Code of Conduct](CODE_OF_CONDUCT.md)** - Community standards
 
-### For Claude Code
+### Host Notes
 
 - **[CLAUDE.md](CLAUDE.md)** - Project instructions for Claude Code development
 - **[Design Principles](docs/core/principles.md)** - Core constraints and architecture
 - **[Implementation Plan](docs/core/plan.md)** - Development roadmap
+- Codex integration uses `plugin-src/.codex-plugin/plugin.json`, `plugin-src/.codex-mcp.json`, and `plugin-src/skills/*/SKILL.md`
 
 **Complete documentation map**: [DOCUMENTATION_MAP.md](docs/DOCUMENTATION_MAP.md)
 
@@ -188,7 +188,8 @@ Save and reuse your best prompts with 3 built-in commands:
 ## Key Features
 
 - **21 MCP tools** - Autonomous session data analysis with two-stage query architecture
-- **3 Slash Commands** - Prompt library management (`/prompt-find`, `/prompt-list`, `/prompt-show`)
+- **Claude Code + Codex transcript analysis** - Shared query/analysis surface over both host schemas
+- **3 Prompt Library commands/skills** - Prompt management (`prompt-find`, `prompt-list`, `prompt-show`)
 - **Advanced analytics** - jq-based filtering, aggregation, time series
 - **Error analysis** - Aggregate tool errors by name and type
 - **Quality scanning** - Error/retry/diversity/completion dimensions
@@ -236,7 +237,8 @@ make push          # Full check before push (all checks + lint, <120s)
 
 ```bash
 make test           # Unit tests (fast)
-make test-all       # Including E2E tests (~30s)
+make test-e2e-codex # Codex install/session E2E
+make test-all       # Including MCP and Codex E2E tests (~30s)
 make test-coverage  # With coverage report
 ```
 

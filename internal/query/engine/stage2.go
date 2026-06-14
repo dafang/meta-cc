@@ -11,6 +11,7 @@ import (
 	"github.com/itchyny/gojq"
 
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/session"
 )
 
 // Stage2Query represents a Stage 2 query request.
@@ -158,17 +159,20 @@ func readJSONLFile(filepath string) ([]interface{}, error) {
 
 	lineNum := 0
 	records := make([]interface{}, 0, len(rawMessages))
+	normalizer := session.NewNormalizer()
 	for _, raw := range rawMessages {
 		lineNum++
 		line := strings.TrimSpace(string(raw))
 		if line == "" {
 			continue
 		}
-		var record interface{}
+		var record map[string]interface{}
 		if err := json.Unmarshal([]byte(line), &record); err != nil {
 			return nil, fmt.Errorf("invalid JSON at line %d: %w", lineNum, err)
 		}
-		records = append(records, record)
+		for _, normalized := range normalizer.NormalizeRecord(record) {
+			records = append(records, normalized)
+		}
 	}
 
 	return records, nil

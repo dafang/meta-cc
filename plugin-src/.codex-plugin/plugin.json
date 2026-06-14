@@ -1,0 +1,45 @@
+{
+  "name": "meta-cc",
+  "version": "3.0.7",
+  "description": "Meta-cognition tools for Claude Code and Codex: session history analysis, workflow optimization, and prompt library workflows.",
+  "author": {
+    "name": "Yale Huang",
+    "email": "yaleh@ieee.org",
+    "url": "https://github.com/yaleh"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/yaleh/meta-cc",
+  "repository": "https://github.com/yaleh/meta-cc",
+  "mcpServers": "./.codex-mcp.json",
+  "keywords": [
+    "workflow-analysis",
+    "session-history",
+    "productivity",
+    "metacognition",
+    "analytics",
+    "optimization",
+    "prompt-library",
+    "codex",
+    "claude-code"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "meta-cc",
+    "shortDescription": "Analyze agent sessions and reuse prompt-library workflows.",
+    "longDescription": "meta-cc provides MCP tools for local session analysis and Codex skills for searching, listing, and viewing saved prompts in .meta-cc/prompts/library/.",
+    "developerName": "Yale Huang",
+    "category": "Productivity",
+    "capabilities": [
+      "MCP Tools",
+      "Skills",
+      "Prompt Library"
+    ],
+    "websiteURL": "https://github.com/yaleh/meta-cc",
+    "defaultPrompt": [
+      "Show my recent tool usage patterns.",
+      "Search my saved prompts for refactoring.",
+      "List my prompt library by usage."
+    ],
+    "brandColor": "#3B82F6"
+  }
+}

@@ -1,6 +1,6 @@
 # Installation Guide
 
-## Method 1: Plugin Marketplace (Recommended)
+## Method 1: Claude Code Plugin Marketplace
 
 Install meta-cc directly from within Claude Code:
 
@@ -13,7 +13,7 @@ Then restart Claude Code. The plugin system handles everything:
 - Installs slash commands (`/prompt-find`, `/prompt-list`, `/prompt-show`)
 - Configures the MCP server automatically via `.mcp.json` (no manual `claude mcp add` needed)
 
-## Method 2: Archive Install
+## Method 2: Archive Install for Claude Code and Codex
 
 Download a platform-specific release archive and run the included installer.
 
@@ -63,7 +63,23 @@ cd meta-cc-plugin-windows-amd64
 The archive installer:
 - Copies the `meta-cc-mcp` binary to `~/.local/bin/`
 - Copies slash commands to `~/.claude/commands/`
-- Automatically merges MCP server configuration into `~/.claude/mcp.json`
+- Copies Codex skills to `~/.codex/skills/`
+- Copies Codex plugin metadata to `~/.codex/plugins/meta-cc/`
+- Automatically merges Claude Code MCP server configuration into `~/.claude/mcp.json`
+- Includes `.codex-mcp.json` for Codex MCP configuration
+
+Use temp or custom destinations when testing:
+
+```bash
+INSTALL_DIR=/tmp/bin CLAUDE_DIR=/tmp/claude CODEX_HOME=/tmp/codex ./install.sh
+```
+
+Use host flags when you only want one integration:
+
+```bash
+INSTALL_CLAUDE=0 ./install.sh  # Codex files only
+INSTALL_CODEX=0 ./install.sh   # Claude Code files only
+```
 
 ## Manual Installation
 
@@ -92,18 +108,22 @@ mkdir -p ~/.local/bin
 cp bin/meta-cc-mcp.exe ~/.local/bin/meta-cc-mcp.exe
 ```
 
-### 3. Install Claude Code Files
+### 3. Install Claude Code and Codex Files
 
-The archive uses a flat layout with `commands/` at the top level:
+The archive uses a flat layout with `commands/` and `skills/` at the top level:
 
 ```bash
 mkdir -p ~/.claude/commands
+mkdir -p ~/.codex/skills
 
 # Copy slash commands
 cp commands/* ~/.claude/commands/
+
+# Copy Codex skills
+cp -R skills/* ~/.codex/skills/
 ```
 
-### 4. Configure MCP
+### 4. Configure MCP for Claude Code
 
 The archive includes a `.mcp.json` file. If you have `jq` installed, merge it automatically:
 
@@ -126,6 +146,18 @@ Otherwise, manually add to `~/.claude/mcp.json`:
 
 If you already have other MCP servers configured, add the `"meta-cc"` entry to the existing `"mcpServers"` object.
 
+### 5. Configure MCP for Codex
+
+The archive includes `.codex-plugin/plugin.json` and `.codex-mcp.json`. If your Codex install does not load the plugin archive directly, copy those files into your Codex plugin location and use `.codex-mcp.json` as the MCP server template:
+
+```bash
+mkdir -p ~/.codex/plugins/meta-cc
+cp -R .codex-plugin ~/.codex/plugins/meta-cc/
+cp .codex-mcp.json ~/.codex/plugins/meta-cc/
+```
+
+Codex session discovery reads JSONL transcripts from `$CODEX_HOME/sessions` when `CODEX_HOME` is set, otherwise from `~/.codex/sessions`. meta-cc normalizes Codex `response_item` and `event_msg` records into the same internal message/tool schema used for Claude Code, so the common MCP tools work across both hosts.
+
 ## Verification
 
 After installation, verify the setup:
@@ -142,6 +174,19 @@ ls -l ~/.local/bin/meta-cc-mcp
 
 1. **Test MCP Tools**: In conversation, ask "What are my recent tool usage patterns?"
 2. **Test Slash Commands**: Type `/prompt-list` and press Enter
+
+**In Codex:**
+
+1. **Test MCP Tools**: Ask "What are my recent tool usage patterns?"
+2. **Test Skills**: Ask Codex to use the `prompt-list` skill
+
+Useful smoke-test prompts for either host:
+
+```text
+Find user messages mentioning "refactor"
+Which tools do I use most often?
+Show token usage for recent assistant turns
+```
 
 ## Troubleshooting
 
@@ -211,6 +256,39 @@ source ~/.bash_profile
    ```
 4. **Check Claude Code settings** to ensure slash commands are enabled
 
+### Codex skills not working
+
+**Issue**: Codex does not see `prompt-find`, `prompt-list`, or `prompt-show`
+
+**Solutions**:
+
+1. **Restart Codex** after installation
+2. **Verify skill files exist**:
+   ```bash
+   ls ~/.codex/skills/prompt-*/SKILL.md
+   ```
+3. **Use a custom Codex home during tests**:
+   ```bash
+   CODEX_HOME=/tmp/codex ./install-skills.sh
+   ```
+
+### Codex sessions not found
+
+**Issue**: MCP tools return no sessions for a Codex project.
+
+**Solutions**:
+
+1. **Check the Codex session root**:
+   ```bash
+   echo "${CODEX_HOME:-$HOME/.codex}"
+   find "${CODEX_HOME:-$HOME/.codex}/sessions" -name '*.jsonl' | tail
+   ```
+2. **Pass the project explicitly** when asking through MCP:
+   ```json
+   {"working_dir": "/absolute/path/to/project", "scope": "project"}
+   ```
+3. **Verify the transcript references the project path**. Codex stores sessions in date directories rather than Claude Code's project-hash directories, so meta-cc matches Codex project sessions by transcript content.
+
 ### Installation fails on macOS
 
 **Issue**: macOS blocks execution due to Gatekeeper
@@ -269,7 +347,7 @@ cd meta-cc-plugin-<platform>
 ./uninstall.sh
 ```
 
-The uninstall script removes the binary, all slash commands, and automatically removes the `meta-cc` entry from `~/.claude/mcp.json`.
+The uninstall script removes the binary, Claude Code slash commands, Codex skills/plugin files, and the `meta-cc` entry from `~/.claude/mcp.json`.
 
 ### Manual uninstallation
 
@@ -281,6 +359,10 @@ rm ~/.local/bin/meta-cc-mcp
 rm ~/.claude/commands/prompt-find.md
 rm ~/.claude/commands/prompt-list.md
 rm ~/.claude/commands/prompt-show.md
+
+# Remove Codex files
+rm -rf ~/.codex/skills/prompt-find ~/.codex/skills/prompt-list ~/.codex/skills/prompt-show
+rm -rf ~/.codex/plugins/meta-cc
 
 # Remove meta-cc from MCP configuration
 jq 'del(.mcpServers["meta-cc"])' ~/.claude/mcp.json > /tmp/mcp.json && mv /tmp/mcp.json ~/.claude/mcp.json

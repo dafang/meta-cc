@@ -33,24 +33,34 @@ See [Capabilities Guide](../guides/capabilities.md) for details.
 
 ### MCP Integration
 
-16 MCP tools enable Claude to autonomously query session data:
+21 MCP tools enable Claude Code and Codex to autonomously query session data:
 
-**Basic Queries**:
-- `get_session_stats` - Session statistics
+**Convenience Queries**:
 - `query_tools` - Filter tool calls
 - `query_user_messages` - Search messages
-- `query_assistant_messages` - Search assistant responses
-- `query_conversation` - Search full conversation
-- `query_files` - File operation statistics
+- `query_tool_errors` - Search failed tool results
+- `query_token_usage` - Query token usage
+- `query_conversation_flow` - Search user/assistant conversation flow
+- `query_tool_blocks` - Query tool use/result content blocks
 
-**Advanced Queries**:
-- `query_context` - Error context with surrounding turns
-- `query_tool_sequences` - Workflow pattern detection
-- `query_file_access` - File operation history
-- `query_project_state` - Project evolution tracking
-- `query_successful_prompts` - High-quality prompt patterns
-- `query_tools_advanced` - SQL-like filtering
-- `query_time_series` - Metrics over time
+**Two-Stage Queries**:
+- `get_session_directory` - Locate session files for project/session scope
+- `inspect_session_files` - Inspect JSONL metadata and samples
+- `execute_stage2_query` - Run jq filter/sort/transform on selected files
+- `get_session_metadata` - Retrieve schema hints and query templates
+
+**Analysis Tools**:
+- `analyze_errors` - Aggregate errors by tool and type
+- `quality_scan` - Compute quality dimensions
+- `get_work_patterns` - Tool frequency, hourly activity, context switches
+- `get_timeline` - Chronological event list
+- `analyze_bugs` - Error-fix pairs and recurring patterns
+- `get_tech_debt` - TODO/FIXME/HACK and unresolved error signals
+
+**Host Support**:
+- Claude Code transcripts from `~/.claude/projects/<project-hash>/`
+- Codex transcripts from `$CODEX_HOME/sessions` or `~/.codex/sessions`
+- Codex messages, tool calls, tool outputs, and token counts are normalized to the common meta-cc schema
 
 **Query Scope**:
 - `scope: "project"` (default) - Cross-session analysis
@@ -513,9 +523,9 @@ meta-cc query tool-sequences --pattern "Read.*Edit"
 ```json
 [
   {
-    "Pattern": "query_tools → query_user_messages → get_session_stats",
+    "Pattern": "query_tools → query_user_messages → get_work_patterns",
     "Occurrences": 8,
-    "ToolNames": ["query_tools", "query_user_messages", "get_session_stats"],
+    "ToolNames": ["query_tools", "query_user_messages", "get_work_patterns"],
     "FirstSeen": "2025-10-02T10:00:00Z",
     "LastSeen": "2025-10-02T14:30:00Z"
   }

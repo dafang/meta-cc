@@ -19,23 +19,23 @@ const (
 	schemaNew
 )
 
-func loadTurnsFromSession(session conversation.Session, maxLines int) ([]conversation.Turn, error) {
+func loadTurnsFromSession(session conversation.Session, maxLines int) ([]conversation.Turn, conversation.TokenUsage, error) {
 	var ext struct {
 		RolloutPath string `json:"rollout_path"`
 	}
 	if err := json.Unmarshal(session.Extensions, &ext); err != nil {
-		return nil, err
+		return nil, conversation.TokenUsage{}, err
 	}
 	if ext.RolloutPath == "" {
-		return nil, fmt.Errorf("missing rollout_path for session %s", session.ID)
+		return nil, conversation.TokenUsage{}, fmt.Errorf("missing rollout_path for session %s", session.ID)
 	}
 	return loadTurnsFromRollout(ext.RolloutPath, maxLines)
 }
 
-func loadTurnsFromRollout(path string, maxLines int) ([]conversation.Turn, error) {
+func loadTurnsFromRollout(path string, maxLines int) ([]conversation.Turn, conversation.TokenUsage, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, conversation.TokenUsage{}, err
 	}
 	defer f.Close()
 
@@ -66,10 +66,10 @@ func loadTurnsFromRollout(path string, maxLines int) ([]conversation.Turn, error
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, conversation.TokenUsage{}, err
 	}
 	builder.flush()
-	return builder.turns, nil
+	return builder.turns, builder.totalTokenUsage, nil
 }
 
 func detectSchemaVersion(firstLine []byte) schemaVersion {
@@ -83,10 +83,11 @@ func detectSchemaVersion(firstLine []byte) schemaVersion {
 }
 
 type turnBuilder struct {
-	current     *conversation.Turn
-	toolCallMap map[string]int
-	turns       []conversation.Turn
-	unknown     []json.RawMessage
+	current         *conversation.Turn
+	toolCallMap     map[string]int
+	turns           []conversation.Turn
+	unknown         []json.RawMessage
+	totalTokenUsage conversation.TokenUsage
 }
 
 func newTurnBuilder() *turnBuilder {
@@ -100,7 +101,7 @@ func (b *turnBuilder) flush() {
 		})
 		b.current.Extensions = ext
 	}
-	if b.current != nil && (b.current.UserText != "" || b.current.AssistantText != "" || len(b.current.ToolCalls) > 0 || len(b.current.Extensions) > 0) {
+	if b.current != nil && (b.current.UserText != "" || b.current.AssistantText != "" || len(b.current.ToolCalls) > 0 || hasUsage(b.current.TokenUsage) || len(b.current.Extensions) > 0) {
 		b.turns = append(b.turns, *b.current)
 	}
 	b.current = nil
@@ -142,6 +143,10 @@ func (b *turnBuilder) applyLegacy(line []byte) {
 			Type    string `json:"type"`
 			Message string `json:"message"`
 			TurnID  string `json:"turn_id"`
+			Info    struct {
+				LastTokenUsage  codexTokenUsage `json:"last_token_usage"`
+				TotalTokenUsage codexTokenUsage `json:"total_token_usage"`
+			} `json:"info"`
 		}
 		_ = json.Unmarshal(event.Payload, &payload)
 		if payload.Type == "task_started" {
@@ -159,6 +164,7 @@ func (b *turnBuilder) applyLegacy(line []byte) {
 			}
 			b.current.AssistantText += payload.Message
 		case "token_count":
+			b.applyTokenUsage(event.Timestamp, payload.Info.LastTokenUsage, payload.Info.TotalTokenUsage)
 			return
 		default:
 			b.appendUnknown(line)
@@ -168,27 +174,46 @@ func (b *turnBuilder) applyLegacy(line []byte) {
 			Type      string          `json:"type"`
 			Name      string          `json:"name"`
 			Arguments string          `json:"arguments"`
+			Input     json.RawMessage `json:"input"`
 			CallID    string          `json:"call_id"`
+			ID        string          `json:"id"`
 			Output    string          `json:"output"`
+			Status    string          `json:"status"`
+			IsError   bool            `json:"is_error"`
+			Error     string          `json:"error"`
 			Role      string          `json:"role"`
 			Content   json.RawMessage `json:"content"`
+			Info      struct {
+				LastTokenUsage  codexTokenUsage `json:"last_token_usage"`
+				TotalTokenUsage codexTokenUsage `json:"total_token_usage"`
+			} `json:"info"`
 		}
 		_ = json.Unmarshal(event.Payload, &envelope)
 		b.ensureTurn("", event.Timestamp)
 		switch envelope.Type {
-		case "function_call":
+		case "function_call", "custom_tool_call":
 			ts, _ := time.Parse(time.RFC3339, event.Timestamp)
+			callID := firstNonEmpty(envelope.CallID, envelope.ID)
+			input := json.RawMessage(envelope.Arguments)
+			if envelope.Type == "custom_tool_call" {
+				input = encodeCustomToolInput(envelope.Input)
+			}
 			call := conversation.ToolCall{
-				ID:        envelope.CallID,
+				ID:        callID,
 				Name:      envelope.Name,
-				Input:     json.RawMessage(envelope.Arguments),
+				Input:     input,
 				Timestamp: ts.UTC(),
 			}
-			b.toolCallMap[envelope.CallID] = len(b.current.ToolCalls)
+			b.toolCallMap[callID] = len(b.current.ToolCalls)
 			b.current.ToolCalls = append(b.current.ToolCalls, call)
-		case "function_call_output":
-			if idx, ok := b.toolCallMap[envelope.CallID]; ok {
+		case "function_call_output", "custom_tool_call_output":
+			callID := firstNonEmpty(envelope.CallID, envelope.ID)
+			if idx, ok := b.toolCallMap[callID]; ok {
 				b.current.ToolCalls[idx].Output = envelope.Output
+				b.current.ToolCalls[idx].IsError = envelope.IsError || isErrorStatus(envelope.Status) || envelope.Error != ""
+				if b.current.ToolCalls[idx].Output == "" {
+					b.current.ToolCalls[idx].Output = envelope.Error
+				}
 			}
 		case "message":
 			text := extractResponseItemText(envelope.Content)
@@ -209,11 +234,39 @@ func (b *turnBuilder) applyLegacy(line []byte) {
 			}
 		case "reasoning":
 			return
+		case "token_count":
+			b.applyTokenUsage(event.Timestamp, envelope.Info.LastTokenUsage, envelope.Info.TotalTokenUsage)
+			return
 		default:
 			b.appendUnknown(line)
 		}
 	default:
 		b.appendUnknown(line)
+	}
+}
+
+type codexTokenUsage struct {
+	InputTokens           int `json:"input_tokens"`
+	CachedInputTokens     int `json:"cached_input_tokens"`
+	OutputTokens          int `json:"output_tokens"`
+	ReasoningOutputTokens int `json:"reasoning_output_tokens"`
+}
+
+func (b *turnBuilder) applyTokenUsage(timestamp string, last, total codexTokenUsage) {
+	b.ensureTurn("", timestamp)
+	if last.InputTokens != 0 || last.OutputTokens != 0 || last.CachedInputTokens != 0 || last.ReasoningOutputTokens != 0 {
+		b.current.TokenUsage = conversation.TokenUsage{
+			InputTokens:  last.InputTokens,
+			OutputTokens: last.OutputTokens,
+			CacheTokens:  last.CachedInputTokens,
+		}
+	}
+	if total.InputTokens != 0 || total.OutputTokens != 0 || total.CachedInputTokens != 0 || total.ReasoningOutputTokens != 0 {
+		b.totalTokenUsage = conversation.TokenUsage{
+			InputTokens:  total.InputTokens,
+			OutputTokens: total.OutputTokens,
+			CacheTokens:  total.CachedInputTokens,
+		}
 	}
 }
 
@@ -288,6 +341,36 @@ func (b *turnBuilder) applyNew(line []byte) {
 func (b *turnBuilder) appendUnknown(line []byte) {
 	b.ensureTurn("", time.Now().UTC().Format(time.RFC3339))
 	b.unknown = append(b.unknown, append(json.RawMessage(nil), line...))
+}
+
+func encodeCustomToolInput(input json.RawMessage) json.RawMessage {
+	if len(input) == 0 || string(input) == "null" {
+		return json.RawMessage(`{}`)
+	}
+	var decoded interface{}
+	if err := json.Unmarshal(input, &decoded); err == nil {
+		if _, ok := decoded.(map[string]interface{}); ok {
+			return input
+		}
+	}
+	data, err := json.Marshal(map[string]json.RawMessage{"input": input})
+	if err != nil {
+		return json.RawMessage(`{}`)
+	}
+	return data
+}
+
+func isErrorStatus(status string) bool {
+	switch status {
+	case "", "completed", "success", "ok":
+		return false
+	default:
+		return true
+	}
+}
+
+func hasUsage(usage conversation.TokenUsage) bool {
+	return usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.CacheTokens != 0
 }
 
 func extractResponseItemText(content json.RawMessage) string {

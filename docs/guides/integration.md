@@ -1,24 +1,23 @@
-# Meta-CC Claude Code Integration Guide
+# Meta-CC Claude Code and Codex Integration Guide
 
 A practical guide to choosing and using the right integration method for your meta-cognition workflow.
 
 ## Overview
 
-meta-cc provides three integration methods with Claude Code, all powered by the MCP server:
+meta-cc provides host-native integrations for Claude Code and Codex, all powered by the MCP server:
 
-- **MCP Tools**: Direct access to 20 query and analysis tools through Claude's autonomous tool calling
-- **Slash Commands**: Quick, pre-defined workflows using MCP capabilities
-- **Subagent (@meta-coach)**: Interactive, conversational analysis leveraging MCP tools
+- **MCP Tools**: Direct access to query and analysis tools through the host's autonomous tool calling
+- **Claude Code Slash Commands**: Quick prompt-library workflows (`/prompt-find`, `/prompt-list`, `/prompt-show`)
+- **Codex Skills**: Native Codex prompt-library workflows (`prompt-find`, `prompt-list`, `prompt-show`)
 
 ### Quick Comparison
 
-| Feature | MCP Server | Slash Commands | Subagent |
-|---------|-----------|----------------|----------|
-| **Invocation** | Automatic (Claude decides) | Manual (`/command`) | Manual or auto-delegated (`@agent`) |
-| **Context** | Main conversation | Main conversation | **Independent context** |
-| **Multi-turn** | ❌ Single call | ❌ Single execution | ✅ Conversational |
-| **Parameters** | Structured (JSON schema) | Positional (`$1, $2`) | Natural language |
-| **Best for** | Data queries | Repeated workflows | Exploratory analysis |
+| Feature | MCP Server | Claude Commands | Codex Skills |
+|---------|-----------|-----------------|--------------|
+| **Invocation** | Automatic host tool calls | Manual (`/command`) | Natural-language skill trigger |
+| **Context** | Main conversation | Main conversation | Main conversation |
+| **Parameters** | Structured schema | Positional (`$1`, `$2`) | Natural language |
+| **Best for** | Data queries and analysis | Repeated Claude Code workflows | Repeated Codex workflows |
 
 **👉 [Jump to Decision Framework](#decision-framework)** to find the best method for your task.
 
@@ -55,6 +54,16 @@ claude mcp add meta-cc --transport stdio meta-cc-mcp --scope user
 }
 ```
 
+### Step 2b: Configure Codex
+
+Archive installs include `.codex-plugin/plugin.json`, `.codex-mcp.json`, and `skills/`. The installer copies Codex skills to `~/.codex/skills/` by default:
+
+```bash
+CODEX_HOME=~/.codex ./install-skills.sh
+```
+
+For MCP, use the bundled `.codex-mcp.json` as the server template if your Codex plugin loader does not import it automatically.
+
 ### Step 3: Test Integration
 
 ```
@@ -63,7 +72,7 @@ claude mcp add meta-cc --transport stdio meta-cc-mcp --scope user
 @meta-cc query_user_messages --pattern=".*error.*"
 ```
 
-**You're ready!** Claude will now automatically call meta-cc tools when you ask questions about your session data.
+**You're ready!** Claude Code or Codex can now call meta-cc tools when you ask questions about your session data.
 
 ---
 
@@ -310,12 +319,17 @@ Analyze the results and provide insights.
 - MCP server not connected → Check `claude mcp list`
 - Tool description too vague → Update tool schema
 
-### Slash Commands Not Found
+### Prompt Commands Or Skills Not Found
 
-**Checklist**:
-1. ✅ File exists at `.claude/commands/meta-stats.md`?
-2. ✅ Frontmatter has `name: meta-stats`?
-3. ✅ Restarted Claude Code after creating file?
+**Claude Code checklist**:
+1. File exists at `.claude/commands/prompt-list.md`
+2. Restarted Claude Code after installing
+3. Using `/prompt-list`, `/prompt-find`, or `/prompt-show`
+
+**Codex checklist**:
+1. File exists at `.codex/skills/prompt-list/SKILL.md`
+2. Restarted Codex after installing
+3. Asking Codex to use `prompt-list`, `prompt-find`, or `prompt-show`
 
 ### Subagent Not Understanding Context
 

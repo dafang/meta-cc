@@ -77,7 +77,7 @@ install_binaries() {
 
 # Install Claude Code integration files
 install_claude_files() {
-    CLAUDE_DIR="${HOME}/.claude"
+    CLAUDE_DIR="${CLAUDE_DIR:-${HOME}/.claude}"
     mkdir -p "$CLAUDE_DIR/commands" "$CLAUDE_DIR/agents" "$CLAUDE_DIR/skills"
 
     # Check if commands directory exists (required)
@@ -105,9 +105,40 @@ install_claude_files() {
     info "Claude Code files installed to $CLAUDE_DIR"
 }
 
+install_codex_files() {
+    CODEX_HOME="${CODEX_HOME:-${CODEX_DIR:-${HOME}/.codex}}"
+    mkdir -p "$CODEX_HOME/skills" "$CODEX_HOME/plugins/meta-cc"
+
+    if [ -d "skills" ]; then
+        cp -r skills/* "$CODEX_HOME/skills/" 2>/dev/null || warn "No Codex skills to copy"
+        SKILL_COUNT=$(find "$CODEX_HOME/skills" -name "SKILL.md" 2>/dev/null | wc -l)
+        if [ "$SKILL_COUNT" -gt 0 ]; then
+            info "Installed $SKILL_COUNT Codex skills"
+        fi
+    else
+        warn "skills directory not found, skipping Codex skills"
+    fi
+
+    if [ -d ".codex-plugin" ]; then
+        cp -r .codex-plugin "$CODEX_HOME/plugins/meta-cc/"
+        info "Codex plugin manifest installed to $CODEX_HOME/plugins/meta-cc/.codex-plugin"
+    else
+        warn ".codex-plugin directory not found, skipping Codex plugin manifest"
+    fi
+
+    if [ -f ".codex-mcp.json" ]; then
+        cp ".codex-mcp.json" "$CODEX_HOME/plugins/meta-cc/.codex-mcp.json"
+        info "Codex MCP template installed to $CODEX_HOME/plugins/meta-cc/.codex-mcp.json"
+    fi
+
+    info "Codex files installed to $CODEX_HOME"
+}
+
 # Merge MCP configuration
 merge_mcp_config() {
-    MCP_CONFIG="${HOME}/.claude/mcp.json"
+    CLAUDE_DIR="${CLAUDE_DIR:-${HOME}/.claude}"
+    MCP_CONFIG="${CLAUDE_DIR}/mcp.json"
+    mkdir -p "$CLAUDE_DIR"
 
     # For manual installs, prefer lib/mcp-config.json (PATH-based, suitable for manual install).
     # .mcp.json uses ${CLAUDE_PLUGIN_ROOT}/bin/meta-cc-mcp which only works in plugin-managed
@@ -173,6 +204,7 @@ main() {
 
     install_binaries
     install_claude_files
+    install_codex_files
     merge_mcp_config
     verify_installation
 
@@ -181,8 +213,8 @@ main() {
     echo ""
     echo "Next steps:"
     echo "1. Add to PATH (if needed): export PATH=\"\$HOME/.local/bin:\$PATH\""
-    echo "2. Restart Claude Code to load the plugin"
-    echo "3. Configure MCP server: claude mcp add meta-cc meta-cc-mcp"
+    echo "2. Restart Claude Code and/or Codex to load the integrations"
+    echo "3. If needed, configure MCP manually with the bundled .mcp.json or .codex-mcp.json"
     echo ""
 }
 

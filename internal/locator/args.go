@@ -1,6 +1,9 @@
 package locator
 
 import (
+	"bufio"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,40 +11,52 @@ import (
 )
 
 // FromSessionID 通过会话 ID 查找会话文件
-// 遍历 ~/.claude/projects/*/，查找匹配的 {session-id}.jsonl
+// 遍历支持的 transcript roots，查找匹配的 {session-id}.jsonl
 // 如果找到多个（跨项目同名会话），返回最新的
 func (l *SessionLocator) FromSessionID(sessionID string) (string, error) {
-	projectsRoot := l.projectsRoot
-	if projectsRoot == "" {
-		return "", fmt.Errorf("Claude Code projects directory not configured")
-	}
-
-	if _, err := os.Stat(projectsRoot); os.IsNotExist(err) {
-		return "", fmt.Errorf("Claude Code projects directory not found: %s", projectsRoot)
-	}
-
-	// 遍历所有项目目录
-	projectDirs, err := os.ReadDir(projectsRoot)
-	if err != nil {
-		return "", fmt.Errorf("failed to read projects directory: %w", err)
-	}
-
 	var candidates []string
 	sessionFilename := sessionID + ".jsonl"
+	var checked []string
 
-	for _, projectDir := range projectDirs {
-		if !projectDir.IsDir() {
+	for _, root := range l.TranscriptRoots() {
+		checked = append(checked, formatRoot(root))
+		if _, err := os.Stat(root.Path); os.IsNotExist(err) {
 			continue
 		}
 
-		sessionPath := filepath.Join(projectsRoot, projectDir.Name(), sessionFilename)
+		if root.ProjectHashed {
+			projectDirs, err := os.ReadDir(root.Path)
+			if err != nil {
+				continue
+			}
+			for _, projectDir := range projectDirs {
+				if !projectDir.IsDir() {
+					continue
+				}
+
+				sessionPath := filepath.Join(root.Path, projectDir.Name(), sessionFilename)
+				if _, err := os.Stat(sessionPath); err == nil {
+					candidates = append(candidates, sessionPath)
+				}
+			}
+			continue
+		}
+
+		sessionPath := filepath.Join(root.Path, sessionFilename)
 		if _, err := os.Stat(sessionPath); err == nil {
 			candidates = append(candidates, sessionPath)
+			continue
+		}
+
+		matches, err := findSessionFilesRecursive(root.Path, sessionFilename)
+		if err == nil {
+			candidates = append(candidates, matches...)
 		}
 	}
 
 	if len(candidates) == 0 {
-		return "", fmt.Errorf("session file not found for ID: %s", sessionID)
+		return "", fmt.Errorf("session file not found for ID %q; checked transcript roots: %s",
+			sessionID, strings.Join(checked, ", "))
 	}
 
 	// 如果找到多个，返回最新的
@@ -62,27 +77,12 @@ func (l *SessionLocator) FromProjectPath(projectPath string) (string, error) {
 	// 计算项目哈希 (pathToHash now handles symlink resolution)
 	projectHash := pathToHash(absPath)
 
-	projectsRoot := l.projectsRoot
-	if projectsRoot == "" {
-		return "", fmt.Errorf("Claude Code projects directory not configured")
-	}
-
-	sessionDir := filepath.Join(projectsRoot, projectHash)
-	if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
-		return "", fmt.Errorf("no sessions found for project: %s (hash: %s)", projectPath, projectHash)
-	}
-
-	// 查找所有 .jsonl 文件
-	sessions, err := filepath.Glob(filepath.Join(sessionDir, "*.jsonl"))
+	sessions, err := l.sessionsFromProject(absPath, projectHash)
 	if err != nil {
-		return "", fmt.Errorf("failed to search session files: %w", err)
+		return "", fmt.Errorf("no sessions found for project %q (hash: %s): %w",
+			projectPath, projectHash, err)
 	}
 
-	if len(sessions) == 0 {
-		return "", fmt.Errorf("no session files found in: %s", sessionDir)
-	}
-
-	// 返回最新的会话文件
 	return findNewestFile(sessions)
 }
 
@@ -100,28 +100,170 @@ func (l *SessionLocator) AllSessionsFromProject(projectPath string) ([]string, e
 	// 计算项目哈希 (pathToHash now handles symlink resolution)
 	projectHash := pathToHash(absPath)
 
-	projectsRoot := l.projectsRoot
-	if projectsRoot == "" {
-		return nil, fmt.Errorf("Claude Code projects directory not configured")
-	}
-
-	sessionDir := filepath.Join(projectsRoot, projectHash)
-	if _, err := os.Stat(sessionDir); os.IsNotExist(err) {
-		return nil, fmt.Errorf("no sessions found for project: %s (hash: %s)", projectPath, projectHash)
-	}
-
-	// 查找所有 .jsonl 文件
-	sessions, err := filepath.Glob(filepath.Join(sessionDir, "*.jsonl"))
+	sessions, err := l.sessionsFromProject(absPath, projectHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search session files: %w", err)
-	}
-
-	if len(sessions) == 0 {
-		return nil, fmt.Errorf("no session files found in: %s", sessionDir)
+		return nil, fmt.Errorf("no sessions found for project %q (hash: %s): %w",
+			projectPath, projectHash, err)
 	}
 
 	// 返回所有会话文件
 	return sessions, nil
+}
+
+func (l *SessionLocator) sessionsFromProject(projectPath, projectHash string) ([]string, error) {
+	var sessions []string
+	var checked []string
+
+	for _, root := range l.TranscriptRoots() {
+		checked = append(checked, formatRoot(root))
+		if !root.ProjectHashed {
+			continue
+		}
+		if _, err := os.Stat(root.Path); os.IsNotExist(err) {
+			continue
+		}
+
+		sessionDir := filepath.Join(root.Path, projectHash)
+		rootSessions, err := filepath.Glob(filepath.Join(sessionDir, "*.jsonl"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to search session files in %s: %w", sessionDir, err)
+		}
+		sessions = append(sessions, rootSessions...)
+	}
+	if len(sessions) > 0 {
+		return sessions, nil
+	}
+
+	for _, root := range l.TranscriptRoots() {
+		if root.ProjectHashed {
+			continue
+		}
+		if _, err := os.Stat(root.Path); os.IsNotExist(err) {
+			continue
+		}
+
+		rootSessions, err := findProjectJSONLFilesRecursive(root.Path, projectPath)
+		if err == nil {
+			sessions = append(sessions, rootSessions...)
+		}
+	}
+	if len(sessions) == 0 {
+		return nil, fmt.Errorf("checked transcript roots: %s", strings.Join(checked, ", "))
+	}
+
+	return sessions, nil
+}
+
+func findSessionFilesRecursive(rootPath, filename string) ([]string, error) {
+	var matches []string
+	err := filepath.WalkDir(rootPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if d.Name() == filename {
+			matches = append(matches, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		return nil, errors.New("no matching session files")
+	}
+	return matches, nil
+}
+
+func findJSONLFilesRecursive(rootPath string) ([]string, error) {
+	var matches []string
+	err := filepath.WalkDir(rootPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) == ".jsonl" {
+			matches = append(matches, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		return nil, errors.New("no jsonl session files")
+	}
+	return matches, nil
+}
+
+func findProjectJSONLFilesRecursive(rootPath, projectPath string) ([]string, error) {
+	all, err := findJSONLFilesRecursive(rootPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var matches []string
+	for _, path := range all {
+		if fileContains(path, projectPath) {
+			matches = append(matches, path)
+		}
+	}
+	if len(matches) == 0 {
+		return nil, errors.New("no project-matching jsonl session files")
+	}
+	return matches, nil
+}
+
+func fileContains(path, projectPath string) bool {
+	if projectPath == "" {
+		return false
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+
+	cleanProject := filepath.Clean(projectPath)
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		var record map[string]interface{}
+		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+			continue
+		}
+		if recordProjectPath(record, cleanProject) {
+			return true
+		}
+	}
+	return false
+}
+
+func recordProjectPath(record map[string]interface{}, cleanProject string) bool {
+	if cwd, ok := record["cwd"].(string); ok && filepath.Clean(cwd) == cleanProject {
+		return true
+	}
+	payload, ok := record["payload"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	for _, key := range []string{"cwd", "working_dir", "workingDir"} {
+		if cwd, ok := payload[key].(string); ok && filepath.Clean(cwd) == cleanProject {
+			return true
+		}
+	}
+	return false
+}
+
+func formatRoot(root SessionRoot) string {
+	if root.ProjectHashed {
+		return fmt.Sprintf("%s=%s (project-hash)", root.Host, root.Path)
+	}
+	return fmt.Sprintf("%s=%s", root.Host, root.Path)
 }
 
 // pathToHash 将项目路径转换为哈希目录名
