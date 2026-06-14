@@ -1,108 +1,10 @@
-package query
+package pipeline
 
 import (
 	"fmt"
 	"testing"
-
-	"github.com/yaleh/meta-cc/internal/parser"
 )
 
-// generateTestEntries creates n test entries for benchmarking
-func generateTestEntries(n int) []parser.SessionEntry {
-	entries := make([]parser.SessionEntry, 0, n)
-
-	for i := 0; i < n; i++ {
-		sessionID := fmt.Sprintf("session-%d", i%10) // 10 different sessions
-		gitBranch := "main"
-		if i%5 == 0 {
-			gitBranch = "feature/branch"
-		}
-
-		// User message
-		entries = append(entries, parser.SessionEntry{
-			Type:       "user",
-			UUID:       fmt.Sprintf("user-%d", i),
-			Timestamp:  fmt.Sprintf("2025-10-23T%02d:%02d:00Z", i/60, i%60),
-			SessionID:  sessionID,
-			ParentUUID: fmt.Sprintf("parent-%d", i-1),
-			GitBranch:  gitBranch,
-			Message: &parser.Message{
-				Role: "user",
-				Content: []parser.ContentBlock{
-					{
-						Type: "text",
-						Text: fmt.Sprintf("User message %d", i),
-					},
-				},
-			},
-		})
-
-		// Assistant message with tool use
-		toolName := "Read"
-		if i%3 == 0 {
-			toolName = "Edit"
-		} else if i%5 == 0 {
-			toolName = "Write"
-		}
-
-		entries = append(entries, parser.SessionEntry{
-			Type:       "assistant",
-			UUID:       fmt.Sprintf("assistant-%d", i),
-			Timestamp:  fmt.Sprintf("2025-10-23T%02d:%02d:05Z", i/60, i%60),
-			SessionID:  sessionID,
-			ParentUUID: fmt.Sprintf("user-%d", i),
-			GitBranch:  gitBranch,
-			Message: &parser.Message{
-				Role: "assistant",
-				Content: []parser.ContentBlock{
-					{
-						Type: "tool_use",
-						ToolUse: &parser.ToolUse{
-							ID:   fmt.Sprintf("tool-%d", i),
-							Name: toolName,
-							Input: map[string]interface{}{
-								"file_path": fmt.Sprintf("/test/file%d.txt", i),
-							},
-						},
-					},
-				},
-			},
-		})
-
-		// Tool result
-		status := "success"
-		if i%10 == 0 {
-			status = "error"
-		}
-
-		entries = append(entries, parser.SessionEntry{
-			Type:       "user",
-			UUID:       fmt.Sprintf("tool-result-%d", i),
-			Timestamp:  fmt.Sprintf("2025-10-23T%02d:%02d:10Z", i/60, i%60),
-			SessionID:  sessionID,
-			ParentUUID: fmt.Sprintf("assistant-%d", i),
-			GitBranch:  gitBranch,
-			Message: &parser.Message{
-				Role: "user",
-				Content: []parser.ContentBlock{
-					{
-						Type: "tool_result",
-						ToolResult: &parser.ToolResult{
-							ToolUseID: fmt.Sprintf("tool-%d", i),
-							Content:   fmt.Sprintf("Result for tool %d", i),
-							IsError:   status == "error",
-							Status:    status,
-						},
-					},
-				},
-			},
-		})
-	}
-
-	return entries
-}
-
-// BenchmarkQueryEntries benchmarks querying all entries (baseline)
 func BenchmarkQueryEntries(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -125,7 +27,6 @@ func BenchmarkQueryEntries(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryMessages benchmarks extracting and querying messages
 func BenchmarkQueryMessages(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -148,7 +49,6 @@ func BenchmarkQueryMessages(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryTools benchmarks extracting and querying tools
 func BenchmarkQueryTools(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -171,7 +71,6 @@ func BenchmarkQueryTools(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryToolsWithFilter benchmarks filtering tool results
 func BenchmarkQueryToolsWithFilter(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -232,7 +131,6 @@ func BenchmarkQueryToolsWithFilter(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryWithAggregate benchmarks aggregation operations
 func BenchmarkQueryWithAggregate(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -294,7 +192,6 @@ func BenchmarkQueryWithAggregate(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryFilterAndAggregate benchmarks combined filter + aggregate
 func BenchmarkQueryFilterAndAggregate(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -324,7 +221,6 @@ func BenchmarkQueryFilterAndAggregate(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryUserMessages benchmarks user message filtering
 func BenchmarkQueryUserMessages(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -350,7 +246,6 @@ func BenchmarkQueryUserMessages(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryAssistantMessages benchmarks assistant message filtering
 func BenchmarkQueryAssistantMessages(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -376,7 +271,6 @@ func BenchmarkQueryAssistantMessages(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryBySession benchmarks session filtering
 func BenchmarkQueryBySession(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -402,7 +296,6 @@ func BenchmarkQueryBySession(b *testing.B) {
 	}
 }
 
-// BenchmarkQueryByGitBranch benchmarks git branch filtering
 func BenchmarkQueryByGitBranch(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -428,7 +321,6 @@ func BenchmarkQueryByGitBranch(b *testing.B) {
 	}
 }
 
-// BenchmarkResourceSelection benchmarks the resource selection step
 func BenchmarkResourceSelection(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 
@@ -467,7 +359,6 @@ func BenchmarkResourceSelection(b *testing.B) {
 	}
 }
 
-// BenchmarkFilterApplication benchmarks the filter application step
 func BenchmarkFilterApplication(b *testing.B) {
 	entries := generateTestEntries(1000)
 	tools, _ := SelectResource(entries, "tools")
@@ -502,7 +393,6 @@ func BenchmarkFilterApplication(b *testing.B) {
 	})
 }
 
-// BenchmarkAggregation benchmarks the aggregation step
 func BenchmarkAggregation(b *testing.B) {
 	entries := generateTestEntries(1000)
 	tools, _ := SelectResource(entries, "tools")

@@ -1,14 +1,14 @@
-package query
+package pipeline
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yaleh/meta-cc/internal/parser"
+
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
-// Test QueryParams validation
 func TestQueryParamsValidation(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -68,11 +68,9 @@ func TestQueryParamsValidation(t *testing.T) {
 			errMsg:  "invalid aggregate.function",
 		},
 		{
-			name:   "default_values",
-			params: QueryParams{
-				// No resource specified
-			},
-			wantErr: false, // Should use defaults
+			name:    "default_values",
+			params:  QueryParams{},
+			wantErr: false,
 		},
 	}
 
@@ -91,7 +89,6 @@ func TestQueryParamsValidation(t *testing.T) {
 	}
 }
 
-// Test QueryParams defaults
 func TestApplyDefaults(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -156,7 +153,6 @@ func TestApplyDefaults(t *testing.T) {
 	}
 }
 
-// Test FilterSpec isEmpty
 func TestFilterSpecIsEmpty(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -208,7 +204,6 @@ func TestFilterSpecIsEmpty(t *testing.T) {
 	}
 }
 
-// Test AggregateSpec isEmpty
 func TestAggregateSpecIsEmpty(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -245,8 +240,6 @@ func TestAggregateSpecIsEmpty(t *testing.T) {
 	}
 }
 
-// Integration tests for Query function
-
 func TestQueryIntegration(t *testing.T) {
 	entries := createTestEntries()
 
@@ -263,9 +256,9 @@ func TestQueryIntegration(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T, result interface{}) {
-				entries, ok := result.([]parser.SessionEntry)
+				got, ok := result.([]types.SessionEntry)
 				require.True(t, ok)
-				assert.Len(t, entries, 3)
+				assert.Len(t, got, 3)
 			},
 		},
 		{
@@ -296,7 +289,7 @@ func TestQueryIntegration(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T, result interface{}) {
-				tools, ok := result.([]parser.ToolCall)
+				tools, ok := result.([]types.ToolCall)
 				require.True(t, ok)
 				assert.Len(t, tools, 1)
 				assert.Equal(t, "Read", tools[0].ToolName)
@@ -355,10 +348,10 @@ func TestQueryIntegration(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T, result interface{}) {
-				entries, ok := result.([]parser.SessionEntry)
+				got, ok := result.([]types.SessionEntry)
 				require.True(t, ok)
-				assert.GreaterOrEqual(t, len(entries), 1)
-				for _, e := range entries {
+				assert.GreaterOrEqual(t, len(got), 1)
+				for _, e := range got {
 					assert.Equal(t, "user", e.Type)
 				}
 			},
@@ -403,14 +396,14 @@ func TestQueryIntegration(t *testing.T) {
 }
 
 func TestQueryEmptyEntries(t *testing.T) {
-	result, err := Query([]parser.SessionEntry{}, QueryParams{
+	result, err := Query([]types.SessionEntry{}, QueryParams{
 		Resource: "entries",
 	})
 
 	require.NoError(t, err)
-	entries, ok := result.([]parser.SessionEntry)
+	got, ok := result.([]types.SessionEntry)
 	require.True(t, ok)
-	assert.Empty(t, entries)
+	assert.Empty(t, got)
 }
 
 func TestQueryValidationError(t *testing.T) {

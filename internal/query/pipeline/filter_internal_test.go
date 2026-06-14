@@ -1,11 +1,12 @@
-package query
+package pipeline
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yaleh/meta-cc/internal/parser"
+
+	"github.com/yaleh/meta-cc/internal/types"
 )
 
 func TestApplyFilter(t *testing.T) {
@@ -21,7 +22,7 @@ func TestApplyFilter(t *testing.T) {
 			name:      "empty_filter_no_change",
 			resources: entries,
 			filter:    FilterSpec{},
-			wantCount: 3, // All entries
+			wantCount: 3,
 		},
 		{
 			name:      "filter_by_type_user",
@@ -29,7 +30,7 @@ func TestApplyFilter(t *testing.T) {
 			filter: FilterSpec{
 				Type: "user",
 			},
-			wantCount: 2, // 2 user entries
+			wantCount: 2,
 		},
 		{
 			name:      "filter_by_type_assistant",
@@ -37,7 +38,7 @@ func TestApplyFilter(t *testing.T) {
 			filter: FilterSpec{
 				Type: "assistant",
 			},
-			wantCount: 1, // 1 assistant entry
+			wantCount: 1,
 		},
 		{
 			name:      "filter_by_session_id",
@@ -45,7 +46,7 @@ func TestApplyFilter(t *testing.T) {
 			filter: FilterSpec{
 				SessionID: "session-1",
 			},
-			wantCount: 3, // All belong to session-1
+			wantCount: 3,
 		},
 		{
 			name:      "filter_by_git_branch",
@@ -53,7 +54,7 @@ func TestApplyFilter(t *testing.T) {
 			filter: FilterSpec{
 				GitBranch: "main",
 			},
-			wantCount: 3, // All on main branch
+			wantCount: 3,
 		},
 		{
 			name:      "filter_by_uuid",
@@ -61,7 +62,7 @@ func TestApplyFilter(t *testing.T) {
 			filter: FilterSpec{
 				UUID: "user-1",
 			},
-			wantCount: 1, // Only one entry with UUID "user-1"
+			wantCount: 1,
 		},
 	}
 
@@ -69,11 +70,10 @@ func TestApplyFilter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ApplyFilter(tt.resources, tt.filter)
 
-			// Type assertion for entries
-			if resultEntries, ok := result.([]parser.SessionEntry); ok {
+			if resultEntries, ok := result.([]types.SessionEntry); ok {
 				assert.Equal(t, tt.wantCount, len(resultEntries))
 			} else {
-				t.Fatalf("Result is not []parser.SessionEntry")
+				t.Fatalf("Result is not []types.SessionEntry")
 			}
 		})
 	}
@@ -91,17 +91,17 @@ func TestApplyFilterMessages(t *testing.T) {
 		{
 			name:      "filter_by_role_user",
 			filter:    FilterSpec{Role: "user"},
-			wantCount: 2, // 2 user messages
+			wantCount: 2,
 		},
 		{
 			name:      "filter_by_role_assistant",
 			filter:    FilterSpec{Role: "assistant"},
-			wantCount: 1, // 1 assistant message
+			wantCount: 1,
 		},
 		{
 			name:      "filter_by_session_id",
 			filter:    FilterSpec{SessionID: "session-1"},
-			wantCount: 3, // All messages
+			wantCount: 3,
 		},
 	}
 
@@ -109,7 +109,6 @@ func TestApplyFilterMessages(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ApplyFilter(messages, tt.filter)
 
-			// Type assertion for messages
 			if resultMessages, ok := result.([]MessageView); ok {
 				assert.Equal(t, tt.wantCount, len(resultMessages))
 			} else {
@@ -121,7 +120,7 @@ func TestApplyFilterMessages(t *testing.T) {
 
 func TestApplyFilterTools(t *testing.T) {
 	entries := createTestEntries()
-	tools := extractToolExecutions(entries)
+	tools := types.ExtractToolCalls(entries)
 
 	tests := []struct {
 		name      string
@@ -131,19 +130,19 @@ func TestApplyFilterTools(t *testing.T) {
 		{
 			name:      "filter_by_tool_name",
 			filter:    FilterSpec{ToolName: "Read"},
-			wantCount: 1, // 1 Read tool
+			wantCount: 1,
 		},
 		{
 			name:      "filter_by_status_success",
 			filter:    FilterSpec{ToolStatus: "success"},
-			wantCount: 1, // 1 successful tool
+			wantCount: 1,
 		},
 		{
 			name: "filter_by_has_error_false",
 			filter: FilterSpec{
 				HasError: boolPtr(false),
 			},
-			wantCount: 1, // 1 tool without error
+			wantCount: 1,
 		},
 	}
 
@@ -151,18 +150,17 @@ func TestApplyFilterTools(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ApplyFilter(tools, tt.filter)
 
-			// Type assertion for tools
-			if resultTools, ok := result.([]parser.ToolCall); ok {
+			if resultTools, ok := result.([]types.ToolCall); ok {
 				assert.Equal(t, tt.wantCount, len(resultTools))
 			} else {
-				t.Fatalf("Result is not []parser.ToolCall")
+				t.Fatalf("Result is not []types.ToolCall")
 			}
 		})
 	}
 }
 
 func TestMatchesFilterEntry(t *testing.T) {
-	entry := parser.SessionEntry{
+	entry := types.SessionEntry{
 		Type:       "user",
 		UUID:       "test-uuid",
 		SessionID:  "session-1",
@@ -229,7 +227,7 @@ func TestMatchesFilterEntry(t *testing.T) {
 			name: "multiple_conditions_one_fails",
 			filter: FilterSpec{
 				Type:      "user",
-				SessionID: "session-2", // Wrong session
+				SessionID: "session-2",
 			},
 			want: false,
 		},
@@ -284,7 +282,7 @@ func TestMatchesFilterMessage(t *testing.T) {
 }
 
 func TestMatchesFilterTool(t *testing.T) {
-	tool := parser.ToolCall{
+	tool := types.ToolCall{
 		UUID:     "tool-uuid",
 		ToolName: "Read",
 		Status:   "success",
@@ -341,7 +339,7 @@ func TestMatchesFilterTool(t *testing.T) {
 }
 
 func TestApplyFilterTimeRange(t *testing.T) {
-	entries := []parser.SessionEntry{
+	entries := []types.SessionEntry{
 		{
 			Type:      "user",
 			UUID:      "early",
@@ -401,11 +399,10 @@ func TestApplyFilterTimeRange(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ApplyFilter(entries, tt.filter)
-			resultEntries, ok := result.([]parser.SessionEntry)
+			resultEntries, ok := result.([]types.SessionEntry)
 			require.True(t, ok)
 			assert.Equal(t, tt.wantCount, len(resultEntries))
 
-			// Verify UUIDs
 			var gotUUIDs []string
 			for _, e := range resultEntries {
 				gotUUIDs = append(gotUUIDs, e.UUID)
@@ -413,9 +410,4 @@ func TestApplyFilterTimeRange(t *testing.T) {
 			assert.ElementsMatch(t, tt.wantUUIDs, gotUUIDs)
 		})
 	}
-}
-
-// Helper function
-func boolPtr(b bool) *bool {
-	return &b
 }

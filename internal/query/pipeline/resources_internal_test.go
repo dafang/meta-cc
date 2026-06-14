@@ -1,80 +1,13 @@
-package query
+package pipeline
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yaleh/meta-cc/internal/parser"
-)
 
-// Helper function to create test entries
-func createTestEntries() []parser.SessionEntry {
-	return []parser.SessionEntry{
-		{
-			Type:       "user",
-			UUID:       "user-1",
-			Timestamp:  "2025-10-23T00:00:00Z",
-			SessionID:  "session-1",
-			ParentUUID: "parent-1",
-			GitBranch:  "main",
-			Message: &parser.Message{
-				Role: "user",
-				Content: []parser.ContentBlock{
-					{
-						Type: "text",
-						Text: "Read the file",
-					},
-				},
-			},
-		},
-		{
-			Type:       "assistant",
-			UUID:       "assistant-1",
-			Timestamp:  "2025-10-23T00:01:00Z",
-			SessionID:  "session-1",
-			ParentUUID: "user-1",
-			GitBranch:  "main",
-			Message: &parser.Message{
-				Role: "assistant",
-				Content: []parser.ContentBlock{
-					{
-						Type: "tool_use",
-						ToolUse: &parser.ToolUse{
-							ID:   "tool-1",
-							Name: "Read",
-							Input: map[string]interface{}{
-								"file_path": "/test/file.go",
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			Type:       "user",
-			UUID:       "user-2",
-			Timestamp:  "2025-10-23T00:02:00Z",
-			SessionID:  "session-1",
-			ParentUUID: "assistant-1",
-			GitBranch:  "main",
-			Message: &parser.Message{
-				Role: "user",
-				Content: []parser.ContentBlock{
-					{
-						Type: "tool_result",
-						ToolResult: &parser.ToolResult{
-							ToolUseID: "tool-1",
-							Content:   "file content",
-							IsError:   false,
-							Status:    "success",
-						},
-					},
-				},
-			},
-		},
-	}
-}
+	"github.com/yaleh/meta-cc/internal/types"
+)
 
 func TestSelectResource(t *testing.T) {
 	entries := createTestEntries()
@@ -82,29 +15,25 @@ func TestSelectResource(t *testing.T) {
 	tests := []struct {
 		name         string
 		resource     string
-		wantType     string
 		wantMinCount int
 		wantErr      bool
 	}{
 		{
 			name:         "select_entries",
 			resource:     "entries",
-			wantType:     "[]parser.SessionEntry",
 			wantMinCount: 3,
 			wantErr:      false,
 		},
 		{
 			name:         "select_messages",
 			resource:     "messages",
-			wantType:     "[]MessageView",
-			wantMinCount: 2, // 2 user messages, 1 assistant message with tool_use
+			wantMinCount: 2,
 			wantErr:      false,
 		},
 		{
 			name:         "select_tools",
 			resource:     "tools",
-			wantType:     "[]parser.ToolCall",
-			wantMinCount: 1, // 1 tool call (Read)
+			wantMinCount: 1,
 			wantErr:      false,
 		},
 		{
@@ -126,20 +55,19 @@ func TestSelectResource(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
-			// Check result count based on type
 			var count int
 			switch tt.resource {
 			case "entries":
-				entries, ok := result.([]parser.SessionEntry)
-				require.True(t, ok, "Result should be []parser.SessionEntry")
-				count = len(entries)
+				got, ok := result.([]types.SessionEntry)
+				require.True(t, ok, "Result should be []types.SessionEntry")
+				count = len(got)
 			case "messages":
 				messages, ok := result.([]MessageView)
 				require.True(t, ok, "Result should be []MessageView")
 				count = len(messages)
 			case "tools":
-				tools, ok := result.([]parser.ToolCall)
-				require.True(t, ok, "Result should be []parser.ToolCall")
+				tools, ok := result.([]types.ToolCall)
+				require.True(t, ok, "Result should be []types.ToolCall")
 				count = len(tools)
 			}
 
@@ -156,7 +84,6 @@ func TestExtractMessages(t *testing.T) {
 
 	require.NotEmpty(t, messages)
 
-	// Verify message structure
 	for _, msg := range messages {
 		assert.NotEmpty(t, msg.UUID)
 		assert.NotEmpty(t, msg.SessionID)
@@ -165,7 +92,6 @@ func TestExtractMessages(t *testing.T) {
 		assert.NotNil(t, msg.ContentBlocks)
 	}
 
-	// Verify we have both user and assistant messages
 	var hasUser, hasAssistant bool
 	for _, msg := range messages {
 		if msg.Role == "user" {
@@ -182,11 +108,10 @@ func TestExtractMessages(t *testing.T) {
 func TestExtractToolExecutions(t *testing.T) {
 	entries := createTestEntries()
 
-	tools := extractToolExecutions(entries)
+	tools := types.ExtractToolCalls(entries)
 
 	require.NotEmpty(t, tools)
 
-	// Verify tool execution structure
 	for _, tool := range tools {
 		assert.NotEmpty(t, tool.UUID)
 		assert.NotEmpty(t, tool.ToolName)
@@ -194,7 +119,6 @@ func TestExtractToolExecutions(t *testing.T) {
 		assert.NotNil(t, tool.Input)
 	}
 
-	// Verify we have the Read tool
 	var hasRead bool
 	for _, tool := range tools {
 		if tool.ToolName == "Read" {
@@ -212,17 +136,14 @@ func TestMessageView(t *testing.T) {
 
 	require.NotEmpty(t, messages)
 
-	// Test MessageView fields
 	msg := messages[0]
 
-	// Verify all required fields are populated
 	assert.NotEmpty(t, msg.UUID, "UUID should not be empty")
 	assert.NotEmpty(t, msg.SessionID, "SessionID should not be empty")
 	assert.NotEmpty(t, msg.Timestamp, "Timestamp should not be empty")
 	assert.NotEmpty(t, msg.Role, "Role should not be empty")
 	assert.NotEmpty(t, msg.ContentBlocks, "ContentBlocks should not be empty")
 
-	// Verify content is extracted
 	if msg.Role == "user" {
 		foundText := false
 		for _, block := range msg.ContentBlocks {
@@ -237,22 +158,21 @@ func TestMessageView(t *testing.T) {
 }
 
 func TestExtractMessagesEmptyInput(t *testing.T) {
-	messages := extractMessages([]parser.SessionEntry{})
+	messages := extractMessages([]types.SessionEntry{})
 	assert.Empty(t, messages, "Should return empty slice for empty input")
 }
 
 func TestExtractToolExecutionsEmptyInput(t *testing.T) {
-	tools := extractToolExecutions([]parser.SessionEntry{})
+	tools := types.ExtractToolCalls([]types.SessionEntry{})
 	assert.Empty(t, tools, "Should return empty slice for empty input")
 }
 
 func TestExtractMessagesNoMessages(t *testing.T) {
-	entries := []parser.SessionEntry{
+	entries := []types.SessionEntry{
 		{
 			Type:      "summary",
 			UUID:      "summary-1",
 			Timestamp: "2025-10-23T00:00:00Z",
-			// No Message field
 		},
 	}
 
