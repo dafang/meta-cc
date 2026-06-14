@@ -192,7 +192,7 @@ func (n *Normalizer) normalizeCodexToolResult(timestamp string, payload map[stri
 	output := stringify(payload["output"])
 	status, _ := firstString(payload, "status")
 	isError, _ := payload["is_error"].(bool)
-	if status != "" && status != "completed" && status != "success" {
+	if isCodexErrorStatus(status) {
 		isError = true
 	}
 	if errText, ok := firstString(payload, "error"); ok {
@@ -350,4 +350,13 @@ func ProjectPathInRecord(record map[string]interface{}, projectPath string) bool
 		return true
 	}
 	return false
+}
+
+func isCodexErrorStatus(status string) bool {
+	switch status {
+	case "", "completed", "success", "ok":
+		return false
+	default:
+		return true
+	}
 }

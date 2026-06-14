@@ -1,8 +1,10 @@
 package codex
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestDetectSchemaVersion(t *testing.T) {
@@ -55,5 +57,26 @@ func TestLoadTurnsFromRolloutLegacyCustomToolsAndTokenCount(t *testing.T) {
 	}
 	if usage.InputTokens != 100 || usage.OutputTokens != 30 || usage.CacheTokens != 20 {
 		t.Fatalf("total usage mismatch: %#v", usage)
+	}
+}
+
+func TestLoadTurnsFromRolloutTokenCountUsesEventTimestamp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "token-first.jsonl")
+	const eventTime = "2026-06-14T06:00:08Z"
+	content := `{"timestamp":"` + eventTime + `","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"cached_input_tokens":2,"output_tokens":3},"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":30}}}}` + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	turns, _, err := loadTurnsFromRollout(path, 100)
+	if err != nil {
+		t.Fatalf("load rollout: %v", err)
+	}
+	if len(turns) != 1 {
+		t.Fatalf("expected one token usage turn, got %#v", turns)
+	}
+	want, _ := time.Parse(time.RFC3339, eventTime)
+	if !turns[0].Timestamp.Equal(want) {
+		t.Fatalf("token_count timestamp = %s, want %s", turns[0].Timestamp.Format(time.RFC3339), eventTime)
 	}
 }

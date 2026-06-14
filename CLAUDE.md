@@ -37,20 +37,21 @@ A: Maximum 500 lines of code modifications per phase, 200 lines per stage. See [
 **Q: Should I use MCP or Slash Commands?**
 A: Quick rule: Natural questions → MCP | Repeated workflows → Slash. See [docs/guides/integration.md](docs/guides/integration.md).
 
-**Q: How do I query session data (v2.0)?**
-A: Use the unified `query` tool with jq filtering or convenience tools:
+**Q: How do I query session data?**
+A: Use convenience tools for common questions and the two-stage tools for custom jq:
 ```javascript
-// Unified interface
-query({resource: "tools", filter: {tool_status: "error"}})
-
 // Convenience tools
 query_tool_errors({limit: 10})
 query_token_usage({stats_first: true})
 
-// Raw jq for power users
-query_raw({jq_expression: '.[] | select(.tool_name == "Bash")'})
+// Custom jq over selected files
+execute_stage2_query({
+  files: ["/path/to/session.jsonl"],
+  filter: 'select(.type == "assistant")',
+  transform: '{timestamp, usage: .message.usage}'
+})
 ```
-See [MCP Query Tools Reference](docs/guides/mcp-query-tools.md) for complete tool documentation and [MCP Query Cookbook](docs/examples/mcp-query-cookbook.md) for 25+ examples.
+See [MCP Query Tools Reference](docs/guides/mcp-query-tools.md) and [Two-Stage Query Guide](docs/guides/two-stage-query-guide.md) for complete documentation.
 
 **Q: Why are my MCP query results in a temp file?**
 A: Results >8KB automatically use file_ref mode to avoid token limits. Read the file with the Read tool. This is **hybrid output mode** - queries return inline for small results (<8KB) and file_ref for large results (≥8KB). See [MCP Query Tools Reference](docs/guides/mcp-query-tools.md#hybrid-output-mode).
@@ -61,24 +62,31 @@ A: No, by default queries return all results (hybrid mode handles large data). O
 **Q: Which MCP query tool should I use?**
 A: Follow this decision tree:
 - **Common queries** → Use convenience tools (`query_tool_errors`, `query_token_usage`, etc.)
-- **Complex filtering** → Use `query` with `jq_filter`
-- **Maximum flexibility** → Use `query_raw` with raw jq expressions
-- **Backward compatibility** → Legacy tools still work (`query_tools`, `query_user_messages`, etc.)
-See [MCP Query Tools Reference](docs/guides/mcp-query-tools.md#best-practices) for detailed guidance.
+- **Search prompts/messages/tools** → Use `query_user_messages`, `query_tools`, or `query_tool_blocks`
+- **Maximum flexibility** → Use `get_session_directory` → `inspect_session_files` → `execute_stage2_query`
+- **Cross-provider history** → Pass `provider: "claude"`, `provider: "codex"`, or `provider: "all"` to convenience and analysis tools
+See [MCP Query Tools Reference](docs/guides/mcp-query-tools.md) for detailed guidance.
 
 **Q: How do I write jq expressions for MCP queries?**
 A: Start simple and add complexity:
 ```javascript
-// Step 1: Get all tools
-query({resource: "tools"})
+// Step 1: Select files
+const dir = await get_session_directory({scope: "project"})
 
-// Step 2: Filter by name
-query({resource: "tools", jq_filter: '.[] | select(.tool_name == "Bash")'})
+// Step 2: Filter by record shape
+execute_stage2_query({
+  files: dir.files,
+  filter: 'select(.type == "assistant")'
+})
 
-// Step 3: Add error filtering
-query({resource: "tools", jq_filter: '.[] | select(.tool_name == "Bash" and .status == "error")'})
+// Step 3: Transform output
+execute_stage2_query({
+  files: dir.files,
+  filter: 'select(.type == "user")',
+  transform: '{timestamp, content: .message.content}'
+})
 ```
-Test jq locally first: `echo '[{"tool":"Bash"}]' | jq '.[]'`. See [MCP Query Tools Reference](docs/guides/mcp-query-tools.md#jq-syntax-quick-reference) for common patterns.
+Test jq locally first: `echo '{"type":"user"}' | jq 'select(.type == "user")'`. See [Two-Stage Query Guide](docs/guides/two-stage-query-guide.md) for common patterns.
 
 **Q: How do I update plugin version?**
 A: Install git hooks (`./scripts/install/install-hooks.sh`) for automatic bumping, or use `./scripts/release/bump-plugin-version.sh [patch|minor|major]`. See [docs/guides/git-hooks.md](docs/guides/git-hooks.md).
@@ -282,26 +290,26 @@ make commit
 
 ### Query Session Data (via MCP)
 
-**Unified Query API (v2.0+)**:
+**Convenience tools**:
 ```javascript
-// Single composable tool
-query({
-  resource: "tools",
-  filter: {tool_name: "Read", tool_status: "error"}
+query_tool_errors({limit: 10})
+query_tools({tool: "Read", limit: 20})
+query_user_messages({pattern: "fix.*bug"})
+```
+
+**Two-stage jq**:
+```javascript
+const dir = await get_session_directory({scope: "project"})
+execute_stage2_query({
+  files: dir.files,
+  filter: 'select(.type == "assistant")',
+  limit: 20
 })
 ```
 
-**Legacy queries** (backward compatible):
-```
-get_session_stats()                      # Session statistics
-query_tools(status="error")              # Error tool calls
-query_user_messages(pattern="fix.*bug")  # Search user messages
-```
-
 **See**:
-- [Unified Query API Guide](docs/guides/unified-query-api.md) - New unified interface
-- [Migration Guide](docs/guides/migration-to-unified-query.md) - Migrate from legacy tools
-- [Query Cookbook](docs/examples/query-cookbook.md) - 10+ practical examples
+- [MCP Query Tools Reference](docs/guides/mcp-query-tools.md) - Current MCP tool reference
+- [Two-Stage Query Guide](docs/guides/two-stage-query-guide.md) - Custom jq workflow
 - [MCP Guide](docs/guides/mcp.md) - Complete MCP reference
 
 ### Update Plugin

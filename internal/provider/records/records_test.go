@@ -82,3 +82,32 @@ func TestNormalizeCodexSessionTokenUsageDoesNotCreateUsageRecord(t *testing.T) {
 		t.Fatalf("codex sqlite tokens_used should not become per-turn usage: %#v", message)
 	}
 }
+
+func TestNormalizeToolInputNullBecomesEmptyMap(t *testing.T) {
+	session := conversation.Session{
+		ID:       "codex-session",
+		Provider: conversation.ProviderCodex,
+		CWD:      "/tmp/project",
+	}
+	turns := []conversation.Turn{{
+		ID: "turn-1",
+		ToolCalls: []conversation.ToolCall{{
+			ID:    "call-null",
+			Name:  "empty_input",
+			Input: json.RawMessage(`null`),
+		}},
+		Timestamp: time.Unix(1700000000, 0).UTC(),
+	}}
+
+	got := Normalize(session, turns)
+	message := got[0]["message"].(map[string]interface{})
+	content := message["content"].([]interface{})
+	toolUse := content[0].(map[string]interface{})
+	input, ok := toolUse["input"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected non-nil input map, got %#v", toolUse["input"])
+	}
+	if len(input) != 0 {
+		t.Fatalf("expected empty input map, got %#v", input)
+	}
+}

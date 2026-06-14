@@ -116,6 +116,24 @@ func TestNormalizerLeavesClaudeRecordUnchanged(t *testing.T) {
 	}
 }
 
+func TestNormalizerTreatsCodexOKStatusAsSuccess(t *testing.T) {
+	normalizer := NewNormalizer()
+	entries, err := normalizer.NormalizeLine([]byte(`{"timestamp":"2026-06-14T06:00:00Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_ok","status":"ok","output":"done"}}`))
+	if err != nil {
+		t.Fatalf("NormalizeLine failed: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one normalized entry, got %d", len(entries))
+	}
+	block := contentBlock(t, entries[0])
+	if block["is_error"] != false {
+		t.Fatalf("status ok should not be an error: %#v", block)
+	}
+	if block["status"] != "ok" {
+		t.Fatalf("expected status ok to be preserved, got %#v", block)
+	}
+}
+
 func contentBlock(t *testing.T, entry map[string]interface{}) map[string]interface{} {
 	t.Helper()
 	message := entry["message"].(map[string]interface{})

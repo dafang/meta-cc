@@ -1,6 +1,8 @@
 package locator
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -216,12 +218,45 @@ func findProjectJSONLFilesRecursive(rootPath, projectPath string) ([]string, err
 	return matches, nil
 }
 
-func fileContains(path, needle string) bool {
-	data, err := os.ReadFile(path)
+func fileContains(path, projectPath string) bool {
+	if projectPath == "" {
+		return false
+	}
+	file, err := os.Open(path)
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(data), needle)
+	defer file.Close()
+
+	cleanProject := filepath.Clean(projectPath)
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		var record map[string]interface{}
+		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+			continue
+		}
+		if recordProjectPath(record, cleanProject) {
+			return true
+		}
+	}
+	return false
+}
+
+func recordProjectPath(record map[string]interface{}, cleanProject string) bool {
+	if cwd, ok := record["cwd"].(string); ok && filepath.Clean(cwd) == cleanProject {
+		return true
+	}
+	payload, ok := record["payload"].(map[string]interface{})
+	if !ok {
+		return false
+	}
+	for _, key := range []string{"cwd", "working_dir", "workingDir"} {
+		if cwd, ok := payload[key].(string); ok && filepath.Clean(cwd) == cleanProject {
+			return true
+		}
+	}
+	return false
 }
 
 func formatRoot(root SessionRoot) string {

@@ -268,6 +268,44 @@ func TestFromProjectPath_CodexSessionsFallback(t *testing.T) {
 	}
 }
 
+func TestFromProjectPath_CodexSessionsFallbackIgnoresMessageMentions(t *testing.T) {
+	t.Setenv(projectsRootEnv, "")
+	home := t.TempDir()
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("HOME", home)
+	t.Setenv(codexHomeEnv, codexHome)
+	projectPath := t.TempDir()
+	otherProject := t.TempDir()
+
+	sessionDir := filepath.Join(codexHome, "sessions", "nested")
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatalf("failed to create Codex sessions dir: %v", err)
+	}
+	mentionOnly := filepath.Join(sessionDir, "mention-only.jsonl")
+	matching := filepath.Join(sessionDir, "matching.jsonl")
+	if err := os.WriteFile(mentionOnly, []byte(`{"cwd":"`+otherProject+`","message":{"content":"please inspect `+projectPath+`"}}`), 0644); err != nil {
+		t.Fatalf("failed to write mention-only session: %v", err)
+	}
+	if err := os.WriteFile(matching, []byte(`{"payload":{"cwd":"`+projectPath+`"}}`), 0644); err != nil {
+		t.Fatalf("failed to write matching session: %v", err)
+	}
+	if err := os.Chtimes(mentionOnly, testutil.TimeFromUnix(3000), testutil.TimeFromUnix(3000)); err != nil {
+		t.Fatalf("failed to set mention-only times: %v", err)
+	}
+	if err := os.Chtimes(matching, testutil.TimeFromUnix(1000), testutil.TimeFromUnix(1000)); err != nil {
+		t.Fatalf("failed to set matching times: %v", err)
+	}
+
+	locator := NewSessionLocator()
+	path, err := locator.FromProjectPath(projectPath)
+	if err != nil {
+		t.Fatalf("Expected Codex sessions fallback to succeed, got: %v", err)
+	}
+	if path != matching {
+		t.Errorf("Expected structured cwd match %s, got %s", matching, path)
+	}
+}
+
 func TestFromProjectPath_RelativePath(t *testing.T) {
 	// Test that relative paths like "." are resolved to absolute paths
 	projectsRoot := setupProjectsRoot(t)

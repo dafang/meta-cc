@@ -164,7 +164,7 @@ func (b *turnBuilder) applyLegacy(line []byte) {
 			}
 			b.current.AssistantText += payload.Message
 		case "token_count":
-			b.applyTokenUsage(payload.Info.LastTokenUsage, payload.Info.TotalTokenUsage)
+			b.applyTokenUsage(event.Timestamp, payload.Info.LastTokenUsage, payload.Info.TotalTokenUsage)
 			return
 		default:
 			b.appendUnknown(line)
@@ -235,7 +235,7 @@ func (b *turnBuilder) applyLegacy(line []byte) {
 		case "reasoning":
 			return
 		case "token_count":
-			b.applyTokenUsage(envelope.Info.LastTokenUsage, envelope.Info.TotalTokenUsage)
+			b.applyTokenUsage(event.Timestamp, envelope.Info.LastTokenUsage, envelope.Info.TotalTokenUsage)
 			return
 		default:
 			b.appendUnknown(line)
@@ -252,8 +252,8 @@ type codexTokenUsage struct {
 	ReasoningOutputTokens int `json:"reasoning_output_tokens"`
 }
 
-func (b *turnBuilder) applyTokenUsage(last, total codexTokenUsage) {
-	b.ensureTurn("", time.Now().UTC().Format(time.RFC3339))
+func (b *turnBuilder) applyTokenUsage(timestamp string, last, total codexTokenUsage) {
+	b.ensureTurn("", timestamp)
 	if last.InputTokens != 0 || last.OutputTokens != 0 || last.CachedInputTokens != 0 || last.ReasoningOutputTokens != 0 {
 		b.current.TokenUsage = conversation.TokenUsage{
 			InputTokens:  last.InputTokens,

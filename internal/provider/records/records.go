@@ -85,13 +85,11 @@ func Normalize(session conversation.Session, turns []conversation.Turn) []map[st
 				content = append(content, map[string]interface{}{"type": "text", "text": turn.AssistantText})
 			}
 			for _, call := range turn.ToolCalls {
-				var input map[string]interface{}
-				_ = json.Unmarshal(call.Input, &input)
 				content = append(content, map[string]interface{}{
 					"type":  "tool_use",
 					"id":    call.ID,
 					"name":  call.Name,
-					"input": input,
+					"input": toolInput(call.Input),
 				})
 			}
 			message := map[string]interface{}{
@@ -154,4 +152,15 @@ func Normalize(session conversation.Session, turns []conversation.Turn) []map[st
 
 func hasUsage(usage conversation.TokenUsage) bool {
 	return usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.CacheTokens != 0
+}
+
+func toolInput(raw json.RawMessage) map[string]interface{} {
+	input := map[string]interface{}{}
+	if len(raw) == 0 {
+		return input
+	}
+	if err := json.Unmarshal(raw, &input); err != nil || input == nil {
+		return map[string]interface{}{}
+	}
+	return input
 }
