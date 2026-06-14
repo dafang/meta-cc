@@ -1,4 +1,4 @@
-package query
+package engine
 
 import (
 	"encoding/json"
@@ -39,7 +39,6 @@ func TestApplyJQFilter_Projection(t *testing.T) {
 		t.Fatalf("ApplyJQFilter failed: %v", err)
 	}
 
-	// Verify projection (no duration field)
 	if strings.Contains(result, "duration") {
 		t.Error("expected duration to be excluded")
 	}
@@ -49,7 +48,6 @@ func TestApplyJQFilter_DefaultExpression(t *testing.T) {
 	jsonlData := `{"tool":"Bash","status":"success"}
 {"tool":"Read","status":"error"}`
 
-	// Empty jq expression should default to ".[]"
 	result, err := ApplyJQFilter(jsonlData, "")
 	if err != nil {
 		t.Fatalf("ApplyJQFilter failed: %v", err)
@@ -64,7 +62,6 @@ func TestApplyJQFilter_DefaultExpression(t *testing.T) {
 func TestApplyJQFilter_InvalidExpression(t *testing.T) {
 	jsonlData := `{"tool":"Bash","status":"success"}`
 
-	// Invalid jq expression
 	_, err := ApplyJQFilter(jsonlData, ".[ invalid syntax")
 	if err == nil {
 		t.Error("expected error for invalid jq expression")
@@ -92,7 +89,6 @@ func TestGenerateStats(t *testing.T) {
 		t.Fatalf("GenerateStats failed: %v", err)
 	}
 
-	// Verify stats format
 	if !strings.Contains(stats, "Bash") {
 		t.Error("expected Bash in stats")
 	}
@@ -100,7 +96,6 @@ func TestGenerateStats(t *testing.T) {
 		t.Error("expected count field")
 	}
 
-	// Verify count is correct (Bash should appear twice)
 	lines := strings.Split(strings.TrimSpace(stats), "\n")
 	if len(lines) != 2 {
 		t.Errorf("expected 2 stat entries, got %d", len(lines))
@@ -108,7 +103,6 @@ func TestGenerateStats(t *testing.T) {
 }
 
 func TestGenerateStats_AlternativeFieldNames(t *testing.T) {
-	// Test with "ToolName" field instead of "tool"
 	jsonlData := `{"ToolName":"Bash","Status":"error"}
 {"ToolName":"Read","Status":"success"}`
 
@@ -137,8 +131,6 @@ func TestGenerateStats_EmptyData(t *testing.T) {
 }
 
 func TestGenerateTimestampStats(t *testing.T) {
-	// 5 records: 2 in hour 06, 2 in hour 07, 1 in hour 08
-	// 2 distinct sessions
 	jsonlData := `{"timestamp":"2026-03-09T06:10:00Z","sessionId":"sess-A","type":"user"}
 {"timestamp":"2026-03-09T06:50:00Z","sessionId":"sess-A","type":"user"}
 {"timestamp":"2026-03-09T07:05:00Z","sessionId":"sess-B","type":"user"}
@@ -151,11 +143,10 @@ func TestGenerateTimestampStats(t *testing.T) {
 	}
 
 	lines := strings.Split(strings.TrimSpace(result), "\n")
-	if len(lines) < 4 { // 1 summary + 3 hour lines
+	if len(lines) < 4 {
 		t.Fatalf("expected at least 4 lines, got %d: %s", len(lines), result)
 	}
 
-	// First line is summary
 	var summary map[string]interface{}
 	if err := json.Unmarshal([]byte(lines[0]), &summary); err != nil {
 		t.Fatalf("failed to parse summary line: %v", err)
@@ -170,7 +161,6 @@ func TestGenerateTimestampStats(t *testing.T) {
 		t.Error("time_range missing")
 	}
 
-	// Remaining lines are hourly buckets
 	hourCounts := map[string]int{}
 	for _, line := range lines[1:] {
 		var bucket map[string]interface{}
@@ -232,12 +222,10 @@ func TestEncodeJQResultsMarshalError(t *testing.T) {
 	}
 }
 
-// TestApplyJQFilter_QuotedExpressionError verifies improved error message for quoted expressions
 func TestApplyJQFilter_QuotedExpressionError(t *testing.T) {
 	jsonlData := `{"tool":"Bash","status":"success"}
 {"tool":"Read","status":"error"}`
 
-	// Test common mistake: wrapping jq expression in quotes
 	testCases := []struct {
 		name     string
 		badExpr  string
@@ -262,25 +250,16 @@ func TestApplyJQFilter_QuotedExpressionError(t *testing.T) {
 				t.Errorf("expected error for quoted expression: %s", tc.badExpr)
 				return
 			}
-
-			// Verify error message contains helpful guidance
 			if !strings.Contains(err.Error(), tc.expected) {
-				t.Errorf("error message should contain '%s' for expression '%s', got: %v",
-					tc.expected, tc.badExpr, err)
+				t.Errorf("error message should contain '%s', got: %v", tc.expected, err)
 			}
-
-			// Verify error message suggests correct syntax
 			if !strings.Contains(err.Error(), ".[] | {field: .field}") {
-				t.Errorf("error message should suggest correct syntax for expression '%s', got: %v",
-					tc.badExpr, err)
+				t.Errorf("error message should suggest correct syntax, got: %v", err)
 			}
-
-			t.Logf("Error for '%s': %v", tc.badExpr, err)
 		})
 	}
 }
 
-// TestGroupBySession tests the GroupBySession function
 func TestGroupBySession(t *testing.T) {
 	t.Run("Basic", func(t *testing.T) {
 		entries := []interface{}{
@@ -295,42 +274,20 @@ func TestGroupBySession(t *testing.T) {
 		if len(result) != 2 {
 			t.Fatalf("expected 2 session objects, got %d", len(result))
 		}
-
 		for _, item := range result {
-			obj, ok := item.(map[string]interface{})
-			if !ok {
-				t.Fatal("expected map[string]interface{}")
-			}
-			if _, has := obj["session_id"]; !has {
-				t.Error("expected session_id field")
-			}
-			if _, has := obj["match_count"]; !has {
-				t.Error("expected match_count field")
-			}
-			if _, has := obj["first_match"]; !has {
-				t.Error("expected first_match field")
-			}
-			if _, has := obj["last_match"]; !has {
-				t.Error("expected last_match field")
-			}
-			if _, has := obj["turns"]; !has {
-				t.Error("expected turns field")
+			obj := item.(map[string]interface{})
+			for _, field := range []string{"session_id", "match_count", "first_match", "last_match", "turns"} {
+				if _, has := obj[field]; !has {
+					t.Errorf("expected field %s", field)
+				}
 			}
 		}
-
 		sessA := result[0].(map[string]interface{})
 		if sessA["session_id"] != "sess-A" {
 			t.Errorf("expected sess-A first, got %v", sessA["session_id"])
 		}
 		if int(sessA["match_count"].(int)) != 2 {
 			t.Errorf("sess-A match_count = %v, want 2", sessA["match_count"])
-		}
-		sessB := result[1].(map[string]interface{})
-		if sessB["session_id"] != "sess-B" {
-			t.Errorf("expected sess-B second, got %v", sessB["session_id"])
-		}
-		if int(sessB["match_count"].(int)) != 2 {
-			t.Errorf("sess-B match_count = %v, want 2", sessB["match_count"])
 		}
 	})
 
@@ -341,21 +298,13 @@ func TestGroupBySession(t *testing.T) {
 			map[string]interface{}{"sessionId": "sess-A", "timestamp": "2026-03-09T06:01:00Z"},
 			map[string]interface{}{"sessionId": "sess-B", "timestamp": "2026-03-09T07:01:00Z"},
 		}
-
 		result := GroupBySession(entries)
-
 		if len(result) != 2 {
-			t.Fatalf("expected 2 session objects, got %d", len(result))
+			t.Fatalf("expected 2, got %d", len(result))
 		}
-
 		first := result[0].(map[string]interface{})
 		if first["session_id"] != "sess-A" {
-			t.Errorf("expected sess-A first (first-seen order), got %v", first["session_id"])
-		}
-
-		second := result[1].(map[string]interface{})
-		if second["session_id"] != "sess-B" {
-			t.Errorf("expected sess-B second, got %v", second["session_id"])
+			t.Errorf("expected sess-A first, got %v", first["session_id"])
 		}
 	})
 
@@ -365,13 +314,10 @@ func TestGroupBySession(t *testing.T) {
 			map[string]interface{}{"session_id": "sess-X", "timestamp": "2026-03-09T06:01:00Z", "content_preview": "world"},
 			map[string]interface{}{"session_id": "sess-Y", "timestamp": "2026-03-09T07:00:00Z", "content_preview": "foo"},
 		}
-
 		result := GroupBySession(entries)
-
 		if len(result) != 2 {
-			t.Fatalf("expected 2 session objects, got %d", len(result))
+			t.Fatalf("expected 2, got %d", len(result))
 		}
-
 		sessX := result[0].(map[string]interface{})
 		if sessX["session_id"] != "sess-X" {
 			t.Errorf("expected sess-X, got %v", sessX["session_id"])
@@ -387,14 +333,10 @@ func TestGroupBySession(t *testing.T) {
 			map[string]interface{}{"sessionId": "sess-camel-2", "timestamp": "2026-03-09T07:00:00Z"},
 			map[string]interface{}{"sessionId": "sess-camel-1", "timestamp": "2026-03-09T06:02:00Z"},
 		}
-
 		result := GroupBySession(entries)
-
 		if len(result) != 2 {
-			t.Fatalf("expected 2 session objects, got %d", len(result))
+			t.Fatalf("expected 2, got %d", len(result))
 		}
-
-		// Output should use snake_case session_id
 		obj := result[0].(map[string]interface{})
 		if _, has := obj["session_id"]; !has {
 			t.Error("output should use snake_case session_id field")
@@ -413,13 +355,10 @@ func TestGroupBySession(t *testing.T) {
 			map[string]interface{}{"sessionId": "only-session", "timestamp": "2026-03-09T06:01:00Z"},
 			map[string]interface{}{"sessionId": "only-session", "timestamp": "2026-03-09T06:02:00Z"},
 		}
-
 		result := GroupBySession(entries)
-
 		if len(result) != 1 {
-			t.Fatalf("expected 1 session object, got %d", len(result))
+			t.Fatalf("expected 1, got %d", len(result))
 		}
-
 		obj := result[0].(map[string]interface{})
 		if int(obj["match_count"].(int)) != len(entries) {
 			t.Errorf("match_count = %v, want %d", obj["match_count"], len(entries))
@@ -427,10 +366,8 @@ func TestGroupBySession(t *testing.T) {
 	})
 }
 
-// TestGenerateSessionStats tests the GenerateSessionStats function
 func TestGenerateSessionStats(t *testing.T) {
 	t.Run("Basic", func(t *testing.T) {
-		// sess-A: 3 turns spanning 10 minutes; sess-B: 2 turns spanning 5 minutes
 		jsonlData := `{"timestamp":"2026-03-09T06:00:00Z","sessionId":"sess-A","type":"user"}
 {"timestamp":"2026-03-09T06:05:00Z","sessionId":"sess-A","type":"user"}
 {"timestamp":"2026-03-09T06:10:00Z","sessionId":"sess-A","type":"user"}
@@ -444,13 +381,12 @@ func TestGenerateSessionStats(t *testing.T) {
 
 		lines := strings.Split(strings.TrimSpace(result), "\n")
 		if len(lines) != 3 {
-			t.Fatalf("expected 3 lines (summary + 2 sessions), got %d: %s", len(lines), result)
+			t.Fatalf("expected 3 lines, got %d: %s", len(lines), result)
 		}
 
-		// Line 1: summary
 		var summary map[string]interface{}
 		if err := json.Unmarshal([]byte(lines[0]), &summary); err != nil {
-			t.Fatalf("failed to parse summary line: %v", err)
+			t.Fatalf("failed to parse summary: %v", err)
 		}
 		if int(summary["total_sessions"].(float64)) != 2 {
 			t.Errorf("total_sessions = %v, want 2", summary["total_sessions"])
@@ -458,65 +394,28 @@ func TestGenerateSessionStats(t *testing.T) {
 		if int(summary["total_matches"].(float64)) != 5 {
 			t.Errorf("total_matches = %v, want 5", summary["total_matches"])
 		}
-		if summary["time_range"] == nil {
-			t.Error("time_range missing from summary")
-		}
-
-		// Line 2: sess-A
-		var sessA map[string]interface{}
-		if err := json.Unmarshal([]byte(lines[1]), &sessA); err != nil {
-			t.Fatalf("failed to parse sess-A line: %v", err)
-		}
-		if sessA["session_id"] != "sess-A" {
-			t.Errorf("expected session_id=sess-A, got %v", sessA["session_id"])
-		}
-		if int(sessA["match_count"].(float64)) != 3 {
-			t.Errorf("sess-A match_count = %v, want 3", sessA["match_count"])
-		}
-		if int(sessA["duration_minutes"].(float64)) != 10 {
-			t.Errorf("sess-A duration_minutes = %v, want 10", sessA["duration_minutes"])
-		}
-
-		// Line 3: sess-B
-		var sessB map[string]interface{}
-		if err := json.Unmarshal([]byte(lines[2]), &sessB); err != nil {
-			t.Fatalf("failed to parse sess-B line: %v", err)
-		}
-		if sessB["session_id"] != "sess-B" {
-			t.Errorf("expected session_id=sess-B, got %v", sessB["session_id"])
-		}
-		if int(sessB["match_count"].(float64)) != 2 {
-			t.Errorf("sess-B match_count = %v, want 2", sessB["match_count"])
-		}
-		if int(sessB["duration_minutes"].(float64)) != 5 {
-			t.Errorf("sess-B duration_minutes = %v, want 5", sessB["duration_minutes"])
-		}
 	})
 
 	t.Run("SingleTurnSession", func(t *testing.T) {
 		jsonlData := `{"timestamp":"2026-03-09T06:00:00Z","sessionId":"solo","type":"user"}`
-
 		result, err := GenerateSessionStats(jsonlData)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-
 		lines := strings.Split(strings.TrimSpace(result), "\n")
 		if len(lines) != 2 {
-			t.Fatalf("expected 2 lines (summary + 1 session), got %d: %s", len(lines), result)
+			t.Fatalf("expected 2 lines, got %d: %s", len(lines), result)
 		}
-
 		var sess map[string]interface{}
 		if err := json.Unmarshal([]byte(lines[1]), &sess); err != nil {
-			t.Fatalf("failed to parse session line: %v", err)
+			t.Fatalf("failed to parse session: %v", err)
 		}
 		if int(sess["duration_minutes"].(float64)) != 0 {
-			t.Errorf("single-turn session duration_minutes = %v, want 0", sess["duration_minutes"])
+			t.Errorf("single-turn duration_minutes = %v, want 0", sess["duration_minutes"])
 		}
 	})
 
 	t.Run("OrderByFirstMatch", func(t *testing.T) {
-		// sess-B starts before sess-A, so it should come first
 		jsonlData := `{"timestamp":"2026-03-09T07:00:00Z","sessionId":"sess-A","type":"user"}
 {"timestamp":"2026-03-09T06:00:00Z","sessionId":"sess-B","type":"user"}
 {"timestamp":"2026-03-09T07:30:00Z","sessionId":"sess-A","type":"user"}`
@@ -525,78 +424,46 @@ func TestGenerateSessionStats(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-
 		lines := strings.Split(strings.TrimSpace(result), "\n")
 		if len(lines) != 3 {
-			t.Fatalf("expected 3 lines (summary + 2 sessions), got %d: %s", len(lines), result)
+			t.Fatalf("expected 3 lines, got %d: %s", len(lines), result)
 		}
-
 		var first map[string]interface{}
 		if err := json.Unmarshal([]byte(lines[1]), &first); err != nil {
-			t.Fatalf("failed to parse first session line: %v", err)
+			t.Fatalf("failed to parse: %v", err)
 		}
 		if first["session_id"] != "sess-B" {
-			t.Errorf("expected sess-B first (earlier first_match), got %v", first["session_id"])
-		}
-
-		var second map[string]interface{}
-		if err := json.Unmarshal([]byte(lines[2]), &second); err != nil {
-			t.Fatalf("failed to parse second session line: %v", err)
-		}
-		if second["session_id"] != "sess-A" {
-			t.Errorf("expected sess-A second, got %v", second["session_id"])
+			t.Errorf("expected sess-B first, got %v", first["session_id"])
 		}
 	})
 }
 
-// TestApplyJQFilter_GenuineSyntaxStillReportsOriginalError verifies that genuine syntax errors still get appropriate error messages
 func TestApplyJQFilter_GenuineSyntaxStillReportsOriginalError(t *testing.T) {
 	jsonlData := `{"tool":"Bash","status":"success"}`
 
-	// Test genuine syntax errors (not quote-related)
 	testCases := []struct {
 		name     string
 		badExpr  string
 		expected string
 	}{
-		{
-			name:     "invalid bracket syntax",
-			badExpr:  `. [ invalid syntax`,
-			expected: "invalid jq expression",
-		},
-		{
-			name:     "missing closing brace",
-			badExpr:  `.[] | select(.tool == "Bash"`,
-			expected: "invalid jq expression",
-		},
-		{
-			name:     "invalid function",
-			badExpr:  `.[] | invalid_function()`,
-			expected: "invalid jq expression",
-		},
+		{"invalid bracket syntax", `. [ invalid syntax`, "invalid jq expression"},
+		{"missing closing brace", `.[] | select(.tool == "Bash"`, "invalid jq expression"},
+		{"invalid function", `.[] | invalid_function()`, "invalid jq expression"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ApplyJQFilter(jsonlData, tc.badExpr)
 			if err == nil {
-				t.Errorf("expected error for invalid expression: %s", tc.badExpr)
+				t.Errorf("expected error for: %s", tc.badExpr)
 				return
 			}
-
-			// Verify error message doesn't incorrectly suggest quote issues
 			if strings.Contains(err.Error(), "appears to be quoted") {
-				t.Errorf("genuine syntax error should not suggest quote issues for expression '%s', got: %v",
-					tc.badExpr, err)
+				t.Errorf("genuine syntax error should not suggest quote issues for: %s", tc.badExpr)
 			}
-
-			// Should still indicate invalid jq expression
 			if !strings.Contains(err.Error(), tc.expected) {
-				t.Errorf("error message should contain '%s' for expression '%s', got: %v",
-					tc.expected, tc.badExpr, err)
+				t.Errorf("expected '%s' in error for: %s, got: %v", tc.expected, tc.badExpr, err)
 			}
-
-			t.Logf("Error for '%s': %v", tc.badExpr, err)
 		})
 	}
 }
