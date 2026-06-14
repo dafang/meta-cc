@@ -1,0 +1,7 @@
+{"timestamp":"2026-06-14T11:07:06Z","type":"thread.started","payload":{"id":"sess-2"}}
+{"timestamp":"2026-06-14T11:07:07Z","type":"turn.started","payload":{"id":"turn-1"}}
+{"timestamp":"2026-06-14T11:07:08Z","type":"item.message","payload":{"role":"user","content":"find codex history"}}
+{"timestamp":"2026-06-14T11:07:09Z","type":"item.message","payload":{"role":"assistant","content":"querying history"}}
+{"timestamp":"2026-06-14T11:07:10Z","type":"item.tool_call","payload":{"id":"tool-1","name":"exec_command","input":{"cmd":"pwd"}}}
+{"timestamp":"2026-06-14T11:07:11Z","type":"item.tool_result","payload":{"id":"tool-1","output":"/tmp/project","is_error":false}}
+{"timestamp":"2026-06-14T11:07:12Z","type":"turn.completed","payload":{"id":"turn-1"}}

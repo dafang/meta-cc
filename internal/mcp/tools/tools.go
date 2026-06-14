@@ -20,6 +20,10 @@ func StandardToolParameters() map[string]Property {
 			Type:        "string",
 			Description: "Query scope: 'project' (default) or 'session'",
 		},
+		"provider": {
+			Type:        "string",
+			Description: `Provider filter: "claude" (default), "codex", or "all". Use "all" only when your jq filter is compatible with both providers.`,
+		},
 		"jq_filter": {
 			Type:        "string",
 			Description: "jq expression for filtering. Defaults to '.[]' when omitted. IMPORTANT: Do NOT wrap in quotes - use raw jq expression like: .[] | {field: .field}",

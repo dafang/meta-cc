@@ -90,6 +90,7 @@ func (e *ToolExecutor) HandleQueryToolBlocks(_ *config.Config, scope string, arg
 // ─── Private implementations ──────────────────────────────────────────────────
 
 func handleQueryUserMessages(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	pattern := GetStringParam(args, "pattern", "")
 	contentType := GetStringParam(args, "content_type", "string")
 	limit := GetIntParam(args, "limit", 0)
@@ -132,10 +133,11 @@ func handleQueryUserMessages(e *ToolExecutor, scope string, args map[string]inte
 		jqFilter += ` | select(.message.content | (startswith("<local-command-caveat>") or startswith("<command-name>") or startswith("<local-command-stdout>") or startswith("<task-notification>")) | not)`
 	}
 
-	return e.ExecuteQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
+	return e.ExecuteQueryWithTimeRangeForProvider(providerName, scope, jqFilter, limit, workingDir, tr)
 }
 
 func handleQueryTools(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	toolName := GetStringParam(args, "tool", "")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
@@ -147,29 +149,32 @@ func handleQueryTools(e *ToolExecutor, scope string, args map[string]interface{}
 		jqFilter = fmt.Sprintf(`%s | select(.message.content[] | select(.type == "tool_use" and .name == "%s"))`, jqFilter, escapedTool)
 	}
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
 func handleQueryToolErrors(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 
 	jqFilter := `select(.type == "user" and (.message.content | type == "array")) | ` +
 		`select(.message.content[] | select(.type == "tool_result" and .is_error == true))`
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
 func handleQueryTokenUsage(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 
 	jqFilter := `select(.type == "assistant" and has("message")) | select(.message | has("usage"))`
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
 func handleQueryConversationFlow(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 	sinceStr := GetStringParam(args, "since", "")
@@ -182,28 +187,31 @@ func handleQueryConversationFlow(e *ToolExecutor, scope string, args map[string]
 
 	jqFilter := `select(.type == "user" or .type == "assistant")`
 
-	return e.ExecuteQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
+	return e.ExecuteQueryWithTimeRangeForProvider(providerName, scope, jqFilter, limit, workingDir, tr)
 }
 
 func handleQuerySystemErrors(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 
 	jqFilter := `select(.type == "system" and .subtype == "api_error")`
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
 func handleQueryFileSnapshots(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 
 	jqFilter := `select(.type == "file-history-snapshot" and has("messageId"))`
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
 func handleQueryTimestamps(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
 	sinceStr := GetStringParam(args, "since", "")
@@ -216,10 +224,11 @@ func handleQueryTimestamps(e *ToolExecutor, scope string, args map[string]interf
 
 	jqFilter := `select(.timestamp != null)`
 
-	return e.ExecuteQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
+	return e.ExecuteQueryWithTimeRangeForProvider(providerName, scope, jqFilter, limit, workingDir, tr)
 }
 
 func handleQuerySummaries(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	keyword := GetStringParam(args, "keyword", "")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
@@ -231,10 +240,11 @@ func handleQuerySummaries(e *ToolExecutor, scope string, args map[string]interfa
 		jqFilter = fmt.Sprintf(`%s | select(.summary | test("%s"; "i"))`, jqFilter, escapedKeyword)
 	}
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
 func handleQueryToolBlocks(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {
+	providerName := GetStringParam(args, "provider", "claude")
 	blockType := GetStringParam(args, "block_type", "tool_use")
 	limit := GetIntParam(args, "limit", 0)
 	workingDir := GetStringParam(args, "working_dir", "")
@@ -250,7 +260,7 @@ func handleQueryToolBlocks(e *ToolExecutor, scope string, args map[string]interf
 		jqFilter = `select(.type == "user" and (.message.content | type == "array")) | .message.content[] | select(.type == "tool_result")`
 	}
 
-	return e.ExecuteQuery(scope, jqFilter, limit, workingDir)
+	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
 }
 
 // EscapeJQ escapes special characters in strings for jq expressions.

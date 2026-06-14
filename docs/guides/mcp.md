@@ -6,6 +6,8 @@ meta-cc provides a Model Context Protocol (MCP) Server that enables Claude Code 
 
 **New in v2.1.0**: [Two-stage query architecture](#two-stage-query-architecture-v21) for 100-600x performance improvements.
 
+**New in multi-provider support**: convenience query tools now accept `provider: "claude" | "codex" | "all"`. The default is `"claude"` to preserve existing behaviour. `provider="codex"` reads Codex CLI history from `~/.codex/state_5.sqlite` plus rollout JSONL files. `provider="all"` merges both sources and adds a `provider` field to returned records. `~/.codex/history.jsonl` is intentionally excluded from this feature.
+
 ### Quick Start
 
 **Prerequisites**:
@@ -48,7 +50,7 @@ Parameters are organized into 5 tiers, from highest to lowest priority:
 
 **Tier 5: Standard Parameters** (applied automatically)
 - Common across all query tools
-- Examples: `scope`, `jq_filter`, `stats_only`, `stats_first`, `output_format`, `inline_threshold_bytes`
+- Examples: `scope`, `provider`, `jq_filter`, `stats_only`, `stats_first`, `output_format`, `inline_threshold_bytes`
 - These parameters are added automatically by the MCP server (see Standard Parameters section)
 
 ### Why This Ordering?
@@ -87,6 +89,16 @@ meta-cc-mcp provides **16 standardized tools** for analyzing Claude Code session
 - `cleanup_temp_files` - Remove old temporary MCP files
 - `list_capabilities` - List capabilities by type (commands/prompts)
 - `get_capability` - Retrieve capability content with type support
+
+### Provider-Aware Queries
+
+All convenience query tools inherit the standard `provider` parameter:
+
+- `provider="claude"` keeps the current Claude Code behavior.
+- `provider="codex"` queries Codex CLI local history from `~/.codex/state_5.sqlite` and rollout files.
+- `provider="all"` merges both providers and adds a `provider` field to each returned record.
+
+When using `provider="all"`, prefer jq filters that check the `provider` field explicitly if you need to distinguish sources.
 
 ### Migration from v2.0
 
@@ -293,6 +305,8 @@ All convenience query tools (`query_user_messages`, `query_tools`, etc.) use **s
 3. **Session boundaries preserved**: Complete context maintained within each session
 4. **Limit applies across sessions**: But respects session boundaries when possible
 
+When `provider` is set to `all`, records from each provider are merged before jq filtering, so the `provider` field is the reliable way to tell Claude and Codex data apart.
+
 **Why Session-First?**
 
 - **Most common use case**: "What was I working on recently?" → Recent sessions matter most
@@ -381,11 +395,15 @@ await execute_stage2_query({
 - `tool` (string): Filter by tool name
 - `status` (string): Filter by "error" or "success"
 - `limit` (number): Maximum results (no limit by default)
+- `provider` (string): `claude` (default), `codex`, or `all`
 
 **Examples**:
 ```json
 // All Bash errors
 {"tool": "Bash", "status": "error", "limit": 10}
+
+// Codex-only tool calls
+{"provider": "codex", "limit": 10}
 
 // Error distribution by tool
 {
@@ -406,6 +424,7 @@ await execute_stage2_query({
 **Key Parameters**:
 - `pattern` (string, **required**): Regex pattern
 - `limit` (number): Maximum results
+- `provider` (string): `claude` (default), `codex`, or `all`
 - `max_message_length` (number): Deprecated - use hybrid mode instead
 - `content_summary` (boolean): Deprecated - use hybrid mode instead
 

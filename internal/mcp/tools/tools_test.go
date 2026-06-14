@@ -12,7 +12,7 @@ func TestStandardToolParameters(t *testing.T) {
 	params := tools.StandardToolParameters()
 
 	requiredParams := []string{
-		"scope", "jq_filter", "stats_only",
+		"scope", "provider", "jq_filter", "stats_only",
 		"stats_first", "inline_threshold_bytes", "output_format",
 	}
 

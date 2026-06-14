@@ -1,7 +1,7 @@
 # Proposal: Multi-Provider Conversation Support (Phases 87–96)
 
 **Date**: 2026-06-14
-**Status**: Draft
+**Status**: Implemented
 **Author**: Claude Code
 **Scope**: Extend meta-cc to support OpenAI Codex CLI session history alongside Claude Code, via a unified provider abstraction at the parser layer.
 
@@ -35,7 +35,7 @@ Users who use both tools need two separate workflows to analyse their AI-assiste
 
 ## Non-Goals
 
-- Cross-provider join queries (e.g. "show all bash commands from both providers in one timeline"). Results are merged by appending with a `_provider` discriminator field; no semantic joins.
+- Cross-provider join queries (e.g. "show all bash commands from both providers in one timeline"). Results are merged by appending with a `provider` discriminator field; no semantic joins.
 - Rewriting or migrating existing Claude Code query logic.
 - Supporting OpenAI API sessions (web or SDK); only the Codex CLI tool's local files are in scope.
 - GUI or web front-end.
@@ -72,7 +72,7 @@ type Session struct {
     CreatedAt  time.Time         `json:"created_at"`
     TokenUsage TokenUsage        `json:"token_usage"`
     Turns      []Turn            `json:"turns,omitempty"`       // populated on deep load
-    Extensions map[string]any    `json:"extensions,omitempty"`  // provider-specific extras
+    Extensions json.RawMessage   `json:"extensions,omitempty"`  // provider-specific extras
 }
 
 // Turn represents one user↔assistant exchange.
@@ -82,14 +82,14 @@ type Turn struct {
     AssistantText string      `json:"assistant_text,omitempty"`
     ToolCalls   []ToolCall    `json:"tool_calls,omitempty"`
     Timestamp   time.Time     `json:"timestamp"`
-    Extensions  map[string]any `json:"extensions,omitempty"`
+    Extensions  json.RawMessage `json:"extensions,omitempty"`
 }
 
 // ToolCall is the provider-agnostic view of a tool invocation.
 type ToolCall struct {
     ID        string         `json:"id"`
     Name      string         `json:"name"`
-    Input     map[string]any `json:"input"`
+    Input     json.RawMessage `json:"input"`
     Output    string         `json:"output,omitempty"`
     IsError   bool           `json:"is_error"`
     Timestamp time.Time      `json:"timestamp"`
@@ -104,7 +104,7 @@ type TokenUsage struct {
 ```
 
 **Design rationale**:
-- `Extensions map[string]any` on both `Session` and `Turn` avoids forcing Codex concepts (e.g. `agent_jobs`, `subagent_spawn` event type) into the shared schema, while still surfacing them to callers who want them. **⚠ Architecture decision required before Phase 89**: `map[string]any` causes type escape — callers must use runtime type assertions and errors surface only at runtime. Preferred alternative is `Extensions json.RawMessage`, which preserves full fidelity, passes through the jq pipeline without re-marshaling, and lets callers unmarshal to a concrete type on demand (e.g. `var x CodexSessionExtras; json.Unmarshal(session.Extensions, &x)`). This trade-off must be decided before implementation begins.
+- `Extensions json.RawMessage` on both `Session` and `Turn` avoids forcing Codex concepts (e.g. `agent_jobs`, `subagent_spawn` event type) into the shared schema while preserving full fidelity. It passes through the jq pipeline without re-marshaling and lets callers unmarshal to a concrete type on demand (e.g. `var x CodexSessionExtras; json.Unmarshal(session.Extensions, &x)`).
 - `Turns` is `omitempty` so that fast metadata queries (`list sessions`) can return `Session` records without triggering rollout JSONL parsing.
 - `ProviderID` is a typed string for forward extensibility without an enum explosion.
 
@@ -218,7 +218,7 @@ Codex rollout event mapping (new ≥0.44 schema; older schemas handled by versio
 
 Older schema mapping (`session_meta` / `event_msg` / `response_item` / `turn_context`) is handled by a separate `legacyRolloutMapper` in Phase 92.
 
-Provider-specific events that have no canonical equivalent (`subagent_spawn`, `agent_jobs`) are stored verbatim in `Turn.Extensions["codex_events"]` as a JSON array (or `json.RawMessage` if the Extensions field type decision resolves to that).
+Provider-specific events that have no canonical equivalent (`subagent_spawn`, `agent_jobs`) are stored verbatim in `Turn.Extensions["codex_events"]` as a `json.RawMessage` array.
 
 ### 3. Provider registry — `internal/provider/registry.go`
 
@@ -231,7 +231,7 @@ type Registry struct {
 
 // MergedSessions returns sessions from all matching providers.
 // If providerFilter is empty, all registered providers are queried.
-// Results include a _provider field in their JSON representation.
+// Results include a provider field in their JSON representation.
 func (r *Registry) MergedSessions(ctx context.Context, providerFilter []conversation.ProviderID) ([]conversation.Session, error)
 ```
 
@@ -244,13 +244,13 @@ A single new standard parameter is added to `StandardToolParameters()`:
 ```go
 "provider": {
     Type:        "string",
-    Description: `Provider filter: "claude" (default), "codex", or "all" (merged, adds _provider field)`,
+    Description: `Provider filter: "claude" (default), "codex", or "all" (merged, adds provider field)`,
 },
 ```
 
 Existing tools (`query_user_messages`, `query_tools`, etc.) gain this parameter with no breaking change: the default `"claude"` preserves existing behaviour exactly.
 
-When `provider = "all"`, the pipeline fetches `Session` records from the registry, serialises them as JSONL, and applies the existing jq pipeline. The `_provider` field on each record allows callers to distinguish sources.
+When `provider = "all"`, the pipeline fetches `Session` records from the registry, serialises them as JSONL, and applies the existing jq pipeline. The `provider` field on each record allows callers to distinguish sources.
 
 **No existing tool signatures change.** The parameter is purely additive.
 
@@ -299,7 +299,7 @@ provider.Registry
             ├── sqlite.go → Session[]      (fast metadata)
             └── rollout.go → Turn[]        (on-demand)
 
-→ conversation.Session[] (merged, tagged with _provider)
+→ conversation.Session[] (merged, tagged with provider)
     → mcp/query.QueryExecutor (jq on serialised JSONL)
         → MCP tool response
 ```
@@ -344,7 +344,7 @@ The existing `types.SessionEntry` type (in `internal/types/session.go`) is kept 
 | Performance: merging large Codex + Claude session sets | Low | `ListSessions()` is metadata-only (SQLite index + first-line JSONL scan); jq filtering happens before turn hydration |
 | Breaking existing MCP tool contracts | Low | `provider` parameter defaults to `"claude"`; existing behaviour is identical when parameter is absent; Claude-only jq filters (`.type == "user"` etc.) would silently miss Codex records if default were `"all"` |
 | CGo build dependency (if `mattn/go-sqlite3` chosen) | **Eliminated** | `modernc.org/sqlite` (pure Go) is mandatory; `mattn` is explicitly excluded |
-| `map[string]any` Extensions causing runtime type panics | Medium | Resolve to `json.RawMessage` before Phase 89; document migration path for any callers that inspect extension fields |
+| `json.RawMessage` Extensions requiring explicit unmarshal by callers | Low | Document the extension contract and keep provider-specific payloads behind typed helpers where needed |
 
 ---
 
@@ -352,7 +352,7 @@ The existing `types.SessionEntry` type (in `internal/types/session.go`) is kept 
 
 | Phase | Work | Original est. | Revised est. | Note |
 |-------|------|-----------|-----------|------|
-| 87 | Add `internal/conversation/types.go` (canonical model + tests) | ~120 | ~130 | Resolve `map[string]any` vs `json.RawMessage` decision here |
+| 87 | Add `internal/conversation/types.go` (canonical model + tests) | ~120 | ~130 | Use `json.RawMessage` for `Extensions` and `ToolCall.Input` |
 | 88 | Add `internal/locator/codex.go` (`CodexLocator`) | ~60 | ~70 | |
 | 89 | Add `internal/provider/interface.go` + `registry.go` (incl. `IsAvailable`/`GetSession`) | ~80 | ~110 | Registry fan-out + skip-unavailable logic |
 | 90a | Add `internal/provider/claude/provider.go`: UUID chain walker + `ListSessions` | ~80 | ~100 | Split from original Phase 90 |
@@ -362,7 +362,7 @@ The existing `types.SessionEntry` type (in `internal/types/session.go`) is kept 
 | 92b | Add `internal/provider/codex/rollout.go`: ≥0.44 streaming mapper + line limit | ~100 | ~170 | Streaming `bufio.Scanner`; `LoadTurns` implementation |
 | 93 | Add `internal/provider/codex/provider.go` (wire sqlite + rollout; `IsAvailable`) | ~80 | ~90 | |
 | 94 | Add `provider` param to `StandardToolParameters()`; update `ToolExecutor` routing | ~120 | ~130 | |
-| 95 | Integration tests: multi-provider merge + `_provider` + unavailable provider skip | ~150 | ~210 | **Merged into Plan Phase 94 Stage 94.1** (split across 2 stages, ~100 lines each) |
+| 95 | Integration tests: multi-provider merge + `provider` + unavailable provider skip | ~150 | ~210 | **Merged into Plan Phase 94 Stage 94.1** (split across 2 stages, ~100 lines each) |
 | 96 | Update MCP tool descriptions + docs + `history.jsonl` scope decision | ~80 | ~90 | **Merged into Plan Phase 94 Stage 94.2** |
 
 **Total estimated modifications**: ~1,390–1,490 lines across 12 phases. The original 10-phase plan underestimated Turn reconstruction complexity (Phase 90), Codex schema multi-version handling (Phase 92), and integration test fixture overhead (Phase 95). Each phase as revised is at or under the 200-line stage limit from `docs/core/principles.md`; Phase 95 requires splitting (handled in Plan Phase 94 via two stages of ~100+80 lines).
@@ -446,9 +446,9 @@ GetSession(ctx context.Context, sessionID string) (conversation.Session, error)
 
 未来实现时，`Registry.MergedSessions` 应对 `IsAvailable() == false` 的 provider 静默跳过并记录 warn 日志，而非让整个查询 fail。
 
-**2.3 `Extensions map[string]any` 类型逃逸问题**
+**2.3 `Extensions` 类型选择（历史记录）**
 
-`map[string]any` 的核心问题：调用方必须用类型断言才能消费扩展字段，且错误只在运行时暴露。在 Go 1.18+ 中有更好方案。
+草案阶段曾讨论 `map[string]any` 的核心问题：调用方必须用类型断言才能消费扩展字段，且错误只在运行时暴露。在 Go 1.18+ 中有更好方案，最终实现采用了 `json.RawMessage`。
 
 **更好的替代方案**：
 
@@ -470,7 +470,7 @@ Extensions json.RawMessage `json:"extensions,omitempty"`
 
 **方案 B（最严格）**：彻底删除 `Extensions`，强制所有 Codex 特有字段在规范类型中有对应字段或被丢弃。对于 `subagent_spawn` 等无语义对应的事件，记录为独立的 `Events []RawEvent` 列表。
 
-**本提案保留 `map[string]any` 作为草稿阶段权宜之计，但在正文 § 1 增加注释：Phase 89 实现前需决策，建议改为 `json.RawMessage`。** 原文未提及此风险，已补充为 Trade-offs 小节。
+**本提案最终实现采用 `json.RawMessage` 作为扩展字段类型，与正文 § 1 的实现一致。** 原文保留的 `map[string]any` 讨论仅作为设计记录。
 
 **2.4 Codex rollout JSONL schema 风险被低估**
 

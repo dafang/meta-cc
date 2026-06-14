@@ -40,9 +40,9 @@ MCP Simple E2E Test
 Binary: ./meta-cc-mcp
 ==========================================
 
-✓ PASSED - Found 15 tools
+✓ PASSED - Found 16 tools
 ✓ PASSED - Tool executed successfully
-⚠ get_session_directory not found (not implemented yet)
+✓ get_session_directory found
 ```
 
 ---
@@ -77,7 +77,7 @@ echo '{
   "method":"tools/call",
   "params":{
     "name":"query_tools",
-    "arguments":{"limit":10}
+    "arguments":{"provider":"codex","limit":10}
   }
 }' | ./meta-cc-mcp 2>&1 | grep '"jsonrpc"' | jq .
 
@@ -88,12 +88,12 @@ echo '{
   "method":"tools/call",
   "params":{
     "name":"query_user_messages",
-    "arguments":{"pattern":".*","limit":5}
+    "arguments":{"provider":"all","pattern":".*","limit":5}
   }
 }' | ./meta-cc-mcp 2>&1 | grep '"jsonrpc"' | jq .
 ```
 
-### 测试 Phase 27 新工具（实现后）
+### 测试 Phase 27 工具
 
 ```bash
 # get_session_directory

@@ -804,6 +804,21 @@ query({
 })
 ```
 
+### `provider` (string)
+Provider filter: `claude` (default), `codex`, or `all`
+
+- **`claude`**: Keep the existing Claude Code query path
+- **`codex`**: Query Codex CLI local history
+- **`all`**: Merge both providers and expose a `provider` field in each returned record
+
+**Example**:
+```javascript
+query_tools({
+  provider: "codex",
+  limit: 10
+})
+```
+
 ### `working_dir` (string)
 Override working directory for session lookup. Defaults to MCP server CWD.
 

@@ -484,7 +484,7 @@ func (p *CodexProvider) LoadTurns(ctx context.Context, id string) ([]conversatio
 ```go
 "provider": {
     Type:        "string",
-    Description: `Provider filter: "claude" (default), "codex", or "all" (merged results include _provider field).
+    Description: `Provider filter: "claude" (default), "codex", or "all" (merged results include provider field).
                   When "all", existing jq filters designed for Claude schema may not match Codex records.`,
     Enum:        []string{"claude", "codex", "all"},
 },
@@ -515,7 +515,7 @@ This guard runs *before* handler dispatch. When `provider == "codex"` or `provid
 **Dependencies**: Phase 93 (full pipeline complete)
 
 **Acceptance Criteria**:
-- Integration test: `provider="all"` returns merged sessions from both providers with `_provider` field
+- Integration test: `provider="all"` returns merged sessions from both providers with `provider` field
 - Integration test: unavailable provider skipped, other provider's results returned normally
 - Integration test: existing Claude-only query (`provider` absent) returns identical results to pre-Phase-87 behaviour
 - `go test -tags integration ./tests/integration/...` passes (skipped in `go test -short`)
