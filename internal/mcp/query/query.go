@@ -18,6 +18,7 @@ import (
 
 	"github.com/yaleh/meta-cc/internal/locator"
 	"github.com/yaleh/meta-cc/internal/parser"
+	"github.com/yaleh/meta-cc/internal/session"
 )
 
 // ParsedTimeRange specifies optional lower and upper bounds for timestamp filtering.
@@ -235,6 +236,7 @@ func (e *QueryExecutor) ProcessFile(ctx context.Context, filepath string, code *
 
 	var results []interface{}
 	r := bufio.NewReader(file)
+	normalizer := session.NewNormalizer()
 
 	for {
 		select {
@@ -255,8 +257,8 @@ func (e *QueryExecutor) ProcessFile(ctx context.Context, filepath string, code *
 			continue
 		}
 
-		var entry interface{}
-		if err := json.Unmarshal(trimmed, &entry); err != nil {
+		var rawEntry map[string]interface{}
+		if err := json.Unmarshal(trimmed, &rawEntry); err != nil {
 			if readErr == io.EOF {
 				break
 			}
@@ -266,17 +268,19 @@ func (e *QueryExecutor) ProcessFile(ctx context.Context, filepath string, code *
 			continue
 		}
 
-		iter := code.Run(entry)
-		for {
-			value, ok := iter.Next()
-			if !ok {
-				break
+		for _, entry := range normalizer.NormalizeRecord(rawEntry) {
+			iter := code.Run(entry)
+			for {
+				value, ok := iter.Next()
+				if !ok {
+					break
+				}
+				if err, ok := value.(error); ok {
+					_ = err
+					continue
+				}
+				results = append(results, value)
 			}
-			if err, ok := value.(error); ok {
-				_ = err
-				continue
-			}
-			results = append(results, value)
 		}
 
 		if readErr == io.EOF {
@@ -300,6 +304,7 @@ func (e *QueryExecutor) ProcessFileWithTimeRange(ctx context.Context, filepath s
 
 	var results []interface{}
 	r := bufio.NewReader(file)
+	normalizer := session.NewNormalizer()
 
 	for {
 		select {
@@ -320,8 +325,8 @@ func (e *QueryExecutor) ProcessFileWithTimeRange(ctx context.Context, filepath s
 			continue
 		}
 
-		var entry map[string]interface{}
-		if err := json.Unmarshal(trimmed, &entry); err != nil {
+		var rawEntry map[string]interface{}
+		if err := json.Unmarshal(trimmed, &rawEntry); err != nil {
 			if readErr == io.EOF {
 				break
 			}
@@ -331,42 +336,32 @@ func (e *QueryExecutor) ProcessFileWithTimeRange(ctx context.Context, filepath s
 			continue
 		}
 
-		if tr.Since != nil || tr.Until != nil {
-			if ts, ok := entry["timestamp"].(string); ok {
-				if t, err := time.Parse(time.RFC3339, ts); err == nil {
-					if tr.Since != nil && t.Before(*tr.Since) {
-						if readErr == io.EOF {
-							break
+		for _, entry := range normalizer.NormalizeRecord(rawEntry) {
+			if tr.Since != nil || tr.Until != nil {
+				if ts, ok := entry["timestamp"].(string); ok {
+					if t, err := time.Parse(time.RFC3339, ts); err == nil {
+						if tr.Since != nil && t.Before(*tr.Since) {
+							continue
 						}
-						if readErr != nil {
-							return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
+						if tr.Until != nil && !t.Before(*tr.Until) {
+							continue
 						}
-						continue
-					}
-					if tr.Until != nil && !t.Before(*tr.Until) {
-						if readErr == io.EOF {
-							break
-						}
-						if readErr != nil {
-							return results, fmt.Errorf("error reading file %s: %w", filepath, readErr)
-						}
-						continue
 					}
 				}
 			}
-		}
 
-		iter := code.Run(entry)
-		for {
-			value, ok := iter.Next()
-			if !ok {
-				break
+			iter := code.Run(entry)
+			for {
+				value, ok := iter.Next()
+				if !ok {
+					break
+				}
+				if err, ok := value.(error); ok {
+					_ = err
+					continue
+				}
+				results = append(results, value)
 			}
-			if err, ok := value.(error); ok {
-				_ = err
-				continue
-			}
-			results = append(results, value)
 		}
 
 		if readErr == io.EOF {
@@ -496,6 +491,7 @@ func LoadTurnsForSession(baseDir, sessionID string) ([]interface{}, error) {
 		}
 
 		r := bufio.NewReader(f)
+		normalizer := session.NewNormalizer()
 		for {
 			line, skipped, readErr := parser.ReadLineFiltered(r, parser.StrategyDefault)
 			if skipped {
@@ -512,9 +508,11 @@ func LoadTurnsForSession(baseDir, sessionID string) ([]interface{}, error) {
 				if lineStr != "" {
 					var obj map[string]interface{}
 					if err := json.Unmarshal([]byte(lineStr), &obj); err == nil {
-						sid, _ := obj["sessionId"].(string)
-						if sid == sessionID {
-							turns = append(turns, obj)
+						for _, normalized := range normalizer.NormalizeRecord(obj) {
+							sid, _ := normalized["sessionId"].(string)
+							if sid == sessionID {
+								turns = append(turns, normalized)
+							}
 						}
 					}
 				}

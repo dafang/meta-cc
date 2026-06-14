@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -358,6 +359,45 @@ invalid json line
 	// Should have 2 user entries (id=1 and id=3)
 	if len(results) != 2 {
 		t.Errorf("expected 2 results, got %d", len(results))
+	}
+}
+
+func TestProcessFile_NormalizesCodexJSONL(t *testing.T) {
+	tmpDir := t.TempDir()
+	file := filepath.Join(tmpDir, "codex.jsonl")
+	content := strings.Join([]string{
+		`{"timestamp":"2026-06-14T06:00:00Z","type":"session_meta","payload":{"id":"codex-session","cwd":"/tmp/project"}}`,
+		`{"timestamp":"2026-06-14T06:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"codex user query"}]}}`,
+		`{"timestamp":"2026-06-14T06:00:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_1","arguments":"{\"cmd\":\"go test ./...\"}"}}`,
+		`{"timestamp":"2026-06-14T06:00:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":"ok"}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	executor := querypkg.NewQueryExecutor(tmpDir)
+	userCode, err := executor.CompileExpression(`select(.type == "user" and (.message.content | type == "string"))`)
+	if err != nil {
+		t.Fatalf("CompileExpression user: %v", err)
+	}
+	userResults, err := executor.ProcessFile(context.Background(), file, userCode)
+	if err != nil {
+		t.Fatalf("ProcessFile user failed: %v", err)
+	}
+	if len(userResults) != 1 {
+		t.Fatalf("expected 1 user result, got %d", len(userResults))
+	}
+
+	toolCode, err := executor.CompileExpression(`select(.type == "assistant") | select(.message.content[] | .type == "tool_use")`)
+	if err != nil {
+		t.Fatalf("CompileExpression tool: %v", err)
+	}
+	toolResults, err := executor.ProcessFile(context.Background(), file, toolCode)
+	if err != nil {
+		t.Fatalf("ProcessFile tool failed: %v", err)
+	}
+	if len(toolResults) != 1 {
+		t.Fatalf("expected 1 tool result, got %d", len(toolResults))
 	}
 }
 

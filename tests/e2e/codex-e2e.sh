@@ -106,6 +106,7 @@ CLAUDE_DIR="$TMP_DIR/claude-home"
 INSTALL_DIR="$TMP_DIR/bin"
 SESSION_ID="codex-e2e-session"
 UNIQUE_MESSAGE="codex-e2e-message-$RANDOM-$(date +%s)"
+UNIQUE_ERROR="codex-e2e-error-$RANDOM-$(date +%s)"
 SESSION_DIR="$CODEX_HOME/sessions/2026/06/14"
 SESSION_FILE="$SESSION_DIR/$SESSION_ID.jsonl"
 
@@ -170,8 +171,13 @@ echo ""
 echo -e "${BLUE}Test 3: Query Codex transcript through real MCP JSON-RPC${NC}"
 mkdir -p "$SESSION_DIR"
 cat > "$SESSION_FILE" <<EOF
-{"type":"user","sessionId":"$SESSION_ID","cwd":"$PROJECT_DIR","timestamp":"2026-06-14T06:00:00Z","message":{"role":"user","content":"$UNIQUE_MESSAGE"}}
-{"type":"assistant","sessionId":"$SESSION_ID","cwd":"$PROJECT_DIR","timestamp":"2026-06-14T06:00:01Z","message":{"role":"assistant","content":[{"type":"text","text":"ack"}]}}
+{"timestamp":"2026-06-14T06:00:00Z","type":"session_meta","payload":{"id":"$SESSION_ID","cwd":"$PROJECT_DIR","model":"gpt-5"}}
+{"timestamp":"2026-06-14T06:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"$UNIQUE_MESSAGE"}]}}
+{"timestamp":"2026-06-14T06:00:02Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ack"}]}}
+{"timestamp":"2026-06-14T06:00:03Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_codex_e2e_1","arguments":"{\"cmd\":\"go test ./internal/session\",\"workdir\":\"$PROJECT_DIR\"}"}}
+{"timestamp":"2026-06-14T06:00:04Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_codex_e2e_1","output":"ok"}}
+{"timestamp":"2026-06-14T06:00:05Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","call_id":"call_codex_e2e_2","input":"*** Begin Patch\n*** End Patch"}}
+{"timestamp":"2026-06-14T06:00:06Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_codex_e2e_2","status":"failed","output":"$UNIQUE_ERROR"}}
 EOF
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
@@ -193,6 +199,35 @@ RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= 
 echo "$RESPONSE" | jq -e '.result.content[0].text | contains("'"$UNIQUE_MESSAGE"'")' >/dev/null \
     || fail "query_user_messages did not return the Codex transcript message"
 pass "query_user_messages returned data from the Codex transcript"
+
+REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
+    '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query_tools","arguments":{"scope":"project","working_dir":$cwd,"tool":"exec_command","limit":5}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    send_request "$REQUEST")
+[ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_tools"
+echo "$RESPONSE" | jq -e '.result.content[0].text | contains("exec_command")' >/dev/null \
+    || fail "query_tools did not return Codex function_call tool data"
+pass "query_tools returned Codex function_call data"
+
+REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" --arg error "$UNIQUE_ERROR" \
+    '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"query_tool_errors","arguments":{"scope":"project","working_dir":$cwd,"limit":5}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    send_request "$REQUEST")
+[ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_tool_errors"
+echo "$RESPONSE" | jq -e '.result.content[0].text | contains("'"$UNIQUE_ERROR"'")' >/dev/null \
+    || fail "query_tool_errors did not return Codex failed tool output"
+pass "query_tool_errors returned Codex failed tool output"
+
+REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
+    '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_work_patterns","arguments":{"scope":"project","working_dir":$cwd}}}')
+RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
+    send_request "$REQUEST")
+[ -n "$RESPONSE" ] || fail "no JSON-RPC response for get_work_patterns"
+echo "$RESPONSE" | jq -e '.result.content[0].text | fromjson | .tool_frequency[] | select(.tool_name == "exec_command" and .count == 1)' >/dev/null \
+    || fail "get_work_patterns did not count Codex exec_command tool usage"
+echo "$RESPONSE" | jq -e '.result.content[0].text | fromjson | .tool_frequency[] | select(.tool_name == "apply_patch" and .count == 1)' >/dev/null \
+    || fail "get_work_patterns did not count Codex apply_patch tool usage"
+pass "get_work_patterns counted Codex tool usage"
 echo ""
 
 echo "=========================================="

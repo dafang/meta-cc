@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/yaleh/meta-cc/internal/session"
 )
 
 // SessionParser 负责解析 Claude Code 会话文件
@@ -39,6 +41,7 @@ func (p *SessionParser) ParseEntries() ([]SessionEntry, error) {
 	var entries []SessionEntry
 	r := bufio.NewReader(file)
 	lineNum := 0
+	normalizer := session.NewNormalizer()
 
 	for {
 		line, skipped, err := ReadLineFiltered(r, StrategyDefault)
@@ -51,15 +54,27 @@ func (p *SessionParser) ParseEntries() ([]SessionEntry, error) {
 
 		lineNum++
 
-		// 解析 JSON 为 SessionEntry
-		var entry SessionEntry
-		if jsonErr := json.Unmarshal(bytes.TrimRight(line, "\n"), &entry); jsonErr != nil {
+		normalized, jsonErr := normalizer.NormalizeLine(bytes.TrimRight(line, "\n"))
+		if jsonErr != nil {
 			return nil, fmt.Errorf("failed to parse line %d: %w", lineNum, jsonErr)
 		}
 
-		// 仅保留消息类型
-		if entry.IsMessage() {
-			entries = append(entries, entry)
+		for _, normalizedEntry := range normalized {
+			data, marshalErr := json.Marshal(normalizedEntry)
+			if marshalErr != nil {
+				return nil, fmt.Errorf("failed to normalize line %d: %w", lineNum, marshalErr)
+			}
+
+			// 解析 JSON 为 SessionEntry
+			var entry SessionEntry
+			if unmarshalErr := json.Unmarshal(data, &entry); unmarshalErr != nil {
+				return nil, fmt.Errorf("failed to parse normalized line %d: %w", lineNum, unmarshalErr)
+			}
+
+			// 仅保留消息类型
+			if entry.IsMessage() {
+				entries = append(entries, entry)
+			}
 		}
 
 		if err == io.EOF {
@@ -77,6 +92,7 @@ func (p *SessionParser) ParseEntries() ([]SessionEntry, error) {
 func ParseEntriesFromContent(content string) ([]SessionEntry, error) {
 	var entries []SessionEntry
 	lines := strings.Split(content, "\n")
+	normalizer := session.NewNormalizer()
 
 	for lineNum, line := range lines {
 		// 跳过空行
@@ -84,14 +100,25 @@ func ParseEntriesFromContent(content string) ([]SessionEntry, error) {
 			continue
 		}
 
-		var entry SessionEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+		normalized, err := normalizer.NormalizeLine([]byte(line))
+		if err != nil {
 			return nil, fmt.Errorf("failed to parse line %d: %w", lineNum+1, err)
 		}
 
-		// 仅保留消息类型
-		if entry.IsMessage() {
-			entries = append(entries, entry)
+		for _, normalizedEntry := range normalized {
+			data, marshalErr := json.Marshal(normalizedEntry)
+			if marshalErr != nil {
+				return nil, fmt.Errorf("failed to normalize line %d: %w", lineNum+1, marshalErr)
+			}
+			var entry SessionEntry
+			if unmarshalErr := json.Unmarshal(data, &entry); unmarshalErr != nil {
+				return nil, fmt.Errorf("failed to parse normalized line %d: %w", lineNum+1, unmarshalErr)
+			}
+
+			// 仅保留消息类型
+			if entry.IsMessage() {
+				entries = append(entries, entry)
+			}
 		}
 	}
 

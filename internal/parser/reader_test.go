@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/yaleh/meta-cc/internal/testutil"
@@ -80,6 +81,34 @@ func TestParseSession_ValidFile(t *testing.T) {
 	}
 	if entry2.Message.Content[0].Type != "tool_result" {
 		t.Errorf("Expected type 'tool_result', got '%s'", entry2.Message.Content[0].Type)
+	}
+}
+
+func TestParseEntriesFromContent_CodexJSONL(t *testing.T) {
+	content := strings.Join([]string{
+		`{"timestamp":"2026-06-14T06:00:00Z","type":"session_meta","payload":{"id":"codex-session","cwd":"/tmp/project"}}`,
+		`{"timestamp":"2026-06-14T06:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"codex parity"}]}}`,
+		`{"timestamp":"2026-06-14T06:00:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_1","arguments":"{\"cmd\":\"go test ./...\",\"workdir\":\"/tmp/project\"}"}}`,
+		`{"timestamp":"2026-06-14T06:00:03Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":"ok"}}`,
+	}, "\n")
+
+	entries, err := ParseEntriesFromContent(content)
+	if err != nil {
+		t.Fatalf("ParseEntriesFromContent failed: %v", err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("expected 3 message entries, got %d", len(entries))
+	}
+	if entries[0].Type != "user" || entries[0].Message.Content[0].Text != "codex parity" {
+		t.Fatalf("unexpected user entry: %#v", entries[0])
+	}
+
+	toolCalls := ExtractToolCalls(entries)
+	if len(toolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(toolCalls))
+	}
+	if toolCalls[0].ToolName != "exec_command" || toolCalls[0].Input["cmd"] != "go test ./..." {
+		t.Fatalf("unexpected tool call: %#v", toolCalls[0])
 	}
 }
 

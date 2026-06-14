@@ -69,6 +69,34 @@ func TestExecuteStage2Query_BasicFilter(t *testing.T) {
 	}
 }
 
+func TestExecuteStage2Query_NormalizesCodexJSONL(t *testing.T) {
+	tempDir := t.TempDir()
+	testFile := filepath.Join(tempDir, "codex.jsonl")
+	testData := strings.Join([]string{
+		`{"timestamp":"2026-06-14T06:00:00Z","type":"session_meta","payload":{"id":"codex-session","cwd":"/tmp/project"}}`,
+		`{"timestamp":"2026-06-14T06:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"codex stage2"}]}}`,
+		`{"timestamp":"2026-06-14T06:00:02Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call_1","arguments":"{\"cmd\":\"go test ./...\"}"}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(testFile, []byte(testData), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	result, err := ExecuteStage2Query(&Stage2Query{
+		Files:     []string{testFile},
+		Filter:    `select(.type == "assistant") | select(.message.content[] | .type == "tool_use")`,
+		Transform: `.message.content[] | select(.type == "tool_use") | .name`,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteStage2Query failed: %v", err)
+	}
+	if len(result.Results) != 1 || result.Results[0] != "exec_command" {
+		t.Fatalf("expected exec_command tool result, got %#v", result.Results)
+	}
+	if result.Metadata.TotalRecordsScanned != 2 {
+		t.Fatalf("expected 2 normalized records scanned, got %d", result.Metadata.TotalRecordsScanned)
+	}
+}
+
 func TestExecuteStage2Query_FilterAndSort(t *testing.T) {
 	// Test case 2: Filter + sort
 	tempDir := t.TempDir()
