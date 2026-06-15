@@ -441,12 +441,12 @@ test-all: test test-e2e-mcp test-e2e-codex
 
 test-coverage: build
 	@echo "Running tests with coverage..."
-	$(GOTEST) -short -v -coverprofile=coverage.out ./...
+	$(GOTEST) -short -v -coverpkg=./... -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 test-coverage-full: build
 	@echo "Running tests with coverage (including E2E and slow tests)..."
-	$(GOTEST) -v -coverprofile=coverage.out ./...
+	$(GOTEST) -v -coverpkg=./... -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 metrics-mcp:
@@ -611,7 +611,7 @@ install-pre-commit:
 	@bash scripts/install/install-pre-commit.sh
 
 test-coverage-check:
-	@$(GOTEST) -coverprofile=coverage.out ./... > /dev/null 2>&1
+	@$(GOTEST) -coverpkg=./... -coverprofile=coverage.out ./... > /dev/null 2>&1
 	@bash scripts/checks/check-coverage.sh 75
 
 lint-fix:
