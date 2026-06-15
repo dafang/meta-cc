@@ -542,10 +542,10 @@ check-no-scanner:
 lint: fmt vet lint-errors lint-error-handling lint-markdown check-no-scanner
 	@echo "Running static analysis..."
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./... || echo "⚠️ golangci-lint issues found (non-blocking)"; \
+		golangci-lint run ./...; \
 	else \
 		echo "golangci-lint not found. Install with:"; \
-		echo "  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+		echo "  go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8"; \
 		echo "Skipping lint checks..."; \
 	fi
 
@@ -620,7 +620,7 @@ lint-fix:
 		golangci-lint run --fix ./...; \
 	else \
 		echo "golangci-lint not found. Install with:"; \
-		echo "  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+		echo "  go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8"; \
 		exit 1; \
 	fi
 

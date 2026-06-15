@@ -287,7 +287,7 @@ func formatRoot(root SessionRoot) string {
 //
 // Note: Resolves symlinks to ensure consistent hashing across platforms.
 // On macOS, /var is a symlink to /private/var, so we resolve it before hashing.
-func pathToHash(path string) string {
+func PathToHash(path string) string {
 	// Handle empty path edge case
 	if path == "" {
 		return ""
@@ -308,4 +308,8 @@ func pathToHash(path string) string {
 	// Finally replace colons (Windows drive letters like C:)
 	hash = strings.ReplaceAll(hash, ":", "-")
 	return hash
+}
+
+func pathToHash(path string) string {
+	return PathToHash(path)
 }

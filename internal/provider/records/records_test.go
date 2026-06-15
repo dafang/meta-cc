@@ -111,3 +111,20 @@ func TestNormalizeToolInputNullBecomesEmptyMap(t *testing.T) {
 		t.Fatalf("expected empty input map, got %#v", input)
 	}
 }
+
+func TestFilterSessionsForScopeDoesNotMutateInput(t *testing.T) {
+	sessions := []conversation.Session{
+		{ID: "keep", Provider: conversation.ProviderCodex, CWD: "/project", CreatedAt: time.Unix(2, 0)},
+		{ID: "drop", Provider: conversation.ProviderCodex, CWD: "/other", CreatedAt: time.Unix(1, 0)},
+	}
+	originalSecond := sessions[1]
+
+	filtered := FilterSessionsForScope(sessions, "project", "/project", conversation.ProviderCodex)
+
+	if len(filtered) != 1 || filtered[0].ID != "keep" {
+		t.Fatalf("unexpected filtered sessions: %#v", filtered)
+	}
+	if sessions[1].ID != originalSecond.ID || sessions[1].CWD != originalSecond.CWD || !sessions[1].CreatedAt.Equal(originalSecond.CreatedAt) {
+		t.Fatalf("FilterSessionsForScope mutated input slice: got %#v, want %#v", sessions[1], originalSecond)
+	}
+}

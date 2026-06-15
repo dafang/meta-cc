@@ -39,7 +39,7 @@ func Build(ctx context.Context, registry *providerpkg.Registry, filters []conver
 }
 
 func FilterSessionsForScope(sessions []conversation.Session, scope, projectPath string, providerID conversation.ProviderID) []conversation.Session {
-	filtered := sessions[:0]
+	filtered := make([]conversation.Session, 0, len(sessions))
 	for _, session := range sessions {
 		if providerID == conversation.ProviderCodex && scope == "project" && session.CWD != "" && projectPath != "" && session.CWD != projectPath {
 			continue

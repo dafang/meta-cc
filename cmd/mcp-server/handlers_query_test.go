@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/yaleh/meta-cc/internal/locator"
 	querypkg "github.com/yaleh/meta-cc/internal/mcp/query"
 )
 
@@ -438,7 +439,7 @@ func setupTimeFilterFixture(t *testing.T) (string, *ToolExecutor, func()) {
 
 	// Use a stable project path (a temp dir that will be the "project root")
 	projectDir := t.TempDir()
-	hash := testProjectHash(projectDir)
+	hash := locator.PathToHash(projectDir)
 
 	// Create META_CC_PROJECTS_ROOT structure
 	projectsRoot := t.TempDir()
@@ -622,7 +623,7 @@ func setupExcludeSystemFixture(t *testing.T) (string, *ToolExecutor, func()) {
 	t.Helper()
 
 	projectDir := t.TempDir()
-	hash := testProjectHash(projectDir)
+	hash := locator.PathToHash(projectDir)
 
 	projectsRoot := t.TempDir()
 	sessionDir := filepath.Join(projectsRoot, hash)
@@ -774,7 +775,7 @@ func TestLoadTurnsForSession_MultipleFiles(t *testing.T) {
 // is silently ignored when content_type is "array".
 func TestExcludeSystemMessages_NoErrorOnArrayType(t *testing.T) {
 	projectDir := t.TempDir()
-	hash := testProjectHash(projectDir)
+	hash := locator.PathToHash(projectDir)
 
 	projectsRoot := t.TempDir()
 	sessionDir := filepath.Join(projectsRoot, hash)

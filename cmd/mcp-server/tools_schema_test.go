@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -234,6 +235,7 @@ func TestExecuteTool_UnknownParameterReturnsError(t *testing.T) {
 
 func TestExecuteTool_ValidParameterSucceeds(t *testing.T) {
 	toolSchemaIndex = nil
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex-home"))
 
 	executor := NewToolExecutor()
 	cfg, err := config.Load()
@@ -278,6 +280,7 @@ func TestExecuteTool_InvalidScopeReturnsError(t *testing.T) {
 
 func TestExecuteTool_ValidScopeSucceeds(t *testing.T) {
 	toolSchemaIndex = nil
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex-home"))
 
 	executor := NewToolExecutor()
 	cfg, err := config.Load()

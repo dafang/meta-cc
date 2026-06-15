@@ -125,8 +125,8 @@ func TestGetQueryBaseDirSessionScopeNoSessions(t *testing.T) {
 	}
 
 	// Override home directory
-	os.Setenv("META_CC_PROJECTS_ROOT", filepath.Join(tempDir, ".claude", "projects"))
-	defer os.Unsetenv("META_CC_PROJECTS_ROOT")
+	t.Setenv("META_CC_PROJECTS_ROOT", filepath.Join(tempDir, ".claude", "projects"))
+	t.Setenv("CODEX_HOME", filepath.Join(tempDir, "codex-home"))
 
 	// Test session scope with no sessions - should return error
 	_, err = getQueryBaseDir("session", "")

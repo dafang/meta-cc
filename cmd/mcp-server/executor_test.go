@@ -1077,6 +1077,8 @@ func TestPreviewLengthParameter(t *testing.T) {
 // TestShortcutQueryToolsRegistered verifies that all 10 shortcut query tools are still registered
 // Phase 27 Stage 27.1: Preserve 10 shortcut tools
 func TestShortcutQueryToolsRegistered(t *testing.T) {
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex-home"))
+
 	shortcutTools := []string{
 		"query_user_messages",
 		"query_tools",
