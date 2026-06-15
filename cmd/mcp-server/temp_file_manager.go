@@ -4,11 +4,6 @@ import (
 	responsepkg "github.com/yaleh/meta-cc/internal/mcp/response"
 )
 
-// getSessionCacheDir returns the session-scoped cache directory
-func getSessionCacheDir() (string, error) {
-	return responsepkg.GetSessionCacheDir()
-}
-
 // CleanupSessionCache removes the session cache directory
 func CleanupSessionCache() error {
 	return responsepkg.CleanupSessionCache()

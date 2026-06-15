@@ -20,12 +20,6 @@ func testConfig() *config.Config {
 	}
 }
 
-// helpers
-
-func makeRecord(fields map[string]interface{}) interface{} {
-	return fields
-}
-
 // ─── InjectWarnings ───────────────────────────────────────────────────────────
 
 func TestInjectWarnings_NoWarnings(t *testing.T) {

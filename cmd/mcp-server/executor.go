@@ -1,8 +1,6 @@
 package main
 
 import (
-	"time"
-
 	"github.com/yaleh/meta-cc/internal/config"
 	execpkg "github.com/yaleh/meta-cc/internal/mcp/executor"
 	filterspkg "github.com/yaleh/meta-cc/internal/mcp/filters"
@@ -60,18 +58,6 @@ func NewToolExecutor() *ToolExecutor {
 // ExecuteTool delegates to the internal executor.
 func (e *ToolExecutor) ExecuteTool(cfg *config.Config, toolName string, args map[string]interface{}) (string, error) {
 	return e.ToolExecutor.ExecuteTool(cfg, toolName, args)
-}
-
-func determineScope(toolName string, args map[string]interface{}) string {
-	return execpkg.DetermineScope(toolName, args)
-}
-
-func recordToolSuccess(toolName, scope string, start time.Time) {
-	execpkg.RecordToolSuccess(toolName, scope, start)
-}
-
-func recordToolFailure(toolName, scope string, start time.Time, errorType string) {
-	execpkg.RecordToolFailure(toolName, scope, start, errorType)
 }
 
 // Helper functions - delegate to executor package

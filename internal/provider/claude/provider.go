@@ -198,15 +198,6 @@ func parseClaudeEntries(file string) ([]types.SessionEntry, error) {
 	return entries, nil
 }
 
-func buildUUIDGraph(entries []types.SessionEntry) map[string]*types.SessionEntry {
-	graph := make(map[string]*types.SessionEntry, len(entries))
-	for i := range entries {
-		entry := entries[i]
-		graph[entry.UUID] = &entry
-	}
-	return graph
-}
-
 func extractClaudeUsage(usage map[string]interface{}) conversation.TokenUsage {
 	return conversation.TokenUsage{
 		InputTokens:  intFromMap(usage, "input_tokens"),

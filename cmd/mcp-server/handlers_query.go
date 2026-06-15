@@ -14,12 +14,6 @@ func (e *ToolExecutor) executeQuery(scope string, jqFilter string, limit int, wo
 	return e.ToolExecutor.ExecuteQuery(scope, jqFilter, limit, workingDir)
 }
 
-// executeQueryWithTimeRange is like executeQuery but applies time-range filtering.
-// Delegates to internal/mcp/executor.ToolExecutor.ExecuteQueryWithTimeRange.
-func (e *ToolExecutor) executeQueryWithTimeRange(scope string, jqFilter string, limit int, workingDir string, tr querypkg.ParsedTimeRange) (querypkg.QueryResult, error) {
-	return e.ToolExecutor.ExecuteQueryWithTimeRange(scope, jqFilter, limit, workingDir, tr)
-}
-
 // getQueryBaseDir delegates to query package
 func getQueryBaseDir(scope, workingDir string) (string, error) {
 	return querypkg.GetQueryBaseDir(scope, workingDir)
