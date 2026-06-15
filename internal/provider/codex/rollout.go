@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/yaleh/meta-cc/internal/conversation"
+	"github.com/yaleh/meta-cc/internal/parser"
 )
 
 type schemaVersion int
@@ -39,8 +41,7 @@ func loadTurnsFromRollout(path string, maxLines int) ([]conversation.Turn, conve
 	}
 	defer f.Close()
 
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 1<<20), 1<<20)
+	reader := bufio.NewReader(f)
 	var (
 		lineCount int
 		version   schemaVersion
@@ -48,8 +49,14 @@ func loadTurnsFromRollout(path string, maxLines int) ([]conversation.Turn, conve
 		builder   = newTurnBuilder()
 	)
 
-	for scanner.Scan() {
-		line := append([]byte(nil), scanner.Bytes()...)
+	for {
+		line, _, readErr := parser.ReadLineFiltered(reader, parser.StrategyDefault)
+		if len(line) == 0 && readErr == io.EOF {
+			break
+		}
+		if readErr != nil && readErr != io.EOF {
+			return nil, conversation.TokenUsage{}, readErr
+		}
 		lineCount++
 		if lineCount > maxLines {
 			slog.Warn("codex rollout truncated", "path", path, "max_lines", maxLines)
@@ -64,9 +71,9 @@ func loadTurnsFromRollout(path string, maxLines int) ([]conversation.Turn, conve
 		} else {
 			builder.applyLegacy(line)
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, conversation.TokenUsage{}, err
+		if readErr == io.EOF {
+			break
+		}
 	}
 	builder.flush()
 	return builder.turns, builder.totalTokenUsage, nil

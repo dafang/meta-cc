@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/yaleh/meta-cc/internal/parser"
 )
 
 // FromSessionID 通过会话 ID 查找会话文件
@@ -229,15 +232,27 @@ func fileContains(path, projectPath string) bool {
 	defer file.Close()
 
 	cleanProject := filepath.Clean(projectPath)
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-	for scanner.Scan() {
+	reader := bufio.NewReader(file)
+	for {
+		line, _, readErr := parser.ReadLineFiltered(reader, parser.StrategyDefault)
+		if len(line) == 0 && readErr == io.EOF {
+			break
+		}
+		if readErr != nil && readErr != io.EOF {
+			return false
+		}
 		var record map[string]interface{}
-		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+		if err := json.Unmarshal(line, &record); err != nil {
+			if readErr == io.EOF {
+				break
+			}
 			continue
 		}
 		if recordProjectPath(record, cleanProject) {
 			return true
+		}
+		if readErr == io.EOF {
+			break
 		}
 	}
 	return false
