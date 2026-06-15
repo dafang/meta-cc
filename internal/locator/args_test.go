@@ -186,7 +186,7 @@ func TestFromProjectPath_Success(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	projectPath := tempDir
-	projectHash := pathToHash(projectPath)
+	projectHash := PathToHash(projectPath)
 
 	sessionDir := filepath.Join(projectsRoot, projectHash)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
@@ -317,7 +317,7 @@ func TestFromProjectPath_RelativePath(t *testing.T) {
 	}
 
 	// Create session directory for current working directory
-	projectHash := pathToHash(cwd)
+	projectHash := PathToHash(cwd)
 	sessionDir := filepath.Join(projectsRoot, projectHash)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
 		t.Fatalf("failed to create session dir: %v", err)
@@ -365,7 +365,7 @@ func TestAllSessionsFromProject_Success(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	projectPath := tempDir
-	projectHash := pathToHash(projectPath)
+	projectHash := PathToHash(projectPath)
 
 	sessionDir := filepath.Join(projectsRoot, projectHash)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
@@ -433,7 +433,7 @@ func TestAllSessionsFromProject_RelativePath(t *testing.T) {
 	projectsRoot := setupProjectsRoot(t)
 	cwd, _ := os.Getwd()
 
-	projectHash := pathToHash(cwd)
+	projectHash := PathToHash(cwd)
 	sessionDir := filepath.Join(projectsRoot, projectHash)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
 		t.Fatalf("failed to create session dir: %v", err)

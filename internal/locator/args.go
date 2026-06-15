@@ -77,8 +77,7 @@ func (l *SessionLocator) FromProjectPath(projectPath string) (string, error) {
 		return "", fmt.Errorf("failed to resolve project path: %w", err)
 	}
 
-	// 计算项目哈希 (pathToHash now handles symlink resolution)
-	projectHash := pathToHash(absPath)
+	projectHash := PathToHash(absPath)
 
 	sessions, err := l.sessionsFromProject(absPath, projectHash)
 	if err != nil {
@@ -100,8 +99,7 @@ func (l *SessionLocator) AllSessionsFromProject(projectPath string) ([]string, e
 		return nil, fmt.Errorf("failed to resolve project path: %w", err)
 	}
 
-	// 计算项目哈希 (pathToHash now handles symlink resolution)
-	projectHash := pathToHash(absPath)
+	projectHash := PathToHash(absPath)
 
 	sessions, err := l.sessionsFromProject(absPath, projectHash)
 	if err != nil {
@@ -281,12 +279,12 @@ func formatRoot(root SessionRoot) string {
 	return fmt.Sprintf("%s=%s", root.Host, root.Path)
 }
 
-// pathToHash 将项目路径转换为哈希目录名
-// 例如：/home/yale/work/myproject → -home-yale-work-myproject
+// PathToHash converts a project path to the hashed directory name used by Claude Code.
+// Example: /home/yale/work/myproject → -home-yale-work-myproject
 // Windows: C:/Users/yale/work/myproject → C--Users-yale-work-myproject
 //
-// Note: Resolves symlinks to ensure consistent hashing across platforms.
-// On macOS, /var is a symlink to /private/var, so we resolve it before hashing.
+// Resolves symlinks for consistent hashing across platforms
+// (e.g., /var → /private/var on macOS).
 func PathToHash(path string) string {
 	// Handle empty path edge case
 	if path == "" {
@@ -308,8 +306,4 @@ func PathToHash(path string) string {
 	// Finally replace colons (Windows drive letters like C:)
 	hash = strings.ReplaceAll(hash, ":", "-")
 	return hash
-}
-
-func pathToHash(path string) string {
-	return PathToHash(path)
 }
