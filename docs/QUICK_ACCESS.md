@@ -14,21 +14,24 @@
 
 - [MCP Server Guide](guides/mcp.md) - Complete MCP reference
 - [Plugin Development](guides/plugin-development.md) - Plugin workflow
-- [Integration Guide](guides/integration.md) - Choose MCP/Slash/Subagent
+- [Integration Guide](guides/integration.md) - Claude Code and Codex setup and usage
 - [Troubleshooting](guides/troubleshooting.md) - Common issues
 
 ### Key References
 
-- [CLI Reference](reference/cli.md) - Complete command reference
 - [JSONL Reference](reference/jsonl.md) - Output format and jq patterns
 - [Repository Structure](reference/repository-structure.md) - Directory guide
-- [Unified Meta Command](reference/unified-meta-command.md) - /meta command
+- [JSONL Schema](reference/jsonl-schema.md) - Claude Code and Codex input schemas
 
 ### Quick Tasks
 
 #### "I want to query session data"
 
 → [MCP Guide](guides/mcp.md#basic-queries)
+
+#### "I want Codex support"
+
+→ [Integration Guide](guides/integration.md) + [Examples](tutorials/examples.md)
 
 #### "I want to develop a plugin"
 
@@ -65,15 +68,13 @@
 
 ### 📖 Reference
 
-- [cli.md](reference/cli.md) - CLI commands
 - [features.md](reference/features.md) - Advanced features
 - [jsonl.md](reference/jsonl.md) - Output format
+- [jsonl-schema.md](reference/jsonl-schema.md) - Claude Code and Codex schemas
 - [repository-structure.md](reference/repository-structure.md) - Directory guide
-- [unified-meta-command.md](reference/unified-meta-command.md) - /meta command
 
 ### 🎓 Tutorials
 
-- [cli-composability.md](tutorials/cli-composability.md) - Unix pipelines
 - [cookbook.md](tutorials/cookbook.md) - Advanced use cases
 - [examples.md](tutorials/examples.md) - Basic examples
 - [github-setup.md](tutorials/github-setup.md) - GitHub configuration
@@ -97,8 +98,8 @@
 | If you're looking for... | Go to... |
 |--------------------------|----------|
 | MCP, server, query | [MCP Guide](guides/mcp.md) |
-| Plugin, slash command | [Plugin Development](guides/plugin-development.md) |
-| CLI, commands, meta-cc | [CLI Reference](reference/cli.md) |
+| Codex, provider, skills | [Integration Guide](guides/integration.md) |
+| Plugin, slash command, skill | [Plugin Development](guides/plugin-development.md) |
 | JSON, output, format | [JSONL Reference](reference/jsonl.md) |
 | Error, problem, issue | [Troubleshooting](guides/troubleshooting.md) |
 | Install, setup | [Installation](tutorials/installation.md) |

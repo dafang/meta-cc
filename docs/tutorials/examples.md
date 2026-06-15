@@ -1,790 +1,275 @@
-# Meta-CC Integration Examples - Usage Guide
+# Meta-CC Examples
 
-This guide shows how to use the meta-cc integration examples (MCP Server, Subagent, and Slash Commands).
+This guide shows practical ways to use meta-cc from Claude Code and Codex. The current integration surface is:
 
-## Design Philosophy
+- MCP tools for session history analysis
+- Claude Code slash commands for the prompt library
+- Codex skills for the same prompt-library workflows
 
-meta-cc is designed as a **powerful session history analysis tool** for Claude Code. It follows a clear separation of concerns:
+meta-cc reads Claude Code transcripts from `~/.claude/projects/` and Codex sessions from `${META_CC_CODEX_ROOT:-~/.codex}/state_5.sqlite` plus rollout JSONL files.
 
-**meta-cc MCP Server (Data Layer)**
-- ✅ 20 query and analysis tools
-- ✅ Powerful query and filtering capabilities with jq integration
-- ✅ Precise statistical analysis
-- ✅ Flexible output control (hybrid mode, pagination)
-- ❌ **No semantic analysis** (no NLP, no recommendations)
+## Quick Checks
 
-**Claude Code Integration Layer (Semantic Layer)**
-- Slash Commands: Use MCP capabilities with predefined workflows
-- Subagents: Iterative multi-turn MCP tool calls
-- MCP Tools: Claude autonomously selects and calls tools
-- ✅ Semantic understanding, pattern recognition, recommendation generation
+After installing, restart Claude Code or Codex and ask natural questions:
 
-This separation allows Claude to perform complex analysis by making multiple MCP tool calls with varying parameters, while the MCP server focuses on fast, accurate data extraction.
-
-## Installation
-
-### Option 1: Quick Install (Bundled Release) - Recommended
-
-Download and extract the bundle for your platform:
-
-```bash
-# Linux/macOS
-curl -L https://github.com/yaleh/meta-cc/releases/latest/download/meta-cc-bundle-linux-amd64.tar.gz | tar xz
-cd meta-cc-v*/
-./install.sh
-
-# Verify installation
-meta-cc --version
-meta-cc-mcp --version
+```text
+Which tools do I use most often?
+Show my work patterns and peak hours
+Find user messages mentioning "refactor"
+Show token usage for recent assistant turns
+Analyze recent tool errors
 ```
 
-The bundle includes:
-- `meta-cc` CLI tool
-- `meta-cc-mcp` MCP server
-- 8 slash commands (`.claude/commands/`)
-- 3 subagents (`.claude/agents/`)
+When you want a specific host, mention it explicitly:
 
-### Option 2: Build from Source
-
-```bash
-git clone https://github.com/yaleh/meta-cc.git
-cd meta-cc
-make build-mcp       # Build MCP server
-sudo cp meta-cc-mcp /usr/local/bin/
-
-# Plugin files are automatically available after installation
+```text
+Use provider=codex and show my recent tool usage
+Use provider=claude and find recent Bash errors
+Compare Claude Code and Codex activity with provider=all
 ```
 
-### MCP Server Configuration
+## Provider Examples
 
-Configure the MCP server for Claude Code:
+Most convenience query and analysis tools accept `provider`:
 
-```bash
-# Quick setup
-claude mcp add meta-cc --transport stdio meta-cc-mcp --scope user
+| Provider | Meaning |
+|----------|---------|
+| `claude` | Query Claude Code sessions. This is the default for compatibility. |
+| `codex` | Query Codex local history. |
+| `all` | Query both providers and include provider-tagged records. |
 
-# Or manual configuration in ~/.claude/settings.json
+Example MCP calls that a host can make:
+
+```javascript
+get_work_patterns({
+  provider: "codex",
+  working_dir: "/path/to/project"
+})
 ```
 
-See [README.md](../../README.md) for detailed MCP setup instructions.
-
-## Integration Hierarchy
-
-meta-cc provides **three integration tiers** optimized for different use cases:
-
-### Tier 1: MCP Server (Core Integration) - Highest Priority
-
-**Use for**: Natural language queries, cross-session analysis, autonomous data access
-
-Claude automatically calls MCP tools based on your questions. No special syntax needed.
-
-**Available**: 20 MCP tools including `query_tools`, `query_user_messages`, `query`, `query_raw`, `get_session_stats`, `query_time_series`, `query_files`, etc.
-
-**Examples**:
-```
-"Show me all Bash errors in this project"
-"Find user messages where I asked about testing"
-"Search assistant responses that mention 'test passed'"
-"Show me the conversation where we discussed refactoring"
-"Compare tool usage between this week and last week"
-"Which files have I edited the most across all sessions?"
+```javascript
+query_tools({
+  provider: "all",
+  tool: "exec_command",
+  working_dir: "/path/to/project",
+  limit: 50
+})
 ```
 
-### Tier 2: @meta-coach Subagent - Deep Analysis
-
-**Use for**: Interactive coaching, workflow optimization, multi-turn analysis
-
-The subagent combines MCP tools with LLM reasoning for personalized guidance.
-
-**Examples**:
-```
-@meta-coach Why do my tests keep failing?
-@meta-coach Help me optimize my workflow
-@meta-coach Analyze patterns in my error history
-@meta-coach What are my most time-consuming activities?
+```javascript
+query_user_messages({
+  provider: "claude",
+  pattern: "test|refactor",
+  limit: 20
+})
 ```
 
-### Tier 3: Slash Commands - Quick Statistics (Lowest Priority)
+## Analysis Recipes
 
-**Use for**: Fast, pre-defined analyses without typing queries
+### Tool Usage
 
-**Available Commands** (5 core commands):
+Ask:
 
-| Command | Description | Arguments |
-|---------|-------------|-----------|
-| `/meta-stats` | Session statistics | None |
-| `/meta-errors` | Tool error pattern analysis | None |
-| `/meta-bugs` | Project-level bug & fix analysis | None |
-| `/meta-timeline` | Timeline view | `[limit]` (default: 50) |
-| `/meta-help` | Help and usage guide | None |
-
-#### How to Use
-
-**No configuration needed!** The slash commands are already installed in `.claude/commands/`.
-
-Simply restart Claude Code and use them:
-
-```
-/meta-stats
-/meta-errors
-/meta-timeline 20
-/meta-help
+```text
+Which tools do I use most often?
 ```
 
----
+Likely MCP tool:
 
-## Detailed Usage Examples
-
-### Example 1: Understanding `/meta-errors` vs `/meta-bugs`
-
-**`/meta-errors`** focuses on **tool-level technical errors**:
-- Bash command failures
-- File not found errors
-- Permission denied errors
-- Tool execution timeouts
-- **Output**: Error signatures, tool error patterns, technical fixes
-
-**`/meta-bugs`** focuses on **project-level workflow issues**:
-- Test failures (TDD cycles broken)
-- Build failures (make errors)
-- Lint failures (code quality issues)
-- Git conflicts and errors
-- User corrections (interrupts, rejections, retries)
-- Fix effectiveness (repeated issues, resolution rate)
-- **Output**: Workflow insights, process improvements, prevention strategies
-
-**Example Use Cases**:
-
-| Scenario | Use Command |
-|----------|-------------|
-| "Bash keeps failing with exit code 1" | `/meta-errors` |
-| "Tests keep failing after refactoring" | `/meta-bugs` |
-| "Read tool can't find files" | `/meta-errors` |
-| "Build breaks frequently during development" | `/meta-bugs` |
-| "I keep interrupting Claude's work" | `/meta-bugs` |
-| "MCP tool returns syntax error" | `/meta-errors` |
-
-**Workflow Suggestion**:
-1. Run `/meta-bugs` first to understand high-level workflow issues
-2. Run `/meta-errors` if you need to debug specific tool failures
-3. Use `@meta-coach` for comprehensive analysis combining both perspectives
-
----
-
-### Example 2: Using MCP for Natural Queries
-
-**Scenario**: You want to understand error patterns across your project.
-
-**Instead of**:
-```
-/meta-errors
+```javascript
+get_work_patterns({
+  provider: "all",
+  working_dir: "/path/to/project"
+})
 ```
 
-**Use MCP** (just ask naturally):
-```
-"Show me all errors in this project grouped by tool"
-"What are the most common error messages?"
-"Compare error rates between morning and afternoon work sessions"
-```
+Use `provider: "codex"` when validating Codex support specifically.
 
-**Why MCP is better**:
-- No need to remember command syntax
-- Claude autonomously picks the right MCP tool
-- Supports complex multi-condition queries
-- Cross-session analysis by default
+### Peak Hours
 
----
+Ask:
 
-### Example 2: Using @meta-coach for Workflow Optimization
-
-**Scenario**: You notice you're making the same mistakes repeatedly.
-
-**Step 1**: Ask @meta-coach
-```
-@meta-coach I keep getting Bash errors. What's the pattern?
+```text
+Show my work patterns and peak hours
 ```
 
-**Step 2**: @meta-coach analyzes (using MCP tools internally)
-- Calls `query_tools` with `tool=Bash, status=error`
-- Calls `analyze_errors` to detect patterns
-- Calls `query_context` to see surrounding turns
+Likely MCP tool:
 
-**Step 3**: @meta-coach provides personalized guidance
-```
-I've analyzed your Bash errors across 15 sessions. Pattern detected:
-- 80% of errors occur when using grep with complex regex
-- Most failures happen in files with special characters in names
-
-Recommendations:
-1. Use `grep -F` for literal strings (avoid regex complexity)
-2. Quote file paths: grep "pattern" "$file" instead of grep pattern $file
-3. Test regex with `grep --color` first to validate patterns
-
-Would you like me to create a custom Hook to validate grep commands before execution?
+```javascript
+get_work_patterns({
+  provider: "all",
+  working_dir: "/path/to/project"
+})
 ```
 
----
+The response includes `tool_frequency`, `hourly_activity`, `context_switches`, and `peak_hour`.
 
-### Example 3: Combining All Three Tiers
+### Error Analysis
 
-**Scenario**: Comprehensive workflow analysis
+Ask:
 
-**Tier 3 (Quick Start)**: Get overview
-```
-/meta-stats
-```
-
-**Output**: "Error rate: 15% - unusually high"
-
-**Tier 1 (Deep Dive)**: Investigate with MCP
-```
-"Show me the top 5 error patterns in the last 100 tool calls"
-"Which files are associated with the most errors?"
+```text
+Analyze recent tool errors grouped by tool
 ```
 
-**Tier 2 (Optimization)**: Get coaching
-```
-@meta-coach Based on these errors, how should I improve my workflow?
-```
+Likely MCP tools:
 
-**@meta-coach response**:
-- Analyzes error clusters
-- Identifies root causes (file permissions, missing dependencies, etc.)
-- Suggests concrete fixes (Hooks, better prompts, alternative tools)
-- Offers to implement solutions
-
----
-
-### Example 4: MCP Tool Showcase
-
-**Available MCP Tools** (20 total):
-
-#### Core Query Tools (Unified API)
-```
-query                    # Unified query interface with jq filtering
-query_raw                # Raw jq expressions for maximum flexibility
+```javascript
+analyze_errors({
+  provider: "all",
+  working_dir: "/path/to/project",
+  limit: 10
+})
 ```
 
-#### Convenience Query Tools
-```
-query_tool_errors        # Query tool errors
-query_token_usage        # Query token usage statistics
-query_conversation_flow  # Query conversation flow patterns
-query_tool_errors        # Common error patterns
-query_file_operations    # File operation history
-query_workflow_patterns  # Workflow pattern detection
-query_time_distribution  # Time-based activity analysis
-query_performance_metrics # Performance metrics
+```javascript
+query_tool_errors({
+  provider: "codex",
+  stats_first: true,
+  limit: 20
+})
 ```
 
-#### Legacy Query Tools (Backward Compatible)
-```
-query_tools              # Query tool call history
-query_user_messages      # Search user messages with regex
-query_assistant_messages # Search assistant responses
-query_conversation       # Search full conversation
-query_files              # File-level statistics
-query_time_series        # Temporal pattern analysis
-query_tool_sequences     # Repeated tool sequences
+### Token Usage
+
+Ask:
+
+```text
+Show token usage for recent assistant turns
 ```
 
-#### Stats & Utilities
-```
-get_session_stats        # Session statistics and metrics
-cleanup_temp_files       # Remove old temporary files
-get_mcp_version          # Get MCP server version
-```
+Likely MCP tool:
 
-**Example Queries Using These Tools**:
-
-```
-# Message queries (Claude picks the right tool)
-"Find messages where I asked about testing"           → query_user_messages
-"Search assistant responses that mention 'passed'"    → query_assistant_messages
-"Show conversation about error handling"              → query_conversation
-
-# Tool queries
-"Show recent Bash errors"                             → query_tools
-"What files did I edit most?"                         → query_files
-
-# Advanced queries (Claude composes multiple tools)
-"Compare my workflow this week vs last week"          → query_time_series + aggregate_stats
-"Find all errors related to test.py"                  → query_tools + query_context
-"Show my most productive hours"                       → query_time_series (tool-calls by hour)
-```
+```javascript
+query_token_usage({
+  provider: "codex",
+  stats_first: true,
+  limit: 20
+})
 ```
 
-### Example 5: Working with Large MCP Query Results
+Codex token usage is available when rollout records include token-count events. SQLite `tokens_used` remains available as session metadata.
 
-**Phase 16.6** introduced hybrid output mode that automatically handles large query results without truncation.
+### Conversation Search
 
-#### How It Works
+Ask:
 
-When MCP queries return large datasets:
-- **Small results (≤32KB)**: Returned inline in the response
-- **Large results (>32KB)**: Written to a temporary JSONL file, metadata returned
-
-**No data truncation occurs** - all results are preserved.
-
-#### Use Case 1: Analyzing All Project Errors
-
-```
-User: "Show me all errors across the entire project"
+```text
+Find user messages mentioning "release" or "deploy"
 ```
 
-Claude will:
-1. Call `query_tools(status="error", scope="project")`
-2. Receive file_ref mode response (likely >32KB for full project)
-3. Analyze the file reference metadata
-4. Use Read or Grep tools to examine specific patterns
+Likely MCP tool:
 
-**Example Response from MCP**:
-```json
-{
-  "mode": "file_ref",
-  "file_ref": {
-    "path": "/tmp/meta-cc-mcp-abc12345-query_tools.jsonl",
-    "size_bytes": 245678,
-    "line_count": 1243,
-    "fields": ["Timestamp", "ToolName", "Status", "Duration", "Args", "Error"],
-    "summary": {
-      "preview": "{\"Timestamp\":\"2025-10-06T10:00:00Z\",\"ToolName\":\"Bash\",\"Status\":\"error\"}",
-      "record_count": 1243
-    }
-  }
-}
+```javascript
+query_user_messages({
+  provider: "all",
+  pattern: "release|deploy",
+  limit: 20
+})
 ```
 
-Claude can then:
-- Read the file: `Read: /tmp/meta-cc-mcp-abc12345-query_tools.jsonl`
-- Search for patterns: `Grep: pattern="timeout" path=/tmp/meta-cc-mcp-abc12345-query_tools.jsonl`
-- Analyze metadata: "You have 1243 errors across the project (245KB). Let me find the most common ones..."
+## Prompt Library
 
-#### Use Case 2: Custom Threshold for Specific Queries
+meta-cc provides the same prompt-library workflows in both hosts.
 
-```
-User: "I want inline results for queries up to 16KB"
-```
+### Claude Code
 
-Claude will use:
-```json
-{
-  "name": "query_tools",
-  "arguments": {
-    "status": "error",
-    "inline_threshold_bytes": 16384  // 16KB threshold instead of default 32KB
-  }
-}
+Use slash commands:
+
+```text
+/prompt-list
+/prompt-list sort=date
+/prompt-list category=debug
+/prompt-find release checklist
+/prompt-show phase-execution-001
 ```
 
-#### Use Case 3: Force File Reference Mode
+### Codex
 
-```
-User: "Query all tool calls and save to a file for analysis"
-```
+Use the matching skills:
 
-Claude will use:
-```json
-{
-  "name": "query_tools",
-  "arguments": {
-    "scope": "project",
-    "output_mode": "file_ref"  // Force file_ref even if result is small
-  }
-}
+```text
+$prompt-list
+$prompt-list sort=date
+$prompt-find release checklist
+$prompt-show phase-execution-001
 ```
 
-This creates a JSONL file that Claude can then read/analyze in chunks.
+The commands and skills both read `.meta-cc/prompts/library/` from the current project.
 
-#### Best Practices
+## Large Result Handling
 
-1. **Let hybrid mode decide** - Don't specify `inline_threshold_bytes` unless you have a specific reason
-2. **Analyze metadata first** - Check `file_ref.summary` before reading the full file
-3. **Use Grep for large files** - Search for patterns instead of reading entire 1MB+ files
-4. **Clean up old files** - Use `cleanup_temp_files` tool to remove files >7 days old
+MCP responses use hybrid output:
 
----
+- Small results return inline.
+- Large results are written to a temporary JSONL file and returned as a `file_ref`.
 
-## MCP Server Configuration (Optional)
+Ask naturally:
 
-The MCP server provides 14 advanced query tools for programmatic access to session history. See Example 4 above for the complete list of available tools.
-
-### Configuration Steps
-
-1. **Verify Node.js is available**:
-   ```bash
-   node --version  # Should show v14+ or higher
-   ```
-
-2. **Add MCP server to Claude Code settings**:
-
-   Edit `~/.claude/settings.json`:
-   ```json
-   {
-     "mcpServers": {
-       "meta-cc": {
-         "command": "node",
-         "args": ["/home/yale/work/meta-cc/.claude/mcp-servers/meta-cc.js"],
-         "transport": "stdio"
-       }
-     }
-   }
-   ```
-
-3. **Restart Claude Code** to load the MCP server
-
-4. **Test with natural queries**:
-   ```
-   "Show me all Bash errors in this project"
-   "Find user messages mentioning 'refactor'"
-   "Analyze tool usage trends across sessions"
-   ```
-
----
-
-## Quick Start Checklist
-
-### Before Restarting Claude Code
-
-- [x] ✅ meta-cc installed and in PATH
-- [x] ✅ Slash Commands (4 core) in `.claude/commands/`
-- [x] ✅ @meta-coach Subagent in `.claude/agents/`
-- [ ] ⚙️ MCP Server in `~/.claude/settings.json` (optional)
-
-### After Restarting Claude Code
-
-Run these tests:
-
-```bash
-# Tier 3: Slash Commands
-/meta-stats
-/meta-errors
-/meta-bugs
-/meta-timeline 10
-/meta-help
-
-# Tier 2: Subagent
-@meta-coach Help me analyze my workflow
-
-# Tier 1: MCP (natural queries)
-"Show me all Bash errors in this session"
-```
-
----
-
-## Working with Large MCP Query Results
-
-The meta-cc MCP server uses **hybrid output mode** to efficiently handle both small and large query results. This section shows how Claude works with file references for large datasets.
-
-### Understanding Hybrid Output Mode
-
-**Inline Mode (≤32KB results)**:
-- Data embedded directly in MCP response
-- Immediate access, single-turn analysis
-- Used for quick stats, small queries
-
-**File Reference Mode (>32KB results)**:
-- Data written to temporary JSONL file
-- Response contains metadata and file path
-- Claude uses Read/Grep tools to analyze
-
-For full technical details, see [MCP Guide](../guides/mcp.md).
-
-### Example 1: Small Query (Inline Mode)
-
-**User Query**:
-```
-Show me the last 20 tool calls in this session
-```
-
-**MCP Call** (automatic):
-```json
-{
-  "tool": "query_tools",
-  "arguments": {
-    "limit": 20,
-    "scope": "session"
-  }
-}
-```
-
-**Response** (inline mode):
-```json
-{
-  "mode": "inline",
-  "data": [
-    {"Timestamp": "2025-10-06T10:00:00Z", "ToolName": "Read", "Status": "success"},
-    {"Timestamp": "2025-10-06T10:01:00Z", "ToolName": "Write", "Status": "success"}
-    // ... 18 more records
-  ]
-}
-```
-
-**Claude's behavior**: Analyzes data immediately, no additional tool calls needed.
-
-### Example 2: Large Query (File Reference Mode)
-
-**User Query**:
-```
+```text
 Analyze all tool usage patterns in this project
 ```
 
-**MCP Call** (automatic):
-```json
-{
-  "tool": "query_tools",
-  "arguments": {
-    "scope": "project"
-  }
-}
+For large results, the host receives file metadata and can read or search the referenced file in chunks. Use `cleanup_temp_files` to remove old temporary MCP output files.
+
+## Codex Verification
+
+For development or release checks, run:
+
+```bash
+make test-e2e-codex
 ```
 
-**Response** (file_ref mode):
-```json
-{
-  "mode": "file_ref",
-  "file_ref": {
-    "path": "/tmp/meta-cc-mcp-abc123-1696598400-query_tools.jsonl",
-    "size_bytes": 405000,
-    "line_count": 5000,
-    "fields": ["Timestamp", "ToolName", "Status", "Duration", "Args"],
-    "summary": {
-      "record_count": 5000,
-      "tool_distribution": {
-        "Read": 1200,
-        "Write": 800,
-        "Bash": 3000
-      }
-    }
-  }
-}
-```
+The E2E test creates a temporary Codex home containing:
 
-**Claude's behavior**:
-1. Analyzes metadata first: "I found 5000 tool calls (405KB). Distribution: Bash (60%), Read (24%), Write (16%)"
-2. Uses Read tool to examine specific sections:
-   ```
-   Read: /tmp/meta-cc-mcp-abc123-1696598400-query_tools.jsonl (offset: 0, limit: 100)
-   ```
-3. Uses Grep to find patterns:
-   ```
-   Grep: "Status":"error" in /tmp/meta-cc-mcp-abc123-1696598400-query_tools.jsonl
-   ```
+- `state_5.sqlite`
+- rollout JSONL fixtures
+- installed Codex skills and plugin metadata
 
-### Example 3: Forcing File Reference Mode
-
-Sometimes you want file reference mode even for small results (e.g., to test workflows):
-
-**User Query**:
-```
-Query all Read tool calls and save to file (for testing)
-```
-
-**MCP Call** (with explicit mode):
-```json
-{
-  "tool": "query_tools",
-  "arguments": {
-    "tool": "Read",
-    "output_mode": "file_ref"
-  }
-}
-```
-
-**Response**:
-```json
-{
-  "mode": "file_ref",
-  "file_ref": {
-    "path": "/tmp/meta-cc-mcp-abc123-1696598401-query_tools.jsonl",
-    "size_bytes": 12000,
-    "line_count": 150
-  }
-}
-```
-
-### Example 4: Configuring Output Mode Threshold
-
-You can customize when hybrid mode switches from inline to file_ref:
-
-**User Query**:
-```
-Show me error patterns with a custom threshold
-```
-
-**MCP Call**:
-```json
-{
-  "tool": "query_tools",
-  "arguments": {
-    "status": "error",
-    "scope": "project",
-    "inline_threshold_bytes": 4096
-  }
-}
-```
-
-**Behavior**:
-- Query returns 500 error records (~50KB)
-- Custom threshold set to 4KB (instead of default 32KB)
-- Data exceeds 4KB, so file_ref mode is selected
-- All 500 records preserved in temp file (no truncation)
-
-**Response**:
-```json
-{
-  "mode": "file_ref",
-  "file_ref": {
-    "path": "/tmp/meta-cc-mcp-abc123-1234567890-query_tools.jsonl",
-    "size_bytes": 51200,
-    "line_count": 500,
-    "fields": ["Timestamp", "ToolName", "Status", "Error"],
-    "summary": {
-      "record_count": 500
-    }
-  }
-}
-```
-
-### Example 5: Cleaning Up Temporary Files
-
-Temporary files are automatically cleaned up after 7 days, but you can manually trigger cleanup:
-
-**User Query**:
-```
-Clean up old meta-cc temp files
-```
-
-**MCP Call**:
-```json
-{
-  "tool": "cleanup_temp_files",
-  "arguments": {
-    "max_age_days": 7
-  }
-}
-```
-
-**Response**:
-```json
-{
-  "removed_count": 12,
-  "freed_bytes": 5242880,
-  "files": [
-    "/tmp/meta-cc-mcp-abc123-1696598400-query_tools.jsonl",
-    "/tmp/meta-cc-mcp-abc123-1696598401-get_stats.jsonl"
-  ]
-}
-```
-
-### Best Practices for Large Results
-
-1. **Let Claude decide**: Don't manually specify `output_mode` unless testing
-2. **Trust metadata**: Claude analyzes file_ref summary before reading full file
-3. **Use Grep for patterns**: More efficient than reading full file
-4. **Clean up regularly**: Run `cleanup_temp_files` weekly for active projects
-5. **Check disk space**: Monitor `/tmp` usage on long-running systems
-
-### File Reference Metadata Fields
-
-| Field | Description | Usage |
-|-------|-------------|-------|
-| `path` | Temp file path | Use with Read/Grep tools |
-| `size_bytes` | Total file size | Estimate memory/disk usage |
-| `line_count` | Number of records | Understand dataset scope |
-| `fields` | Detected field names | Know available data fields |
-| `summary` | Stats/sample data | Quick analysis without reading file |
-
----
+It then calls the MCP server over JSON-RPC with `provider: "codex"` and verifies Codex session, message, tool, token, and prompt-library behavior.
 
 ## Troubleshooting
 
-### Slash Commands not showing up
+### No Codex Results
 
-1. **Check file location**:
-   ```bash
-   ls -la .claude/commands/
-   # Should show: meta-stats.md, meta-errors.md, meta-timeline.md, meta-help.md
-   ```
-
-2. **Restart Claude Code completely**
-
-3. **Test manually**:
-   ```bash
-   bash -c "$(sed -n '/```bash/,/```/p' .claude/commands/meta-stats.md | grep -v '```')"
-   ```
-
-### @meta-coach not responding
-
-1. **Check file location**:
-   ```bash
-   ls -la .claude/agents/
-   # Should show: meta-coach.md
-   ```
-
-2. **Verify meta-cc works**:
-   ```bash
-   meta-cc parse stats --output md
-   ```
-
-3. **Restart Claude Code**
-
-### MCP Server not connecting
-
-1. **Check settings.json syntax**:
-   ```bash
-   cat ~/.claude/settings.json | jq .
-   # Should parse without errors
-   ```
-
-2. **Verify Node.js**:
-   ```bash
-   node --version
-   ```
-
-3. **Test server manually**:
-   ```bash
-   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | \
-   node .claude/mcp-servers/meta-cc.js
-   ```
-
-4. **Check Claude Code logs** for MCP connection errors
-
-### meta-cc command not found
+Check that the queried project path matches the Codex thread `cwd`:
 
 ```bash
-# Check installation
-which meta-cc
-
-# If not found, install:
-cd /home/yale/work/meta-cc
-go build -o meta-cc
-sudo mv meta-cc /usr/local/bin/
-
-# Or add to PATH:
-export PATH=$PATH:/home/yale/work/meta-cc
+sqlite3 ~/.codex/state_5.sqlite \
+  "select cwd, rollout_path from threads order by updated_at desc limit 10;"
 ```
 
----
+If you use a non-default Codex home:
 
-## Next Steps
+```bash
+META_CC_CODEX_ROOT=/path/to/codex-home meta-cc-mcp
+```
 
-1. **Restart Claude Code** to load all integrations
-2. **Run test commands** from the checklist above
-3. **Try natural MCP queries** for cross-session analysis
-4. **Use @meta-coach** for interactive workflow optimization
-5. **Refer to [Integration Guide](../guides/integration.md)** for decision framework
+### Prompt Skills Not Found In Codex
 
----
+Verify files exist:
 
-## Documentation
+```bash
+ls ~/.codex/skills/prompt-list/SKILL.md
+ls ~/.codex/plugins/meta-cc/.codex-plugin/plugin.json
+ls ~/.codex/plugins/meta-cc/.codex-mcp.json
+```
 
-- **Main README**: `/home/yale/work/meta-cc/README.md`
-- **Integration Guide**: `/home/yale/work/meta-cc/docs/integration-guide.md`
-- **Troubleshooting**: `/home/yale/work/meta-cc/docs/troubleshooting.md`
-- **CLI Help**: `meta-cc --help`
-- **This Guide**: `/home/yale/work/meta-cc/docs/examples-usage.md`
+Restart Codex after installing.
 
----
+### Slash Commands Not Found In Claude Code
 
-Enjoy using meta-cc to optimize your Claude Code workflow! 🚀
+Verify files exist:
+
+```bash
+ls ~/.claude/commands/prompt-list.md
+```
+
+Restart Claude Code after installing.
+
+## Related Docs
+
+- [Installation Guide](installation.md)
+- [Integration Guide](../guides/integration.md)
+- [MCP Guide](../guides/mcp.md)
+- [MCP Query Tools Reference](../guides/mcp-query-tools.md)

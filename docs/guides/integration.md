@@ -1,421 +1,235 @@
 # Meta-CC Claude Code and Codex Integration Guide
 
-A practical guide to choosing and using the right integration method for your meta-cognition workflow.
+This guide explains which meta-cc integration to use in Claude Code or Codex.
 
-## Overview
+## Integration Surface
 
-meta-cc provides host-native integrations for Claude Code and Codex, all powered by the MCP server:
+| Integration | Claude Code | Codex | Best for |
+|-------------|-------------|-------|----------|
+| MCP server | Yes | Yes | Session history queries and analysis |
+| Prompt-library commands | `/prompt-find`, `/prompt-list`, `/prompt-show` | Native skills: `prompt-find`, `prompt-list`, `prompt-show` | Reusing saved prompts |
+| Plugin metadata | Claude Code marketplace/archive plugin | Codex plugin metadata under `~/.codex/plugins/meta-cc/` | Host-native packaging |
 
-- **MCP Tools**: Direct access to query and analysis tools through the host's autonomous tool calling
-- **Claude Code Slash Commands**: Quick prompt-library workflows (`/prompt-find`, `/prompt-list`, `/prompt-show`)
-- **Codex Skills**: Native Codex prompt-library workflows (`prompt-find`, `prompt-list`, `prompt-show`)
+The MCP server is the primary integration. It exposes 21 tools for querying and analyzing Claude Code and Codex session history through a provider-aware layer.
 
-### Quick Comparison
+## Data Sources
 
-| Feature | MCP Server | Claude Commands | Codex Skills |
-|---------|-----------|-----------------|--------------|
-| **Invocation** | Automatic host tool calls | Manual (`/command`) | Natural-language skill trigger |
-| **Context** | Main conversation | Main conversation | Main conversation |
-| **Parameters** | Structured schema | Positional (`$1`, `$2`) | Natural language |
-| **Best for** | Data queries and analysis | Repeated Claude Code workflows | Repeated Codex workflows |
+| Provider | Source | Notes |
+|----------|--------|-------|
+| `claude` | `~/.claude/projects/<project-hash>/*.jsonl` | Default provider for backward compatibility. |
+| `codex` | `${META_CC_CODEX_ROOT:-~/.codex}/state_5.sqlite` and rollout JSONL files referenced by `threads.rollout_path` | `~/.codex/history.jsonl` is intentionally not used. |
+| `all` | Both providers | Results include a provider tag where applicable. |
 
-**👉 [Jump to Decision Framework](#decision-framework)** to find the best method for your task.
+Use `working_dir` to query a project path different from the current process working directory.
 
----
+## Installation Paths
 
-## Quick Start: MCP Server Setup
+### Claude Code Marketplace
 
-For most users, the **MCP Server** provides the best balance of power and convenience.
-
-### Step 1: Install and Build
-
-```bash
-git clone https://github.com/yaleh/meta-cc.git
-cd meta-cc
-make build-mcp
-cp meta-cc-mcp ~/.local/bin/
-```
-
-### Step 2: Configure Claude Code
+Use this when you only need Claude Code integration:
 
 ```bash
-# Quick setup
-claude mcp add meta-cc --transport stdio meta-cc-mcp --scope user
-
-# Or manual configuration - edit claude_desktop_config.json
-{
-  "mcpServers": {
-    "meta-cc": {
-      "type": "stdio",
-      "command": "meta-cc-mcp",
-      "args": []
-    }
-  }
-}
+/plugin marketplace add yaleh/meta-cc
+/plugin install meta-cc
 ```
 
-### Step 2b: Configure Codex
+Restart Claude Code. The plugin provides the MCP server configuration and prompt-library slash commands.
 
-Archive installs include `.codex-plugin/plugin.json`, `.codex-mcp.json`, and `skills/`. The installer copies Codex skills to `~/.codex/skills/` by default:
+### Archive Install
+
+Use this for Claude Code and Codex together:
 
 ```bash
-CODEX_HOME=~/.codex ./install-skills.sh
+./install.sh
 ```
 
-For MCP, use the bundled `.codex-mcp.json` as the server template if your Codex plugin loader does not import it automatically.
+The archive installer:
 
-### Step 3: Test Integration
+- copies `meta-cc-mcp` to `~/.local/bin/`
+- installs Claude Code slash commands under `~/.claude/commands/`
+- merges Claude Code MCP configuration into `~/.claude/mcp.json`
+- installs Codex skills under `~/.codex/skills/`
+- installs Codex plugin metadata under `~/.codex/plugins/meta-cc/`
 
-```
-@meta-cc get_session_stats
-@meta-cc query_tools --limit=10
-@meta-cc query_user_messages --pattern=".*error.*"
-```
+Install one host only:
 
-**You're ready!** Claude Code or Codex can now call meta-cc tools when you ask questions about your session data.
-
----
-
-## Core Differences
-
-### Context Isolation
-
-**Main Conversation (MCP & Slash)**:
-- ✅ Full history access - can reference previous messages
-- ✅ Context continuity - Claude remembers earlier analysis
-- ⚠️ Context pollution - tool calls accumulate in history
-- ⚠️ Token consumption - each call adds to context length
-
-**Independent Context (Subagent)**:
-- ✅ No pollution - main conversation stays focused
-- ✅ Specialized reasoning - dedicated context for deep analysis
-- ❌ No shared history - each invocation starts fresh
-- ❌ Limited continuity - cannot reference main conversation details
-
-**When it matters**:
-- Need to correlate with earlier conversation → MCP/Slash (main context)
-- Deep multi-step analysis → Subagent (independent context)
-- Keep main conversation clean → Subagent
-
-### Invocation Models
-
-**MCP - Autonomous Tool Selection**:
-```
-User: "What's my session error rate?"
-  ↓
-Claude: [Decides to call get_session_stats]
-  ↓
-Result: {"ErrorRate": 0.0, "ErrorCount": 0, ...}
-  ↓
-Response: "Your error rate is 0%, with 0 errors detected."
+```bash
+INSTALL_CLAUDE=0 ./install.sh  # Codex files only
+INSTALL_CODEX=0 ./install.sh   # Claude Code files only
 ```
 
-**Pros**: Natural UX, no command memorization, flexible
-**Cons**: Less predictable, less control over parameters
+Install prompt-library commands and skills without the MCP binary:
 
-**Slash Commands - Explicit Execution**:
-```
-User: /meta-stats
-  ↓
-Executes: meta-cc parse stats --output md
-  ↓
-Output: [Formatted markdown table]
+```bash
+./install-skills.sh
 ```
 
-**Pros**: Fully predictable, fast, scriptable
-**Cons**: Must remember commands, limited flexibility
+## MCP Usage
 
-**Subagent - Delegated Conversation**:
-```
-User: "@meta-coach I feel stuck, help analyze my workflow"
-  ↓
-@meta-coach: "Let me gather data first..."
-  ↓
-[Multi-turn dialogue with tool calls and reasoning]
-  ↓
-@meta-coach: "Here's what I found and recommend..."
+Ask naturally in either host:
+
+```text
+Which tools do I use most often?
+Show my work patterns and peak hours
+Find user messages mentioning "migration"
+Analyze recent errors
+Show token usage for recent assistant turns
 ```
 
-**Pros**: Conversational, adaptive, keeps main chat clean
-**Cons**: Slower, no memory between sessions
+For Codex-specific checks:
 
-### Execution Models
-
-**MCP - Data Source**:
-- Raw data retrieval
-- Main conversation Claude does interpretation
-- Single tool call per invocation
-- Can combine with other tools
-
-**Slash Commands - Pre-Programmed Workflow**:
-- Pre-defined logic (Bash scripts)
-- Can include multiple meta-cc commands
-- Output is pre-formatted (markdown/json)
-- Claude's role is minimal (display + optional context)
-
-**Subagent - Independent Analyst**:
-- Has own personality and methodology
-- Can reason across multiple tool calls
-- Supports back-and-forth dialogue
-- Returns only high-level summary to main conversation
-
----
-
-## Decision Framework
-
-### Task Type Decision Tree
-
-```
-┌─────────────────────────────────────┐
-│ What do you need to do?             │
-└─────────────────┬───────────────────┘
-                  │
-        ┌─────────┴─────────┐
-        │                   │
-    [Simple       [Complex multi-step
-     data query]   analysis]
-        │                   │
-        ├── Is it a one-time    │
-        │   question?            │
-        │   YES → MCP            │
-        │   NO ↓                 │
-        │                        │
-        ├── Will you repeat      ├── Do you know exactly
-        │   this often?          │   what steps to take?
-        │   YES → Slash Command  │   YES → Slash Command
-        │   NO → MCP             │   NO ↓
-                                 │
-                                 ├── Do you need guidance
-                                 │   or exploration?
-                                 │   YES → Subagent
-                                 │   NO → MCP (multiple calls)
+```text
+Use provider=codex and show recent tool usage
+Use provider=codex and find user messages mentioning "release"
+Use provider=codex and show token usage
 ```
 
-**Quick decision rules**:
+For cross-host analysis:
 
-1. **Just want data, ask naturally** → MCP
-2. **Repeat the same workflow often** → Slash Command
-3. **Don't know what's wrong, need help** → Subagent
-4. **Multi-step with known steps** → Slash Command
-5. **Multi-step with unknown steps** → Subagent
-
-### Use Case Scenarios Matrix
-
-| Scenario | Best Method | Why | Alternative |
-|----------|-------------|-----|-------------|
-| **Quick stats check** | MCP or Slash | Fast, no ceremony | Either works |
-| **Daily workflow automation** | Slash Command | Predictable, repeatable | - |
-| **Debugging repeated errors** | Subagent | Needs exploration | Slash + manual |
-| **Cross-project comparison** | MCP Tools | Native support | - |
-| **Learning optimization** | Subagent | Educational, conversational | - |
-| **Ad-hoc exploration** | MCP | Natural questions | - |
-| **Implementing fixes** | Subagent | Can create files/configs | Manual |
-
-### Anti-Patterns
-
-**❌ Don't Use MCP When**:
-1. You need exactly the same analysis every time → Use Slash Command
-2. You need multi-step reasoning → Use Subagent
-3. Building automation/scripts → Use meta-cc CLI directly
-
-**❌ Don't Use Slash Commands When**:
-1. Workflow isn't well-defined yet → Use Subagent to explore first
-2. Need adaptive behavior based on results → Use Subagent
-3. Only use it once → Just ask Claude (uses MCP)
-
-**❌ Don't Use Subagent When**:
-1. Just need quick data → Use MCP tools or Slash (faster)
-2. Need same exact output format → Use Slash Command
-3. Want to reference main conversation → Stay in main context (MCP)
-4. Track progress across sessions → MCP query tools handle multi-session data
-
----
-
-## Best Practices
-
-### Combining Integration Methods
-
-The three methods work together:
-
-**Pattern 1: Slash Command → Calls MCP**
-- Use case: Fixed workflow leveraging MCP data access
-- Benefit: Combines predictability with seamless integration
-
-**Pattern 2: Subagent → Calls MCP Tools**
-- Use case: Complex analysis requiring reasoning and data
-- Benefit: Subagent's reasoning + MCP tools' structured data
-
-**Pattern 3: MCP as Foundation, Others as Shortcuts**
-- Strategy: Start with MCP → Identify common patterns → Create Slash Commands → Add Subagent for guidance
-- Benefit: Organic growth based on actual usage
-
-### Minimizing Context Pollution
-
-**Solutions**:
-
-1. **Use Slash Commands for bulk operations**
-   - Bad: Claude calls MCP 20 times for different sessions
-   - Good: `/meta-compare-all` (script loops)
-
-2. **Use Subagent for exploratory deep dives**
-   - Bad: Long back-and-forth in main conversation
-   - Good: `@meta-coach` (keeps main clean)
-
-3. **Be explicit about output format**
-   - Better: "Get stats as JSON" (MCP with output_format)
-   - Good: `/meta-stats` (pre-configured)
-
-### Choosing Output Format
-
-**JSON** - Best for:
-- Programmatic processing, piping to tools, precision
-
-**Markdown** - Best for:
-- Human readability, slash commands, interpretation
-
-**Recommendation by method**:
-- **MCP**: JSON (Claude interprets)
-- **Slash**: Markdown (better UX)
-- **Subagent**: JSON (subagent reasons over it)
-
-### Creating Custom Integrations
-
-**When to Create Slash Command**:
-1. Run same meta-cc command >3 times
-2. Workflow has clear, fixed steps
-3. Want consistent output format
-
-**Template**:
-```markdown
----
-name: my-custom-check
-description: [Your description]
----
-
-# My Custom Check
-
-Query session data using MCP tools.
-
-## Instructions
-
-Use the following MCP tools:
-- query_tools for tool call analysis
-- get_session_stats for statistics
-- query_user_messages for message search
-
-Analyze the results and provide insights.
+```text
+Use provider=all and compare tool usage across Claude Code and Codex
+Use provider=all and analyze recent error patterns
 ```
 
----
+Common MCP calls:
+
+```javascript
+get_work_patterns({
+  provider: "all",
+  working_dir: "/path/to/project"
+})
+```
+
+```javascript
+query_tools({
+  provider: "codex",
+  tool: "exec_command",
+  limit: 20
+})
+```
+
+```javascript
+query_user_messages({
+  provider: "claude",
+  pattern: "test|refactor",
+  limit: 20
+})
+```
+
+See [MCP Query Tools Reference](mcp-query-tools.md) for the full catalog.
+
+## Prompt Library
+
+The prompt library lives in the current project's `.meta-cc/prompts/library/` directory.
+
+Claude Code slash commands:
+
+```text
+/prompt-list
+/prompt-list sort=usage
+/prompt-find release checklist
+/prompt-show phase-execution-001
+```
+
+Codex skills:
+
+```text
+$prompt-list
+$prompt-list sort=usage
+$prompt-find release checklist
+$prompt-show phase-execution-001
+```
+
+The commands and skills parse the same Markdown files and frontmatter fields: `id`, `title`, `category`, `keywords`, `usage_count`, `updated`, and `status`.
+
+## Choosing A Method
+
+| Task | Use |
+|------|-----|
+| Ask about session history, tools, errors, or token usage | MCP tools |
+| Browse saved prompts in Claude Code | `/prompt-list` |
+| Browse saved prompts in Codex | `$prompt-list` |
+| Search reusable prompts in Claude Code | `/prompt-find <keywords>` |
+| Search reusable prompts in Codex | `$prompt-find <keywords>` |
+| View a saved prompt in Claude Code | `/prompt-show <id>` |
+| View a saved prompt in Codex | `$prompt-show <id>` |
+| Validate Codex support in development | `make test-e2e-codex` |
+
+## Verification
+
+### Claude Code
+
+1. Restart Claude Code.
+2. Ask: `Which tools do I use most often?`
+3. Run: `/prompt-list`
+
+### Codex
+
+1. Restart Codex.
+2. Ask: `Use provider=codex and show my work patterns`
+3. Run: `$prompt-list`
+
+### Development E2E
+
+```bash
+make test-e2e-codex
+```
+
+This creates an isolated Codex home, installs the Codex files, creates SQLite and rollout fixtures, and calls the MCP server over JSON-RPC with `provider: "codex"`.
 
 ## Troubleshooting
 
-### MCP Tools Not Being Called
+### MCP Tools Are Not Called
 
-**Symptoms**: Ask for stats but Claude doesn't use MCP tool
+- Confirm the host has loaded the MCP server configuration.
+- Ask more directly: `Use the meta-cc MCP server to show recent tool usage`.
+- Check the binary is available:
 
-**Solutions**:
-- Question too indirect → Rephrase explicitly: "Get my session statistics"
-- MCP server not connected → Check `claude mcp list`
-- Tool description too vague → Update tool schema
-
-### Prompt Commands Or Skills Not Found
-
-**Claude Code checklist**:
-1. File exists at `.claude/commands/prompt-list.md`
-2. Restarted Claude Code after installing
-3. Using `/prompt-list`, `/prompt-find`, or `/prompt-show`
-
-**Codex checklist**:
-1. File exists at `.codex/skills/prompt-list/SKILL.md`
-2. Restarted Codex after installing
-3. Asking Codex to use `prompt-list`, `prompt-find`, or `prompt-show`
-
-### Subagent Not Understanding Context
-
-**Remember**: Subagent has independent context!
-
-**Solution**:
-```
-Don't: "@meta-coach why did that error happen?"
-       (doesn't know which error)
-
-Do: "@meta-coach I just got an error in my auth module.
-     Can you analyze recent errors and help debug?"
-```
-
----
-
-## Quick Reference
-
-### Command Cheat Sheet
-
-**MCP Tools** (mention naturally in conversation):
-```
-"Get session statistics"          → get_session_stats
-"Analyze error patterns"          → analyze_errors
-"Show tool usage"                 → extract_tools
-```
-
-**Slash Commands**:
 ```bash
-/meta-stats              # Session overview
-/meta-errors [window]    # Error analysis (default=20)
-/meta-timeline [limit]   # Chronological tool calls (default=50)
-/meta-compare <path>     # Compare with another project
-/meta-help               # Show all commands
+which meta-cc-mcp
 ```
 
-**Subagent**:
+### Claude Code Prompt Commands Not Found
+
 ```bash
-@meta-coach [question]   # Start analysis conversation
-
-# Example questions:
-@meta-coach How's my workflow efficiency?
-@meta-coach I'm stuck, help analyze what's wrong
-@meta-coach Compare current session with best practices
+ls ~/.claude/commands/prompt-list.md
+ls ~/.claude/commands/prompt-find.md
+ls ~/.claude/commands/prompt-show.md
 ```
 
-### Decision Quick Lookup
+Restart Claude Code after installing.
 
-| I want to... | Use this |
-|--------------|----------|
-| Check error rate quickly | MCP or `/meta-stats` |
-| Analyze repeated errors | `/meta-errors 30` |
-| Understand why I'm inefficient | `@meta-coach` |
-| Compare two projects | `/meta-compare <path>` |
-| Get help optimizing | `@meta-coach` |
-| See recent tool usage | MCP or `/meta-timeline` |
-| Automate daily checks | Create Slash Command |
-| Explore unknown problem | `@meta-coach` |
-| Get exact same report | Slash Command |
+### Codex Skills Not Found
 
----
+```bash
+ls ~/.codex/skills/prompt-list/SKILL.md
+ls ~/.codex/skills/prompt-find/SKILL.md
+ls ~/.codex/skills/prompt-show/SKILL.md
+```
 
-## Next Steps
+Restart Codex after installing.
 
-### For New Users
+### Codex MCP Query Returns No Sessions
 
-1. **Start with MCP**: Ask questions naturally
-2. **Learn Slash Commands**: Use `/meta-help`
-3. **Try @meta-coach**: When you need guidance
+Check the Codex index:
 
-### For Advanced Users
+```bash
+sqlite3 ~/.codex/state_5.sqlite \
+  "select cwd, rollout_path from threads order by updated_at desc limit 10;"
+```
 
-1. **Create Custom Slash Commands**: Automate workflows
-2. **Extend @meta-coach**: Add domain-specific analysis
-3. **Combine Methods**: Use MCP + Slash + Subagent together
+If Codex data is stored outside `~/.codex`, set:
 
----
+```bash
+export META_CC_CODEX_ROOT=/path/to/codex-home
+```
+
+The `cwd` in the `threads` table must match the project path you query with `working_dir`.
 
 ## Related Documentation
 
-- **[meta-cc README](../../README.md)**: Installation and CLI reference
-- **[Examples & Usage](../tutorials/examples.md)**: Step-by-step setup guides
-- **[Troubleshooting Guide](troubleshooting.md)**: Common issues and solutions
-- **[MCP Output Modes](../archive/mcp-output-modes.md)**: Detailed MCP usage
-- **[Technical Proposal](../architecture/proposals/meta-cognition-proposal.md)**: Architecture deep dive
-
----
-
-*Last updated: 2025-10-12*
+- [Installation Guide](../tutorials/installation.md)
+- [Examples](../tutorials/examples.md)
+- [MCP Guide](mcp.md)
+- [MCP Query Tools Reference](mcp-query-tools.md)
+- [JSONL Schema Reference](../reference/jsonl-schema.md)

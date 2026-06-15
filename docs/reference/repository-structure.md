@@ -1,322 +1,155 @@
 # Repository Structure
 
-Complete guide to meta-cc directory organization and file purposes.
+Complete guide to the current meta-cc directory organization.
 
 ## Directory Tree
 
-```
+```text
 meta-cc/
-├── .claude/                   # Claude Code plugin entry point
-│   ├── commands/             # Slash command definitions
-│   │   └── meta.md          # Unified /meta command
-│   ├── agents/               # Subagent definitions
-│   │   ├── project-planner.md
-│   │   └── stage-executor.md
-│   └── hooks/                # Project hooks (optional)
-│
-├── .githooks/                 # Git hooks source (tracked in git)
-│   └── pre-commit            # Auto-bump plugin version
-│
-├── capabilities/              # Capability source files (Git tracked)
-│   ├── commands/             # Command capabilities
-│   │   ├── meta-errors.md
-│   │   ├── meta-quality-scan.md
-│   │   ├── meta-timeline.md
-│   │   └── ... (13 total)
-│   └── agents/               # Agent capabilities (future)
-│
-├── .capabilities-cache/       # Runtime capability cache (Git ignored)
-│   ├── github/               # Cached capabilities from GitHub
-│   │   └── {owner}/{repo}/{branch}/{subdir}/
-│   ├── packages/             # Cached capability packages
-│   │   └── {hash}/
-│   └── .meta-cc-cache.json   # Cache metadata (TTL, download times)
-│
-├── .claude-plugin/            # Plugin metadata for marketplace
-│   ├── plugin.json           # Plugin manifest
-│   └── marketplace.json      # Marketplace listing
-│
-├── dist/                      # Build artifacts (Git ignored)
-│   ├── commands/             # Merged: .claude/commands + capabilities/commands
-│   └── agents/               # Merged: .claude/agents + capabilities/agents
-│
-├── cmd/                       # CLI commands and MCP server
-│   ├── main.go               # CLI entry point
-│   └── mcp-server/           # MCP server implementation
-│       └── main.go
-│
-├── internal/                  # Core logic (not imported by external projects)
-│   ├── conversation/         # Provider-agnostic session/turn/tool-call model
-│   ├── locator/              # Project and Codex path resolution
-│   ├── parser/               # JSONL session parser
-│   ├── provider/             # Claude/Codex provider adapters and registry
-│   ├── analyzer/             # Pattern detection
-│   ├── query/                # Query execution
+├── .claude-plugin/             # Claude Code marketplace metadata
+│   └── marketplace.json
+├── cmd/
+│   └── mcp-server/             # MCP server entry point
+├── internal/
+│   ├── conversation/           # Provider-agnostic session, turn, and tool-call model
+│   ├── locator/                # Claude project and Codex home path resolution
+│   ├── mcp/                    # MCP executor, handlers, tools, pipeline, response code
+│   ├── parser/                 # Claude Code JSONL parser
+│   ├── provider/
+│   │   ├── claude/             # Claude Code provider adapter
+│   │   ├── codex/              # Codex SQLite and rollout JSONL provider
+│   │   └── records/            # Shared record normalization helpers
+│   ├── query/                  # Query engines, resources, jq/stage2 support
 │   └── ...
-│
-├── pkg/                       # Public packages (can be imported)
-│   ├── output/               # Output formatting (JSONL, TSV)
-│   └── pipeline/             # Data pipeline
-│
-├── lib/                       # Shared library files
-│   ├── mcp-config.json       # MCP server configuration template
-│   └── ...
-│
-├── docs/                      # Technical documentation
-│   ├── plan.md               # Phase roadmap
-│   ├── principles.md         # Design constraints
-│   ├── mcp-guide.md          # MCP complete reference
-│   ├── integration-guide.md  # Integration patterns
-│   ├── release-process.md    # Release workflow
-│   ├── git-hooks.md          # Git hooks guide
-│   └── ...
-│
-├── plans/                     # Phase-by-phase development plans
-│   ├── phase-01-*.md
-│   ├── phase-02-*.md
-│   └── ...
-│
-├── tests/                     # Test fixtures and integration tests
-│   ├── fixtures/             # Test data
-│   └── integration/          # Integration test suites
-│
-├── scripts/                   # Development and release scripts
-│   ├── bump-plugin-version.sh    # Plugin version management
-│   ├── release.sh                # Full release workflow
-│   ├── install-hooks.sh          # Git hooks installation
-│   └── ...
-│
-├── Makefile                   # Build automation
-├── go.mod                     # Go module definition
-├── CLAUDE.md                  # Development entry point (this doc)
-└── README.md                  # Public documentation
+├── lib/
+│   ├── mcp-config.json         # PATH-based MCP config template
+│   └── meta-utils.sh           # Shared prompt command utilities
+├── plugin-src/
+│   ├── .claude-plugin/         # Claude Code plugin manifest
+│   ├── .codex-plugin/          # Codex plugin manifest
+│   ├── .codex-mcp.json         # Codex MCP template
+│   ├── .mcp.json               # Claude Code plugin MCP template
+│   ├── commands/               # Claude Code prompt-library slash commands
+│   └── skills/                 # Codex prompt-library skills
+├── scripts/
+│   ├── install/                # Archive and skills installers
+│   ├── ci/                     # Smoke and release checks
+│   └── checks/                 # Local quality checks
+├── tests/
+│   ├── e2e/                    # MCP and Codex E2E scripts
+│   └── fixtures/
+│       └── codex/              # Codex rollout fixtures
+├── docs/                       # Guides, tutorials, examples, and reference docs
+├── Makefile
+├── go.mod
+├── README.md
+└── CLAUDE.md
 ```
 
-## Directory Purposes
+## Host Integration Files
 
-### Development Workflow Directories
+### Claude Code
 
-#### `.claude/` - Claude Code Plugin Entry Point
-- **Purpose**: Claude Code recognizes plugins from this directory
-- **When to edit**: Modifying slash commands or subagent definitions
-- **Files tracked**: Yes (Git tracked)
-- **Build needed**: No (Claude Code reads directly)
+Source files:
 
-**Example workflow**:
+- `plugin-src/.claude-plugin/plugin.json`
+- `plugin-src/.mcp.json`
+- `plugin-src/commands/prompt-find.md`
+- `plugin-src/commands/prompt-list.md`
+- `plugin-src/commands/prompt-show.md`
+
+Installed locations:
+
+- `~/.claude/commands/`
+- `~/.claude/mcp.json`
+- `~/.local/share/meta-cc/` for user-scope plugin installs
+
+### Codex
+
+Source files:
+
+- `plugin-src/.codex-plugin/plugin.json`
+- `plugin-src/.codex-mcp.json`
+- `plugin-src/skills/prompt-find/SKILL.md`
+- `plugin-src/skills/prompt-list/SKILL.md`
+- `plugin-src/skills/prompt-show/SKILL.md`
+
+Installed locations:
+
+- `~/.codex/skills/`
+- `~/.codex/plugins/meta-cc/.codex-plugin/plugin.json`
+- `~/.codex/plugins/meta-cc/.codex-mcp.json`
+
+## Core Packages
+
+### `internal/conversation`
+
+Defines the provider-neutral model used by Claude Code and Codex:
+
+- sessions
+- turns
+- user and assistant messages
+- tool calls and tool outputs
+- token usage
+
+### `internal/provider`
+
+Contains the multi-provider adapter layer:
+
+- `provider/claude`: reads Claude Code project JSONL transcripts
+- `provider/codex`: reads Codex `state_5.sqlite` and rollout JSONL files
+- `provider/registry.go`: fan-out and provider filtering
+- `provider/records`: shared normalized record helpers
+
+### `internal/locator`
+
+Resolves host-specific paths:
+
+- Claude Code project roots from `~/.claude/projects/` or `META_CC_PROJECTS_ROOT`
+- Codex roots from `~/.codex` or `META_CC_CODEX_ROOT`
+
+### `internal/mcp`
+
+Implements the MCP surface:
+
+- tool definitions
+- provider-aware executor
+- convenience query handlers
+- analysis handlers
+- hybrid inline/file-reference output
+
+## Build Artifacts
+
+Generated files are not source of truth:
+
+- `bin/`
+- `build/`
+- `dist/`
+- `plugin-src/bin/`
+
+`make stage`, `make install-local`, and `make install-user` may regenerate `plugin-src/bin/meta-cc-mcp`.
+
+## Tests
+
+Important test entry points:
+
 ```bash
-# Edit /meta command
-vim .claude/commands/meta.md
-# Test immediately in Claude Code (no build needed)
+go test ./...
+make test-e2e-mcp
+make test-e2e-codex
 ```
 
-#### `capabilities/` - Capability Source Files
-- **Purpose**: Store capability definitions (content for /meta command)
-- **When to edit**: Adding/updating capability logic
-- **Files tracked**: Yes (Git tracked)
-- **Build needed**: No (loaded dynamically)
+`tests/e2e/codex-e2e.sh` is the real Codex integration test. It creates an isolated Codex home, installs Codex plugin and skill files, builds SQLite/rollout fixtures, and verifies `provider: "codex"` through the MCP server.
 
-**Local development**:
-```bash
-export META_CC_CAPABILITY_SOURCES="capabilities/commands"
-# Changes reflect immediately without cache
-```
+## Documentation
 
-#### `.githooks/` - Git Hooks Source
-- **Purpose**: Store git hook scripts (tracked in repo)
-- **When to edit**: Modifying hook behavior
-- **Files tracked**: Yes (Git tracked)
-- **Installation**: `./scripts/install-hooks.sh`
+Primary user docs:
 
-**Note**: Active hooks live in `.git/hooks/` (not tracked).
+- [README](../../README.md)
+- [Installation Guide](../tutorials/installation.md)
+- [Examples](../tutorials/examples.md)
+- [Integration Guide](../guides/integration.md)
+- [MCP Guide](../guides/mcp.md)
+- [MCP Query Tools Reference](../guides/mcp-query-tools.md)
 
-### Build and Release Directories
-
-#### `dist/` - Build Artifacts (Git Ignored)
-- **Purpose**: Merged plugin files for release
-- **Generated by**: `make sync-plugin-files`
-- **Contents**: `.claude/` + `capabilities/` merged
-- **When to use**: During release process only
-
-**Build command**:
-```bash
-make sync-plugin-files
-# Creates: dist/commands/ and dist/agents/
-```
-
-#### `.capabilities-cache/` - Runtime Cache (Git Ignored)
-- **Purpose**: Cache downloaded capabilities from GitHub/packages
-- **Generated by**: Automatic during runtime
-- **TTL**: 1 hour (branches), 7 days (tags/releases)
-- **Location**: `~/.capabilities-cache/` (user home) or `./.capabilities-cache/` (project)
-
-**Cache structure**:
-```
-.capabilities-cache/
-├── github/yaleh/meta-cc/main/commands/  # GitHub source cache
-├── packages/abc123def/                   # Package file cache
-└── .meta-cc-cache.json                  # Metadata
-```
-
-### Code Organization Directories
-
-#### `cmd/` - Application Entry Points
-- **Purpose**: Main applications (CLI, MCP server)
-- **cmd/main.go**: CLI entry point
-- **cmd/mcp-server/main.go**: MCP server entry point
-
-#### `internal/` - Core Logic (Private)
-- **Purpose**: Core implementation (not importable by external projects)
-- **Key packages**:
-  - `internal/conversation`: Provider-agnostic session/turn/tool-call model
-  - `internal/locator`: Session and Codex path resolution helpers
-  - `internal/parser`: JSONL session parser
-  - `internal/provider`: Claude/Codex provider adapters and registry
-  - `internal/analyzer`: Pattern detection
-  - `internal/query`: Query execution engine
-  - `internal/mcp`: MCP server handlers
-
-#### `pkg/` - Public Packages
-- **Purpose**: Libraries that can be imported by external projects
-- **Key packages**:
-  - `pkg/output`: Output formatting (JSONL, TSV)
-  - `pkg/pipeline`: Data processing pipeline
-
-### Configuration and Metadata
-
-#### `.claude-plugin/` - Plugin Metadata
-- **plugin.json**: Plugin manifest (name, version, commands, agents)
-- **marketplace.json**: Marketplace listing configuration
-
-**Version management**:
-- Updated by: `./scripts/bump-plugin-version.sh` or `./scripts/release.sh`
-- Git hook: Auto-bump on `.claude/` changes (optional)
-
-#### `lib/` - Shared Library Files
-- **mcp-config.json**: MCP server configuration template
-- **Other**: Shared utilities and templates
-
-### Documentation Directories
-
-#### `docs/` - Technical Documentation
-See [DOCUMENTATION_MAP.md](../DOCUMENTATION_MAP.md) for complete structure.
-
-**Key documents**:
-- **plan.md**: Phase-by-phase roadmap
-- **principles.md**: Design constraints
-- **mcp-guide.md**: Complete MCP reference
-- **integration-guide.md**: Choosing MCP/Slash/Subagent
-
-#### `plans/` - Phase Implementation Plans
-- **Purpose**: Detailed stage-by-stage development plans
-- **Format**: `phase-{number}-{name}.md`
-- **Status**: Historical reference after phase completion
-
-### Testing
-
-#### `tests/` - Test Fixtures and Integration Tests
-- **fixtures/**: Test data (sample JSONL sessions)
-- **integration/**: Integration test suites
-
-**Running tests**:
-```bash
-make test          # Unit tests
-make test-all      # Unit + integration tests
-make test-coverage # With coverage report
-```
-
-## File Tracking and Ignore Rules
-
-### Git Tracked Files
-- `.claude/` - Plugin entry point
-- `.githooks/` - Hook source code
-- `.claude-plugin/` - Plugin metadata
-- `capabilities/` - Capability sources
-- `cmd/`, `internal/`, `pkg/` - Go code
-- `docs/`, `plans/` - Documentation
-- `scripts/` - Development scripts
-
-### Git Ignored Files (`.gitignore`)
-- `dist/` - Build artifacts
-- `.capabilities-cache/` - Runtime cache
-- `build/` - Release packages
-- `.git/hooks/` - Active hooks (not tracked)
-- `*.log`, `*.tmp` - Temporary files
-
-## Development vs Production
-
-### Development Setup
-```bash
-# Local capability development
-export META_CC_CAPABILITY_SOURCES="capabilities/commands"
-
-# Install git hooks (optional)
-./scripts/install-hooks.sh
-
-# Build and test
-make all
-```
-
-### Production Runtime
-```bash
-# Default capability source (GitHub)
-# META_CC_CAPABILITY_SOURCES="yaleh/meta-cc@main/commands"
-
-# Capability cache location
-# ~/.capabilities-cache/github/yaleh/meta-cc/main/commands/
-```
-
-## Common Operations
-
-### Plugin Development
-```bash
-# Edit slash command
-vim .claude/commands/meta.md
-# Test in Claude Code (no build needed)
-
-# Edit capability
-vim capabilities/commands/meta-errors.md
-export META_CC_CAPABILITY_SOURCES="capabilities/commands"
-# Test in Claude Code
-```
-
-### Release Build
-```bash
-# Sync plugin files
-make sync-plugin-files
-
-# Full release
-./scripts/release.sh v1.0.0
-```
-
-### Version Management
-```bash
-# Plugin-only version bump
-./scripts/bump-plugin-version.sh patch
-
-# Full release (CLI + MCP + Plugin)
-./scripts/release.sh v1.0.0
-```
-
-## Directory Design Rationale
-
-### Why `.claude/` and `capabilities/` are separate?
-- **`.claude/`**: Plugin framework (slash commands, subagents)
-- **`capabilities/`**: Capability content (logic, analysis)
-- **Benefit**: Capability updates don't require plugin version bump
-
-### Why `dist/` is Git ignored?
-- **Reason**: Build artifact, not source code
-- **Generated by**: `make sync-plugin-files`
-- **Used in**: Release workflow only
-
-### Why `.githooks/` instead of `.git/hooks/`?
-- **Reason**: `.git/hooks/` is not tracked by Git (by design)
-- **Solution**: Track hooks in `.githooks/`, install via script
-- **Benefit**: Share hooks with all developers
-
-## See Also
-
-- [Plugin Development Guide](../guides/plugin-development.md) - Detailed plugin workflow
-- [Release Process](../guides/release-process.md) - Release workflow
-- [Git Hooks](../guides/git-hooks.md) - Git hooks usage
-- [DOCUMENTATION_MAP.md](../DOCUMENTATION_MAP.md) - Documentation navigation
+Planning and historical docs under `docs/plans/`, `docs/proposals/`, `plans/`, and `docs/archive/` may describe older architecture phases.
