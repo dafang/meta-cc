@@ -1,709 +1,136 @@
 # Feature Overview
 
-This document provides a comprehensive overview of meta-cc's advanced features.
+meta-cc is a provider-aware MCP server for local coding-agent history analysis. It supports Claude Code and Codex through a shared session model, then exposes query and analysis tools to the host.
 
-## Core Capabilities
+## Host Support
 
-### Natural Language Interface
+| Host | Data source | Integration files |
+|------|-------------|-------------------|
+| Claude Code | `~/.claude/projects/<project-hash>/*.jsonl` | `plugin-src/.claude-plugin/`, `plugin-src/.mcp.json`, `plugin-src/commands/` |
+| Codex | `${META_CC_CODEX_ROOT:-~/.codex}/state_5.sqlite` plus rollout JSONL files referenced by `threads.rollout_path` | `plugin-src/.codex-plugin/`, `plugin-src/.codex-mcp.json`, `plugin-src/skills/` |
 
-The `/meta` command provides natural language capability discovery:
+The `provider` parameter controls which history is queried:
+
+- `claude`: Claude Code only. This is the default for backward compatibility.
+- `codex`: Codex only.
+- `all`: merge both providers and include provider-tagged records.
+
+## MCP Tools
+
+meta-cc exposes 21 MCP tools.
+
+### Convenience Queries
+
+- `query_user_messages`: search user messages by regex
+- `query_tools`: query assistant tool calls
+- `query_tool_errors`: query failed tool results
+- `query_token_usage`: query assistant token usage
+- `query_conversation_flow`: query user/assistant turns
+- `query_tool_blocks`: query `tool_use` or `tool_result` blocks
+- `query_timestamps`: query timestamped records
+- `query_system_errors`: query Claude Code API system errors
+- `query_file_snapshots`: query Claude Code file history snapshots
+- `query_summaries`: query Claude Code session summaries
+
+Claude-only record types return empty results for Codex when Codex has no equivalent local record.
+
+### Analysis Tools
+
+- `analyze_errors`: aggregate tool errors by tool and type
+- `analyze_bugs`: detect error-fix pairs and recurring patterns
+- `quality_scan`: compute error, retry, diversity, and completion dimensions
+- `get_work_patterns`: summarize tool frequency, hourly activity, and context switches
+- `get_timeline`: build chronological session events
+- `get_tech_debt`: detect TODO/FIXME/HACK markers and unresolved error signals
+
+### Two-Stage Query Tools
+
+- `get_session_directory`: locate a session directory and aggregate metadata
+- `inspect_session_files`: inspect selected JSONL files
+- `execute_stage2_query`: run jq-style filter/sort/transform on selected files
+- `get_session_metadata`: return schema hints, file info, and query templates
+
+### Utilities
+
+- `cleanup_temp_files`: remove old temporary MCP output files
+- `list_capabilities`: list packaged prompt/command capabilities
+- `get_capability`: retrieve a capability by name/type
+
+## Provider-Aware Normalization
+
+Codex rollout records are normalized into the same conversation model used for Claude Code:
+
+- user and assistant messages
+- function/custom tool calls
+- function/custom tool outputs
+- token count events when present
+- session metadata from SQLite
+
+This lets the same MCP tools answer questions such as:
+
+```text
+Which tools do I use most often?
+Show my work patterns and peak hours
+Find user messages mentioning "refactor"
+Analyze recent tool errors
+Show token usage for recent assistant turns
+```
+
+## Prompt Library
+
+meta-cc provides matching prompt-library workflows in both hosts.
+
+Claude Code slash commands:
+
+- `/prompt-find`
+- `/prompt-list`
+- `/prompt-show`
+
+Codex skills:
+
+- `$prompt-find`
+- `$prompt-list`
+- `$prompt-show`
+
+Both read `.meta-cc/prompts/library/` in the current project and parse Markdown frontmatter fields such as `id`, `title`, `category`, `keywords`, `usage_count`, `updated`, and `status`.
+
+## Output Modes
+
+MCP responses use hybrid output:
+
+- small results return inline
+- large results are written to temporary JSONL files and returned as `file_ref`
+
+This keeps natural host conversations usable while preserving complete result sets.
+
+## Verification
+
+General checks:
+
+```text
+Which tools do I use most often?
+Find user messages mentioning "release"
+Show token usage for recent assistant turns
+```
+
+Codex-specific check:
+
+```text
+Use provider=codex and show my work patterns
+```
+
+Development E2E:
 
 ```bash
-/meta "show errors"              # Error analysis
-/meta "find repeated workflows"   # Pattern detection
-/meta "which files change most"   # File operation stats
-/meta "quality check"             # Code quality scan
+make test-e2e-codex
 ```
 
-**How it works**:
-- Capabilities loaded from GitHub (or custom sources)
-- Semantic keyword matching scores each capability
-- Best match executed automatically
-
-**Customization**:
-```bash
-# Use custom capabilities
-export META_CC_CAPABILITY_SOURCES="~/my-caps:commands"
-
-# Pin to specific version
-export META_CC_CAPABILITY_SOURCES="yaleh/meta-cc@v1.0.0/commands"
-```
-
-See [Capabilities Guide](../guides/capabilities.md) for details.
-
-### MCP Integration
-
-21 MCP tools enable Claude Code and Codex to autonomously query session data:
-
-**Convenience Queries**:
-- `query_tools` - Filter tool calls
-- `query_user_messages` - Search messages
-- `query_tool_errors` - Search failed tool results
-- `query_token_usage` - Query token usage
-- `query_conversation_flow` - Search user/assistant conversation flow
-- `query_tool_blocks` - Query tool use/result content blocks
-
-**Two-Stage Queries**:
-- `get_session_directory` - Locate session files for project/session scope
-- `inspect_session_files` - Inspect JSONL metadata and samples
-- `execute_stage2_query` - Run jq filter/sort/transform on selected files
-- `get_session_metadata` - Retrieve schema hints and query templates
-
-**Analysis Tools**:
-- `analyze_errors` - Aggregate errors by tool and type
-- `quality_scan` - Compute quality dimensions
-- `get_work_patterns` - Tool frequency, hourly activity, context switches
-- `get_timeline` - Chronological event list
-- `analyze_bugs` - Error-fix pairs and recurring patterns
-- `get_tech_debt` - TODO/FIXME/HACK and unresolved error signals
-
-**Host Support**:
-- Claude Code transcripts from `~/.claude/projects/<project-hash>/`
-- Codex transcripts from `$CODEX_HOME/sessions` or `~/.codex/sessions`
-- Codex messages, tool calls, tool outputs, and token counts are normalized to the common meta-cc schema
-
-**Query Scope**:
-- `scope: "project"` (default) - Cross-session analysis
-- `scope: "session"` - Current session only
-
-See [MCP Guide](../guides/mcp.md) for complete reference.
-
-### Interactive Coaching
-
-The `@meta-coach` subagent provides personalized workflow optimization:
-
-```bash
-@meta-coach Why do my tests keep failing?
-@meta-coach Help me optimize my workflow
-@meta-coach Analyze my efficiency bottlenecks
-```
-
-**Capabilities**:
-- Error pattern analysis
-- Workflow optimization recommendations
-- Multi-turn interactive coaching
-- Combines MCP data with LLM reasoning
-
----
-
-## Context-Length Management
-
-Handle large sessions (>1000 turns) without context overflow.
-
-### 1. Pagination
-
-Process data in manageable chunks:
-
-```bash
-# Get first 50 tools
-meta-cc query tools --limit 50
-
-# Skip first 100, get next 50
-meta-cc query tools --limit 50 --offset 100
-
-# Iterate through all tools
-for i in {0..10}; do
-  meta-cc query tools --limit 100 --offset $((i*100))
-done
-```
-
-**Use case**: Exploring large sessions incrementally.
-
-### 2. Size Estimation
-
-Predict output size before generating:
-
-```bash
-meta-cc query tools --estimate-size
-```
-
-**Output**:
-```json
-{
-  "estimated_bytes": 1107311,
-  "estimated_kb": 1081.36,
-  "format": "json",
-  "record_count": 246
-}
-```
-
-**Use case**: Adaptive Slash Commands that choose strategy based on size.
-
-**Example**:
-```bash
-SIZE=$(meta-cc query tools --estimate-size | jq '.estimated_kb')
-if (( $(echo "$SIZE > 100" | bc -l) )); then
-  meta-cc query tools --summary-first --top 20
-else
-  meta-cc query tools --output md
-fi
-```
-
-### 3. Chunking
-
-Split large output into multiple files:
-
-```bash
-meta-cc query tools --chunk-size 100 --output-dir /tmp/chunks
-```
-
-**Output**:
-```
-Generated 20 chunk(s)
-  Chunk 0: chunk_0001.json (100 records, 44KB)
-  Chunk 1: chunk_0002.json (100 records, 45KB)
-  ...
-Manifest: /tmp/chunks/manifest.json
-```
-
-**Use case**: Process massive sessions in parallel.
-
-**Example**:
-```bash
-# Process chunks in parallel
-ls /tmp/chunks/chunk_*.json | \
-  xargs -P 4 -I {} sh -c 'jq ".[] | select(.Status == \"error\")" {}'
-```
-
-### 4. Field Projection
-
-Output only specified fields (70%+ size reduction):
-
-```bash
-# Basic projection
-meta-cc query tools --fields "UUID,ToolName,Status"
-
-# With conditional error fields
-meta-cc query tools --fields "UUID,ToolName,Status" --if-error-include "Error,Output"
-```
-
-**Size comparison**:
-```bash
-# Full output
-meta-cc query tools --limit 100 | wc -c
-# 31101 bytes (30.4 KB)
-
-# Projected output
-meta-cc query tools --limit 100 --fields "UUID,ToolName,Status" | wc -c
-# 8501 bytes (8.3 KB) - 72.7% reduction
-```
-
-**Use case**: Reduce token consumption while preserving key data.
-
-### 5. Compact Formats
-
-TSV format is 86%+ smaller than JSON:
-
-```bash
-meta-cc query tools --output tsv
-```
-
-**Output**:
-```
-UUID	ToolName	Status	Error
-1b08...	Read
-69a7...	Bash
-586a...	Bash
-```
-
-**Usage with Unix tools**:
-```bash
-# Count tool usage
-meta-cc query tools --output tsv | cut -f2 | sort | uniq -c
-
-# Extract specific column
-meta-cc query tools --output tsv | awk '{print $2}'
-```
-
-**Use case**: CLI processing and automation.
-
-### 6. Summary Mode
-
-Overview + top N details:
-
-```bash
-meta-cc query tools --summary-first --top 10
-```
-
-**Output**:
-```markdown
-=== Session Summary ===
-Total Tools: 246
-Errors: 0 (0.0%)
-
-Top Tools:
-  1. Bash (102)
-  2. Read (37)
-  3. TodoWrite (37)
-  ...
-
-[Top 10 detailed records follow]
-```
-
-**Use case**: Quick overview for very large sessions.
-
-### Strategy Selection
-
-| Session Size | Recommended Strategy | Example |
-|-------------|---------------------|---------|
-| < 500 turns | Standard output | `meta-cc query tools` |
-| 500-1000 | Pagination or Projection | `meta-cc query tools --limit 200 --fields "UUID,ToolName,Status"` |
-| 1000-2000 | Summary + TSV | `meta-cc query tools --summary-first --top 20 --output tsv` |
-| > 2000 | Chunking + TSV | `meta-cc query tools --chunk-size 100 --output-dir ./chunks --output tsv` |
-
----
-
-## Advanced Query Capabilities
-
-SQL-like filtering, aggregation, and time series analysis.
-
-### 1. Advanced Filtering
-
-SQL-like expressions with AND/OR/NOT, IN, BETWEEN, LIKE, REGEXP:
-
-```bash
-# AND conditions
-meta-cc query tools --where "tool='Bash' AND status='error'"
-
-# IN operator
-meta-cc query tools --where "tool IN ('Bash', 'Edit', 'Write')"
-
-# BETWEEN operator
-meta-cc query tools --where "duration BETWEEN 500 AND 2000"
-
-# LIKE operator
-meta-cc query tools --where "error LIKE '%permission%'"
-
-# REGEXP operator
-meta-cc query tools --where "error REGEXP 'timeout|connection'"
-
-# Complex expressions
-meta-cc query tools --where "(tool='Bash' OR tool='Edit') AND status='error'"
-```
-
-**Use case**: Precise filtering for complex analyses.
-
-### 2. Aggregation Statistics
-
-Group-by with metrics:
-
-```bash
-# Tool usage by name
-meta-cc stats aggregate --group-by tool --metrics "count,error_rate"
-
-# Hourly activity
-meta-cc stats aggregate --group-by hour --metrics count
-
-# Error distribution
-meta-cc stats aggregate --group-by status --metrics count
-```
-
-**Available metrics**:
-- `count` - Total occurrences
-- `error_rate` - Percentage of errors
-- `avg_duration` - Average execution time
-- `p50`, `p95`, `p99` - Duration percentiles
-
-**Output example**:
-```json
-[
-  {
-    "group_value": "Bash",
-    "metrics": {
-      "count": 495,
-      "error_rate": 0.02,
-      "avg_duration": 234.5
-    }
-  }
-]
-```
-
-**Use case**: Statistical analysis and reporting.
-
-### 3. Time Series Analysis
-
-Analyze metrics over time (hour/day/week):
-
-```bash
-# Tool calls per hour
-meta-cc stats time-series --metric tool-calls --interval hour
-
-# Error rate per day
-meta-cc stats time-series --metric error-rate --interval day
-
-# Bash usage per week
-meta-cc stats time-series --metric tool-calls --interval week --where "tool='Bash'"
-```
-
-**Available metrics**:
-- `tool-calls` - Number of tool invocations
-- `error-rate` - Error percentage
-- `avg-duration` - Average execution time
-
-**Output example**:
-```json
-[
-  {
-    "timestamp": "2025-10-02T10:00:00Z",
-    "interval": "hour",
-    "metric": "tool-calls",
-    "value": 45
-  }
-]
-```
-
-**Use case**: Trend analysis and workflow evolution tracking.
-
-### 4. File-Level Statistics
-
-Track file operations and identify hotspots:
-
-```bash
-# Top 10 most edited files
-meta-cc stats files --sort-by edit_count --top 10
-
-# Files with errors
-meta-cc stats files --filter "error_count>0"
-
-# High-churn files (10+ edits)
-meta-cc stats files --filter "edit_count>=10"
-```
-
-**Output example**:
-```json
-[
-  {
-    "file_path": "src/main.go",
-    "total_ops": 42,
-    "read_count": 15,
-    "edit_count": 23,
-    "write_count": 4,
-    "error_count": 0,
-    "error_rate": 0
-  }
-]
-```
-
-**Use case**: Identify file churn and refactoring opportunities.
-
----
-
-## Unix Composability
-
-Seamless integration with Unix pipelines and standard tools.
-
-### 1. JSONL Streaming Output
-
-Stream data as JSON Lines for efficient pipeline processing:
-
-```bash
-# Basic streaming
-meta-cc query tools --output jsonl
-
-# Pipeline with jq
-meta-cc query tools | jq 'select(.Status == "error")'
-
-# Pipeline with grep
-meta-cc query tools | jq -r '.Error' | grep -i "permission"
-
-# Pipeline with awk
-meta-cc query tools | \
-  jq -r '[.ToolName, .Duration] | @tsv' | \
-  awk '{sum+=$2} END {print "Total:", sum "ms"}'
-```
-
-**Benefits**:
-- Constant memory usage (stream, don't slurp)
-- Works with any Unix tool
-- Efficient for large datasets
-
-### 2. Standard Exit Codes
-
-Unix-compliant exit codes:
-
-| Exit Code | Meaning | Example |
-|-----------|---------|---------|
-| 0 | Success (with results) | `meta-cc query tools --limit 10` |
-| 1 | Error (parsing, I/O, etc.) | `meta-cc query tools --where "invalid syntax"` |
-| 2 | Success (no results) | `meta-cc query tools --where "tool='NonExistent'"` |
-
-**Usage in scripts**:
-```bash
-if meta-cc query tools --status error; then
-  echo "Errors found!"
-else
-  EXIT_CODE=$?
-  if [ $EXIT_CODE -eq 2 ]; then
-    echo "No errors (good!)"
-  else
-    echo "Query failed"
-    exit 1
-  fi
-fi
-```
-
-### 3. Clean I/O Separation
-
-Logs and data separated for clean pipeline processing:
-
-- **stdout**: Command output data (JSON, TSV, Markdown)
-- **stderr**: Diagnostic messages (logs, warnings, errors)
-
-```bash
-# Redirect data only
-meta-cc query tools > data.json
-
-# Redirect logs only
-meta-cc query tools 2> debug.log
-
-# Separate both
-meta-cc query tools > data.json 2> debug.log
-
-# Suppress logs in pipelines
-meta-cc query tools 2>/dev/null | jq '.ToolName'
-```
-
-### 4. Common Pipeline Patterns
-
-**Error Analysis**:
-```bash
-# Top error patterns
-meta-cc query tools --status error | \
-  jq -r '.Error' | \
-  grep -oP '(permission|timeout|not found)' | \
-  sort | uniq -c | sort -rn
-```
-
-**Performance Profiling**:
-```bash
-# Average duration by tool
-meta-cc stats aggregate --group-by tool --metrics avg_duration | \
-  jq -r '.[] | [.group_value, .metrics.avg_duration] | @tsv' | \
-  column -t
-```
-
-**Tool Usage Statistics**:
-```bash
-# Tool distribution
-meta-cc query tools | \
-  jq -r '.ToolName' | \
-  sort | uniq -c | sort -rn
-```
-
-**File Modification Tracking**:
-```bash
-# Most edited files with error rates
-meta-cc stats files --sort-by edit_count --top 10 | \
-  jq -r '.[] | [.file_path, .edit_count, (.error_rate * 100 | tostring + "%")] | @tsv' | \
-  column -t
-```
-
----
-
-## Workflow Pattern Detection
-
-Identify repeated sequences and optimize workflows.
-
-### Tool Sequence Detection
-
-Find repeated workflow patterns:
-
-```bash
-# Find all patterns (3+ occurrences)
-meta-cc query tool-sequences --min-occurrences 3
-
-# Include built-in tools (Bash, Read, Edit)
-meta-cc query tool-sequences --min-occurrences 3 --include-builtin-tools
-
-# Find specific pattern
-meta-cc query tool-sequences --pattern "Read.*Edit"
-```
-
-**Output example**:
-```json
-[
-  {
-    "Pattern": "query_tools → query_user_messages → get_work_patterns",
-    "Occurrences": 8,
-    "ToolNames": ["query_tools", "query_user_messages", "get_work_patterns"],
-    "FirstSeen": "2025-10-02T10:00:00Z",
-    "LastSeen": "2025-10-02T14:30:00Z"
-  }
-]
-```
-
-**Use case**: Identify repeated workflows that could be automated.
-
-**Note**: By default, built-in tools (Bash, Read, Edit, etc.) are excluded for cleaner patterns. Use `--include-builtin-tools` for complete analysis.
-
-### File Churn Analysis
-
-Detect frequently modified files:
-
-```bash
-# Files edited 5+ times
-meta-cc analyze file-churn --threshold 5
-
-# High-churn files (10+ edits)
-meta-cc analyze file-churn --threshold 10
-```
-
-**Use case**: Identify refactoring candidates or architectural issues.
-
-### Idle Period Detection
-
-Find time gaps in session activity:
-
-```bash
-# Idle periods > 5 minutes
-meta-cc analyze idle-periods --threshold "5 minutes"
-
-# Long breaks (1+ hour)
-meta-cc analyze idle-periods --threshold "1 hour"
-```
-
-**Use case**: Understand workflow interruptions and blockers.
-
----
-
-## Extensibility
-
-Create custom capabilities with simple markdown files.
-
-### Capability Structure
-
-```markdown
----
-name: my-feature
-description: My custom analysis
-keywords: custom, analysis, example
-category: analysis
----
-
-# My Custom Feature
-
-Analyze custom patterns in session data.
-
-## Implementation
-
-\`\`\`bash
-meta-cc query tools --tool Bash --status error | \
-  jq 'select(.Error | test("permission"))'
-\`\`\`
-
-## Usage
-
-Run with:
-
-\`\`\`
-/meta "my feature"
-\`\`\`
-```
-
-### Multi-Source Configuration
-
-Load capabilities from multiple sources:
-
-```bash
-# Local development + GitHub
-export META_CC_CAPABILITY_SOURCES="~/my-caps:yaleh/meta-cc@main/commands"
-
-# Package file + GitHub
-export META_CC_CAPABILITY_SOURCES="./caps.tar.gz:yaleh/meta-cc@main/commands"
-
-# Priority: left = highest (overrides)
-export META_CC_CAPABILITY_SOURCES="~/dev/caps:yaleh/meta-cc@v1.0.0/commands"
-```
-
-**Source types**:
-- **Local directories**: Immediate reflection, no cache
-- **Package files** (`.tar.gz`): Cached with TTL
-- **GitHub repositories**: jsDelivr CDN with smart caching
-
-### Caching Strategy
-
-**Branches** (mutable, 1-hour cache):
-```bash
-export META_CC_CAPABILITY_SOURCES="yaleh/meta-cc@develop/commands"
-```
-
-**Tags** (immutable, 7-day cache):
-```bash
-export META_CC_CAPABILITY_SOURCES="yaleh/meta-cc@v1.0.0/commands"
-```
-
-**Package files**:
-- Release packages: 7-day cache
-- Custom packages: 1-hour cache
-
-**Local sources**: No cache (always fresh)
-
----
-
-## Performance Optimization
-
-### Memory Efficiency
-
-**Streaming** (constant memory):
-```bash
-meta-cc query tools | jq 'select(.Status == "error")'
-```
-
-**Slurping** (loads all into memory):
-```bash
-meta-cc query tools | jq -s 'length'
-```
-
-**Recommendation**: Use streaming when possible, slurp only for array operations.
-
-### Large Dataset Strategies
-
-For sessions with 1000+ tools:
-
-1. **Field projection** (70% size reduction):
-   ```bash
-   meta-cc query tools --fields "UUID,ToolName,Status"
-   ```
-
-2. **TSV format** (86% smaller):
-   ```bash
-   meta-cc query tools --output tsv
-   ```
-
-3. **Pagination**:
-   ```bash
-   meta-cc query tools --limit 100 --offset 0
-   ```
-
-4. **Summary mode**:
-   ```bash
-   meta-cc query tools --summary-first --top 20
-   ```
-
-### Built-in Tool Filtering
-
-Query tool sequences excludes built-in tools by default (35x faster):
-
-```bash
-# Fast (excludes Bash, Read, Edit, etc.)
-meta-cc query tool-sequences --min-occurrences 3
-
-# Slower but complete
-meta-cc query tool-sequences --min-occurrences 3 --include-builtin-tools
-```
-
-**Built-in tools** (14 total):
-- File operations: Bash, Read, Edit, Write, Glob, Grep
-- Task management: TodoWrite, Task
-- Web operations: WebFetch, WebSearch
-- Other: SlashCommand, BashOutput, NotebookEdit, ExitPlanMode
-
----
+The Codex E2E test creates an isolated Codex home, installs Codex skills and plugin metadata, creates SQLite and rollout fixtures, and verifies MCP calls with `provider: "codex"`.
 
 ## See Also
 
-- [CLI Reference](cli.md) - Complete command list
-- [MCP Guide](../guides/mcp.md) - MCP tool integration
-- [CLI Composability](../tutorials/cli-composability.md) - Advanced Unix patterns
-- [Capabilities Guide](../guides/capabilities.md) - Create custom capabilities
-- [Integration Guide](../guides/integration.md) - Choose MCP vs Slash vs Subagent
+- [MCP Guide](../guides/mcp.md)
+- [MCP Query Tools Reference](../guides/mcp-query-tools.md)
+- [Integration Guide](../guides/integration.md)
+- [Examples](../tutorials/examples.md)
+- [JSONL Schema Reference](jsonl-schema.md)

@@ -166,7 +166,7 @@ func (n *Normalizer) normalizeCodexToolUse(timestamp string, payload map[string]
 	callID, _ := firstString(payload, "call_id", "callId", "id")
 	name, _ := firstString(payload, "name")
 
-	input := map[string]interface{}{}
+	var input map[string]interface{}
 	if payloadType == "function_call" {
 		input = parseInput(payload["arguments"], "arguments")
 	} else {

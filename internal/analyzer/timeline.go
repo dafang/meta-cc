@@ -83,7 +83,7 @@ func GetTimeline(entries []types.SessionEntry, limit int) (*TimelineResult, erro
 	for _, e := range entries {
 		ts := entryToTimestamp(e.Timestamp)
 		label := entryTypeLabel(e.Type)
-		summary := fmt.Sprintf("%s", label)
+		summary := label
 		rawEvents = append(rawEvents, raw{ts: ts, etype: label, summary: summary})
 	}
 

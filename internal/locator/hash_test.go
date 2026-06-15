@@ -49,9 +49,9 @@ func TestPathToHash(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := pathToHash(tt.input)
+			result := PathToHash(tt.input)
 			if result != tt.expected {
-				t.Errorf("pathToHash(%q) = %q, want %q", tt.input, result, tt.expected)
+				t.Errorf("PathToHash(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}

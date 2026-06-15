@@ -232,6 +232,7 @@ func TestHandleGetSessionDirectory_DirectoryNotFound(t *testing.T) {
 	// Create temp directory as mock Claude projects root (but no sessions)
 	projectsRoot := t.TempDir()
 	t.Setenv("META_CC_PROJECTS_ROOT", projectsRoot)
+	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "codex-home"))
 
 	// Create temp directory as project path
 	projectPath := t.TempDir()

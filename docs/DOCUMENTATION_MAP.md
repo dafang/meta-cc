@@ -22,15 +22,12 @@ docs/
 │   └── troubleshooting.md
 │
 ├── reference/               # Complete specifications
-│   ├── cli.md              # CLI commands (renamed from cli-reference.md)
 │   ├── features.md         # Advanced features
 │   ├── jsonl.md            # Output format (renamed from jsonl-reference.md)
 │   ├── jsonl-schema.md     # JSONL session file schema
 │   ├── repository-structure.md
-│   └── unified-meta-command.md
 │
 ├── tutorials/               # Step-by-step learning
-│   ├── cli-composability.md
 │   ├── cookbook.md
 │   ├── examples.md         # Basic examples (renamed from examples-usage.md)
 │   ├── github-setup.md
@@ -73,7 +70,6 @@ graph TD
   docs_principles_md["principles.md<br/>(Design Rules)"]:::guide
   docs_plugin_development_md["plugin-development.md<br/>(Plugin Workflow)"]:::guide
   docs_repository_structure_md["repository-structure.md<br/>(Directory Guide)"]:::guide
-  docs_unified_meta_command_md["unified-meta-command.md<br/>(/meta Command)"]:::guide
   docs_integration_guide_md["integration.md"]:::guide
   docs_mcp_guide_md["mcp.md<br/>(MCP Complete)"]:::guide
   docs_capabilities_guide_md["capabilities.md"]:::guide
@@ -83,7 +79,6 @@ graph TD
   docs_release_process_md["release-process.md<br/>(Release)"]:::maintenance
 
   %% Reference Docs
-  docs_cli_reference_md["cli.md<br/>(CLI Commands)"]:::reference
   docs_jsonl_reference_md["jsonl.md<br/>(Output Format)"]:::reference
   docs_jsonl_schema_md["jsonl-schema.md<br/>(Session Schema)"]:::reference
   docs_features_md["features.md<br/>(Advanced Features)"]:::reference
@@ -101,12 +96,10 @@ graph TD
   CLAUDE_md --> docs_repository_structure_md
   CLAUDE_md --> docs_mcp_guide_md
   CLAUDE_md --> docs_integration_guide_md
-  CLAUDE_md --> docs_unified_meta_command_md
 
   README_md --> docs_mcp_guide_md
   README_md --> docs_integration_guide_md
   README_md --> docs_examples_usage_md
-  README_md --> docs_cli_reference_md
   README_md --> docs_features_md
 
   %% Dependencies - Guides
@@ -116,16 +109,11 @@ graph TD
   docs_plugin_development_md --> docs_git_hooks_md
   docs_plugin_development_md --> docs_release_process_md
   docs_plugin_development_md --> docs_repository_structure_md
-  docs_plugin_development_md --> docs_unified_meta_command_md
-  docs_unified_meta_command_md --> docs_capabilities_guide_md
   docs_integration_guide_md --> docs_examples_usage_md
   docs_mcp_guide_md --> docs_integration_guide_md
   docs_examples_usage_md --> docs_cookbook_md
 
   %% Dependencies - Reference
-  docs_cli_reference_md --> docs_jsonl_reference_md
-  docs_cli_reference_md --> docs_mcp_guide_md
-  docs_features_md --> docs_cli_reference_md
   docs_features_md --> docs_mcp_guide_md
   docs_cookbook_md --> docs_features_md
 
@@ -148,7 +136,7 @@ graph TD
 
 ### For Advanced Users
 
-1. **MCP Tools Reference**: [docs/guides/mcp.md](guides/mcp.md) - Complete MCP tool reference (20 tools)
+1. **MCP Tools Reference**: [docs/guides/mcp.md](guides/mcp.md) - Complete MCP tool reference (21 tools)
 2. **JSONL Reference**: [docs/reference/jsonl.md](reference/jsonl.md) - Output format and jq patterns
 3. **JSONL Schema**: [docs/reference/jsonl-schema.md](reference/jsonl-schema.md) - Session file structure specification
 4. **Query Examples**:
@@ -170,37 +158,33 @@ graph TD
 ### For Plugin & Integration Development
 
 1. **Plugin Workflow**: [docs/guides/plugin-development.md](guides/plugin-development.md) - Complete development guide
-2. **Unified /meta Command**: [docs/reference/unified-meta-command.md](reference/unified-meta-command.md) - /meta command guide
+2. **Integration Guide**: [docs/guides/integration.md](guides/integration.md) - Claude Code and Codex integration
 3. **Git Hooks**: [docs/guides/git-hooks.md](guides/git-hooks.md) - Automatic version bumping
 4. **Release Process**: [docs/guides/release-process.md](guides/release-process.md) - Release workflow
 5. **Repository Structure**: [docs/reference/repository-structure.md](reference/repository-structure.md) - Directory organization
 
 ### For Integration Work
 
-1. **Integration Guide**: [docs/guides/integration.md](guides/integration.md) - Choosing MCP/Slash/Subagent
+1. **Integration Guide**: [docs/guides/integration.md](guides/integration.md) - Choosing MCP, Claude commands, and Codex skills
 2. **MCP Complete Guide**: [docs/guides/mcp.md](guides/mcp.md) - All MCP topics in one place
-3. **Capabilities Guide**: [docs/guides/capabilities.md](guides/capabilities.md) - Create custom capabilities
+3. **Examples**: [docs/tutorials/examples.md](tutorials/examples.md) - Provider-aware usage examples
 
 ### For Documentation Maintenance
 
-**Documentation Health Capabilities** (based on [Role-Based Documentation Architecture](methodology/role-based-documentation.md)):
+Use these checks before release or documentation-only PRs:
 
-| Your Question | Use | Frequency | What It Reveals |
-|---------------|-----|-----------|-----------------|
-| Is my doc system healthy? | `/meta doc-health` | Monthly, pre-commit | Role violations, size issues, R/E anomalies |
-| Will this doc become stale? | `/meta doc-evolution` | Monthly | Phase transitions, archival probability |
-| What docs am I missing? | `/meta doc-gaps` | Quarterly, pre-release | Undocumented features, knowledge silos |
-| Are my docs effective? | `/meta doc-usage` | Quarterly | Resolution rates, task alignment |
-| Is my doc structure compliant? | `/meta doc-structure` | Quarterly, pre-commit | DRY violations, hierarchy issues, size violations |
+| Check | Command | Purpose |
+|-------|---------|---------|
+| Markdown formatting | `markdownlint docs/**/*.md` | Catch formatting issues when markdownlint is available |
+| Repository references | `rg "Codex|Claude Code|provider" README.md docs` | Verify host-support claims stay in sync |
+| User entry points | Review `README.md`, `docs/tutorials/installation.md`, `docs/tutorials/examples.md`, `docs/guides/integration.md` | Keep install and usage docs aligned |
+| E2E docs | `make test-e2e-codex` | Validate Codex install/session behavior when code changes affect provider support |
 
 **Typical Maintenance Workflow**:
 
-```
-Bootstrap:       /meta doc-health (establish baseline)
-Monthly:         /meta doc-health + /meta doc-evolution (15 min)
-Quarterly:       All 5 capabilities + comprehensive review (90 min)
-Pre-Release:     /meta doc-gaps + /meta doc-structure (ensure completeness)
-```
+1. Search user-facing docs for outdated tool counts, retired command names, and old subagent references.
+2. Search user-facing docs for `provider`, `Codex`, and `Claude Code` to verify host-support claims stay consistent.
+3. Run `make test-e2e-codex` when implementation or packaging changes affect Codex behavior.
 
 See [Role-Based Documentation Architecture](methodology/role-based-documentation.md) for complete methodology.
 
@@ -214,7 +198,6 @@ See [Role-Based Documentation Architecture](methodology/role-based-documentation
 | **docs/core/principles.md** | Design constraints | Developers | Rarely (stable) |
 | **docs/guides/plugin-development.md** | Plugin development workflow | Plugin developers | When workflow changes |
 | **docs/reference/repository-structure.md** | Directory organization guide | Developers | Rarely (stable) |
-| **docs/reference/unified-meta-command.md** | /meta command complete guide | Users & Developers | When /meta evolves |
 | **docs/guides/mcp.md** | MCP complete reference | Users & Developers | As MCP evolves |
 | **docs/guides/integration.md** | Integration decisions | Advanced users | Stable |
 | **docs/guides/release-process.md** | Release workflow | Maintainers | Rarely (stable) |
@@ -243,7 +226,7 @@ See [Role-Based Documentation Architecture](methodology/role-based-documentation
 
 ## Plans Directory Structure
 
-Implementation plans for each development phase are organized in `plans/` with descriptive naming:
+Historical implementation plans for earlier development phases are organized in `plans/` with descriptive naming:
 
 ```
 plans/
@@ -252,8 +235,8 @@ plans/
 ├── 02-jsonl-parser/               # JSONL parsing
 ├── 08-mcp-integration/            # MCP server integration
 ├── 13-output-simplification/      # Output format standardization
-├── 22-unified-meta-command/       # Unified /meta command
-└── ...                            # 21 phases total
+├── 22-unified-meta-command/       # Historical /meta command work
+└── ...                            # Historical phase plans
 ```
 
 Each phase directory contains:

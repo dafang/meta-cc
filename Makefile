@@ -441,12 +441,12 @@ test-all: test test-e2e-mcp test-e2e-codex
 
 test-coverage: build
 	@echo "Running tests with coverage..."
-	$(GOTEST) -short -v -coverprofile=coverage.out ./...
+	$(GOTEST) -short -v -coverpkg=./... -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 test-coverage-full: build
 	@echo "Running tests with coverage (including E2E and slow tests)..."
-	$(GOTEST) -v -coverprofile=coverage.out ./...
+	$(GOTEST) -v -coverpkg=./... -coverprofile=coverage.out ./...
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 metrics-mcp:
@@ -542,10 +542,10 @@ check-no-scanner:
 lint: fmt vet lint-errors lint-error-handling lint-markdown check-no-scanner
 	@echo "Running static analysis..."
 	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./... || echo "⚠️ golangci-lint issues found (non-blocking)"; \
+		golangci-lint run ./...; \
 	else \
 		echo "golangci-lint not found. Install with:"; \
-		echo "  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+		echo "  go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8"; \
 		echo "Skipping lint checks..."; \
 	fi
 
@@ -611,7 +611,7 @@ install-pre-commit:
 	@bash scripts/install/install-pre-commit.sh
 
 test-coverage-check:
-	@$(GOTEST) -coverprofile=coverage.out ./... > /dev/null 2>&1
+	@$(GOTEST) -coverpkg=./... -coverprofile=coverage.out ./... > /dev/null 2>&1
 	@bash scripts/checks/check-coverage.sh 75
 
 lint-fix:
@@ -620,7 +620,7 @@ lint-fix:
 		golangci-lint run --fix ./...; \
 	else \
 		echo "golangci-lint not found. Install with:"; \
-		echo "  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
+		echo "  go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8"; \
 		exit 1; \
 	fi
 

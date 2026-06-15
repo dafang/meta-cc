@@ -5,6 +5,13 @@ All notable changes to the meta-cc project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- CI: fix golangci-lint v1.64 configuration validation, remove stale unused code,
+  and use the streaming JSONL reader for Codex rollout and project matching reads.
+
 ## [3.0.7] - 2026-06-10
 
 

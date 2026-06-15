@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/yaleh/meta-cc/internal/parser"
 )
 
 // FromSessionID 通过会话 ID 查找会话文件
@@ -74,8 +77,7 @@ func (l *SessionLocator) FromProjectPath(projectPath string) (string, error) {
 		return "", fmt.Errorf("failed to resolve project path: %w", err)
 	}
 
-	// 计算项目哈希 (pathToHash now handles symlink resolution)
-	projectHash := pathToHash(absPath)
+	projectHash := PathToHash(absPath)
 
 	sessions, err := l.sessionsFromProject(absPath, projectHash)
 	if err != nil {
@@ -97,8 +99,7 @@ func (l *SessionLocator) AllSessionsFromProject(projectPath string) ([]string, e
 		return nil, fmt.Errorf("failed to resolve project path: %w", err)
 	}
 
-	// 计算项目哈希 (pathToHash now handles symlink resolution)
-	projectHash := pathToHash(absPath)
+	projectHash := PathToHash(absPath)
 
 	sessions, err := l.sessionsFromProject(absPath, projectHash)
 	if err != nil {
@@ -229,15 +230,27 @@ func fileContains(path, projectPath string) bool {
 	defer file.Close()
 
 	cleanProject := filepath.Clean(projectPath)
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-	for scanner.Scan() {
+	reader := bufio.NewReader(file)
+	for {
+		line, _, readErr := parser.ReadLineFiltered(reader, parser.StrategyDefault)
+		if len(line) == 0 && readErr == io.EOF {
+			break
+		}
+		if readErr != nil && readErr != io.EOF {
+			return false
+		}
 		var record map[string]interface{}
-		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+		if err := json.Unmarshal(line, &record); err != nil {
+			if readErr == io.EOF {
+				break
+			}
 			continue
 		}
 		if recordProjectPath(record, cleanProject) {
 			return true
+		}
+		if readErr == io.EOF {
+			break
 		}
 	}
 	return false
@@ -266,13 +279,13 @@ func formatRoot(root SessionRoot) string {
 	return fmt.Sprintf("%s=%s", root.Host, root.Path)
 }
 
-// pathToHash 将项目路径转换为哈希目录名
-// 例如：/home/yale/work/myproject → -home-yale-work-myproject
+// PathToHash converts a project path to the hashed directory name used by Claude Code.
+// Example: /home/yale/work/myproject → -home-yale-work-myproject
 // Windows: C:/Users/yale/work/myproject → C--Users-yale-work-myproject
 //
-// Note: Resolves symlinks to ensure consistent hashing across platforms.
-// On macOS, /var is a symlink to /private/var, so we resolve it before hashing.
-func pathToHash(path string) string {
+// Resolves symlinks for consistent hashing across platforms
+// (e.g., /var → /private/var on macOS).
+func PathToHash(path string) string {
 	// Handle empty path edge case
 	if path == "" {
 		return ""

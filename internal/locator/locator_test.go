@@ -60,7 +60,7 @@ func TestLocate_WithProjectPath(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	testProjectPath := tempDir
-	projectHash := pathToHash(testProjectPath)
+	projectHash := PathToHash(testProjectPath)
 
 	sessionDir := filepath.Join(projectsRoot, projectHash)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
@@ -103,7 +103,7 @@ func TestLocate_DefaultCWD(t *testing.T) {
 	// 准备测试环境：使用当前工作目录
 	cwd, _ := os.Getwd()
 	projectsRoot := setupProjectsRoot(t)
-	projectHash := pathToHash(cwd)
+	projectHash := PathToHash(cwd)
 
 	sessionDir := filepath.Join(projectsRoot, projectHash)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
@@ -190,7 +190,7 @@ func TestLocate_EnvVarsIgnoredInProjectMode(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	testProjectPath := tempDir
-	projectHash := pathToHash(testProjectPath)
+	projectHash := PathToHash(testProjectPath)
 
 	sessionDir := filepath.Join(projectsRoot, projectHash)
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
