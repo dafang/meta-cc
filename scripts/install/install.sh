@@ -75,6 +75,23 @@ install_binaries() {
     info "Binary installed to $INSTALL_DIR"
 }
 
+# Install Claude plugin manifest to data directory
+install_plugin_manifest() {
+    PLUGIN_DATA_DIR="${PLUGIN_DATA_DIR:-${HOME}/.local/share/meta-cc}"
+    PLUGIN_MANIFEST_DIR="${PLUGIN_DATA_DIR}/.claude-plugin"
+
+    if [ ! -d ".claude-plugin" ]; then
+        warn ".claude-plugin directory not found, skipping plugin manifest installation"
+        return
+    fi
+
+    mkdir -p "$PLUGIN_MANIFEST_DIR"
+    cp .claude-plugin/plugin.json "$PLUGIN_MANIFEST_DIR/plugin.json" || error_exit "Failed to copy plugin.json"
+    cp .claude-plugin/marketplace.json "$PLUGIN_MANIFEST_DIR/marketplace.json" || error_exit "Failed to copy marketplace.json"
+
+    info "Plugin manifest installed to $PLUGIN_MANIFEST_DIR"
+}
+
 # Install Claude Code integration files
 install_claude_files() {
     CLAUDE_DIR="${CLAUDE_DIR:-${HOME}/.claude}"
@@ -203,6 +220,7 @@ main() {
     info "Detected platform: $PLATFORM_ARCH"
 
     install_binaries
+    install_plugin_manifest
     install_claude_files
     install_codex_files
     merge_mcp_config
