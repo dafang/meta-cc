@@ -207,6 +207,7 @@ func handleQuerySummaries(e *ToolExecutor, scope string, args map[string]interfa
 			"reason": "no_summaries_generated",
 			"hint":   `No summary records found. Summaries are a separate artifact type from raw messages. Use query_user_messages for message statistics, or get_timeline(scope="session") for current session events.`,
 		}}
+		result.BypassStats = true
 	}
 	return result, nil
 }

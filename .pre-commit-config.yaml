@@ -32,12 +32,12 @@ repos:
 
   # golangci-lint (optimized to only check changed files)
   - repo: https://github.com/golangci/golangci-lint
-    rev: v1.55.2
+    rev: v2.5.0
     hooks:
       - id: golangci-lint
         name: golangci-lint
         description: Run golangci-lint (only on changed files)
-        args: [--fast, --new-from-rev=HEAD~1, --timeout=2m]
+        args: [--new-from-rev=HEAD~1, --timeout=2m]
         pass_filenames: false
 
   # Security scanning (critical only for pre-commit)

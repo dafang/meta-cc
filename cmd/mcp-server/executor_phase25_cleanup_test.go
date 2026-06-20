@@ -316,3 +316,57 @@ func TestQuerySummariesDiagnosticWhenEmpty(t *testing.T) {
 		t.Errorf("unexpected response mode: %q", mode)
 	}
 }
+
+// TestQuerySummariesDiagnosticWithStatsOnly verifies that query_summaries(stats_only=true)
+// also returns the diagnostic object when no summaries exist, instead of silent empty output.
+func TestQuerySummariesDiagnosticWithStatsOnly(t *testing.T) {
+	testData := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"content":"hello"}}
+{"type":"assistant","timestamp":"2025-01-01T10:00:01Z","message":{"content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":10,"output_tokens":5}}}
+`
+	projectPath := setupTestSessionDir(t, testData)
+
+	originalWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalWd) }()
+	require.NoError(t, os.Chdir(projectPath))
+
+	cfg := &config.Config{}
+	executor := NewToolExecutor()
+
+	result, err := executor.ExecuteTool(cfg, "query_summaries", map[string]interface{}{
+		"scope":      "project",
+		"stats_only": true,
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result, "query_summaries(stats_only=true) must return non-empty result when no summaries exist")
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &parsed))
+
+	mode, _ := parsed["mode"].(string)
+	require.NotEmpty(t, mode, "response should have a mode field")
+
+	switch mode {
+	case "inline":
+		data, ok := parsed["data"]
+		require.True(t, ok, "inline response should have a data field")
+		require.NotNil(t, data, "data should not be null")
+		entries, ok := data.([]interface{})
+		require.True(t, ok, "data should be an array")
+		require.Len(t, entries, 1, "should contain exactly one diagnostic entry")
+		entry, ok := entries[0].(map[string]interface{})
+		require.True(t, ok, "diagnostic entry should be an object")
+		assert.Equal(t, float64(0), entry["count"])
+		assert.Equal(t, "no_summaries_generated", entry["reason"])
+		assert.NotEmpty(t, entry["hint"])
+	case "file_ref":
+		fileRef, ok := parsed["file_ref"].(map[string]interface{})
+		require.True(t, ok, "file_ref response should have a file_ref field")
+		summary, ok := fileRef["summary"].(map[string]interface{})
+		require.True(t, ok)
+		preview, _ := summary["preview"].(string)
+		assert.Contains(t, preview, `"count":0`)
+	default:
+		t.Errorf("unexpected response mode: %q", mode)
+	}
+}

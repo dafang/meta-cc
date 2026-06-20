@@ -52,7 +52,7 @@ func BuildResponse(cfg *config.Config, result mcquerypkg.QueryResult, args map[s
 		return "", fmt.Errorf("group_by_session and stats_only are mutually exclusive")
 	}
 
-	if pc.StatsOnly {
+	if pc.StatsOnly && !result.BypassStats {
 		output, err := BuildStatsOnlyResponse(rawData, pc.UseTimestampStats, pc.StatsLevel)
 		if err != nil {
 			return "", err
