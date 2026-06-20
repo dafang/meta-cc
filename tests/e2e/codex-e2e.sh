@@ -77,6 +77,7 @@ PY
     local response
     response=$(get_json_response "$raw_output")
     if [ -z "$response" ]; then
+        # shellcheck disable=SC2001  # ${var//...} cannot prefix every line; sed is required here
         echo "$raw_output" | sed 's/^/RAW: /' >&2
     fi
     echo "$response"
@@ -154,6 +155,7 @@ cat > "$FULL_PKG/lib/mcp-config.json" <<'EOF'
 }
 EOF
 cp "$PROJECT_DIR/plugin-src/.claude-plugin/plugin.json" "$FULL_PKG/.claude-plugin/plugin.json"
+cp "$PROJECT_DIR/.claude-plugin/marketplace.json" "$FULL_PKG/.claude-plugin/marketplace.json"
 cp "$PROJECT_DIR/plugin-src/.mcp.json" "$FULL_PKG/.mcp.json"
 cp "$PROJECT_DIR/plugin-src/.codex-plugin/plugin.json" "$FULL_PKG/.codex-plugin/plugin.json"
 cp "$PROJECT_DIR/plugin-src/.codex-mcp.json" "$FULL_PKG/.codex-mcp.json"
@@ -234,6 +236,7 @@ PY
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" --arg pattern "$UNIQUE_MESSAGE" \
     '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query_user_messages","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"pattern":$pattern,"limit":5}}}')
+# shellcheck disable=SC2097,SC2098,SC1007  # env-prefix on shell function; shellcheck false positive
 RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for provider-backed query_user_messages"
@@ -243,6 +246,7 @@ pass "provider-backed query_user_messages returned data from Codex SQLite + roll
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" --arg pattern "$UNIQUE_MESSAGE" \
     '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"query_user_messages","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"pattern":$pattern,"limit":5}}}')
+# shellcheck disable=SC2097,SC2098,SC1007  # env-prefix on shell function; shellcheck false positive
 RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_user_messages"
@@ -252,6 +256,7 @@ pass "query_user_messages returned data from the Codex transcript"
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
     '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"query_tools","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"tool":"exec_command","limit":5}}}')
+# shellcheck disable=SC2097,SC2098,SC1007  # env-prefix on shell function; shellcheck false positive
 RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_tools"
@@ -261,6 +266,7 @@ pass "query_tools returned Codex function_call data"
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" --arg error "$UNIQUE_ERROR" \
     '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"query_tool_errors","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"limit":5}}}')
+# shellcheck disable=SC2097,SC2098,SC1007  # env-prefix on shell function; shellcheck false positive
 RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_tool_errors"
@@ -270,6 +276,7 @@ pass "query_tool_errors returned Codex failed tool output"
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
     '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"query_token_usage","arguments":{"provider":"codex","scope":"project","working_dir":$cwd,"limit":5}}}')
+# shellcheck disable=SC2097,SC2098,SC1007  # env-prefix on shell function; shellcheck false positive
 RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for query_token_usage"
@@ -279,6 +286,7 @@ pass "query_token_usage returned Codex token_count usage"
 
 REQUEST=$(jq -nc --arg cwd "$PROJECT_DIR" \
     '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"get_work_patterns","arguments":{"provider":"codex","scope":"project","working_dir":$cwd}}}')
+# shellcheck disable=SC2097,SC2098,SC1007  # env-prefix on shell function; shellcheck false positive
 RESPONSE=$(HOME="$TMP_DIR/home" CODEX_HOME="$CODEX_HOME" META_CC_CODEX_ROOT="$CODEX_HOME" META_CC_PROJECTS_ROOT= \
     send_request "$REQUEST")
 [ -n "$RESPONSE" ] || fail "no JSON-RPC response for get_work_patterns"

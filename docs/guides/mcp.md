@@ -144,6 +144,42 @@ Most query and analysis tools accept:
 
 Time-aware tools also accept RFC3339 `since` and `until`.
 
+### `get_timeline` and `stats_only`
+
+`get_timeline` has special behaviour for `stats_only` that differs from other tools.
+Without it, a project with many sessions can return hundreds of kilobytes of event
+data and overflow the context window.
+
+**`stats_only: true`** returns a compact summary instead of the full event list:
+
+```json
+{
+  "total_entries": 9368,
+  "time_range": {
+    "from": "2026-06-16T14:19:48Z",
+    "to":   "2026-06-20T03:25:43Z",
+    "span": "85h 5m"
+  },
+  "event_type_counts": {
+    "assistant_message": 5600,
+    "user_message": 3768
+  }
+}
+```
+
+Use this as a **scout step** before deciding how to query:
+
+```text
+1. get_timeline(scope=project, stats_only=true)   → assess scale and time range
+2a. entries are small  → get_timeline(scope=project, limit=50)
+2b. entries are large  → get_timeline(scope=session)           # current session only
+                       → get_timeline(scope=project, limit=N)  # explicit cap
+                       → get_timeline(jq_filter='select .timestamp > "..."')
+```
+
+When `limit` truncates the result, the response includes `truncated: true` and
+`total_events: N` so you know more data exists.
+
 ## Output Modes
 
 The MCP server uses hybrid output:
