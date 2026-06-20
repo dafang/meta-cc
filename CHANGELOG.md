@@ -5,6 +5,19 @@ All notable changes to the meta-cc project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.3] - 2026-06-20
+
+### Fixed
+
+- `get_timeline`: implement `stats_only` parameter to return aggregate statistics
+  (total entries, time range, event type counts) instead of the full event list —
+  fixes 740K context overflow on large projects
+- `get_timeline`: add `truncated`/`total_events` fields to result when limit cuts
+  the output; auto-cap project scope at 500 events when entries exceed 2000
+- `query_summaries`: return structured diagnostic object instead of silent
+  `data: null` when no summary records exist, with `reason` and `hint` fields
+  redirecting to appropriate tools
+
 ## [3.1.2] - 2026-06-18
 
 
