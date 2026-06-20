@@ -436,6 +436,10 @@ func GetToolDefinitions() []Tool {
 				Type:        "number",
 				Description: "Max events to return (0 = unlimited)",
 			},
+			"stats_only": {
+				Type:        "boolean",
+				Description: "Return summary statistics (total entries, time range, event type counts) instead of the full event list. Safe for large project scopes.",
+			},
 			"working_dir": {
 				Type:        "string",
 				Description: "Override working directory for session lookup. Defaults to MCP server CWD.",

@@ -197,7 +197,18 @@ func handleQuerySummaries(e *ToolExecutor, scope string, args map[string]interfa
 		jqFilter = fmt.Sprintf(`%s | select(.summary | test("%s"; "i"))`, jqFilter, escapedKeyword)
 	}
 
-	return e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
+	result, err := e.ExecuteQueryForProvider(providerName, scope, jqFilter, limit, workingDir)
+	if err != nil {
+		return mcquery.QueryResult{}, err
+	}
+	if len(result.Entries) == 0 {
+		result.Entries = []interface{}{map[string]interface{}{
+			"count":  0,
+			"reason": "no_summaries_generated",
+			"hint":   `No summary records found. Summaries are a separate artifact type from raw messages. Use query_user_messages for message statistics, or get_timeline(scope="session") for current session events.`,
+		}}
+	}
+	return result, nil
 }
 
 func handleQueryToolBlocks(e *ToolExecutor, scope string, args map[string]interface{}) (mcquery.QueryResult, error) {

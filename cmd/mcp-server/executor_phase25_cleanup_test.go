@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/yaleh/meta-cc/internal/config"
@@ -259,4 +261,58 @@ func TestPhase25ToolsExecuteJQOnce(t *testing.T) {
 
 		// This is a smoke test - actual behavior tested by TestPhase25ToolsNoDoubleJQApplication
 	})
+}
+
+// TestQuerySummariesDiagnosticWhenEmpty verifies that query_summaries returns a diagnostic
+// object when no summary records exist, instead of silent null/empty data.
+func TestQuerySummariesDiagnosticWhenEmpty(t *testing.T) {
+	// Test data with only user messages — no summary records.
+	testData := `{"type":"user","timestamp":"2025-01-01T10:00:00Z","message":{"content":"hello"}}
+{"type":"assistant","timestamp":"2025-01-01T10:00:01Z","message":{"content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":10,"output_tokens":5}}}
+`
+	projectPath := setupTestSessionDir(t, testData)
+
+	originalWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalWd) }()
+	require.NoError(t, os.Chdir(projectPath))
+
+	cfg := &config.Config{}
+	executor := NewToolExecutor()
+
+	result, err := executor.ExecuteTool(cfg, "query_summaries", map[string]interface{}{"scope": "project"})
+	require.NoError(t, err)
+	require.NotEmpty(t, result, "query_summaries should return non-empty result even when no summaries exist")
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &parsed))
+
+	mode, _ := parsed["mode"].(string)
+	require.NotEmpty(t, mode, "response should have a mode field")
+
+	switch mode {
+	case "inline":
+		data, ok := parsed["data"]
+		require.True(t, ok, "inline response should have a data field")
+		require.NotNil(t, data, "data should not be null when no summaries exist")
+		entries, ok := data.([]interface{})
+		require.True(t, ok, "data should be an array")
+		require.Len(t, entries, 1, "data should contain exactly one diagnostic entry")
+		entry, ok := entries[0].(map[string]interface{})
+		require.True(t, ok, "diagnostic entry should be an object")
+		assert.Equal(t, float64(0), entry["count"], "diagnostic entry should have count=0")
+		assert.Equal(t, "no_summaries_generated", entry["reason"])
+		assert.NotEmpty(t, entry["hint"])
+	case "file_ref":
+		fileRef, ok := parsed["file_ref"].(map[string]interface{})
+		require.True(t, ok, "file_ref response should have a file_ref field")
+		summary, ok := fileRef["summary"].(map[string]interface{})
+		require.True(t, ok, "file_ref should have summary")
+		recordCount, _ := summary["record_count"].(float64)
+		assert.Equal(t, float64(1), recordCount, "file_ref should have exactly one diagnostic record")
+		preview, _ := summary["preview"].(string)
+		assert.Contains(t, preview, `"count":0`, "preview should contain diagnostic count field")
+	default:
+		t.Errorf("unexpected response mode: %q", mode)
+	}
 }

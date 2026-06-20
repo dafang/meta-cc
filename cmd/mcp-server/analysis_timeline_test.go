@@ -23,6 +23,38 @@ func TestGetTimelineToolRegistered(t *testing.T) {
 	t.Fatal("get_timeline not found in tool definitions")
 }
 
+// TestGetTimelineStatsOnly verifies stats_only mode returns aggregate statistics instead of events.
+func TestGetTimelineStatsOnly(t *testing.T) {
+	testJSONL, err := filepath.Abs("test.jsonl")
+	require.NoError(t, err)
+	_, err = os.Stat(testJSONL)
+	require.NoError(t, err, "test.jsonl must exist")
+
+	projectPath := setupAnalysisTestProjectDir(t, testJSONL)
+
+	args := map[string]interface{}{
+		"working_dir": projectPath,
+		"stats_only":  true,
+	}
+
+	output, err := analysis.New().GetTimeline(args)
+	require.NoError(t, err)
+	require.NotEmpty(t, output)
+
+	var result map[string]interface{}
+	err = json.Unmarshal([]byte(output), &result)
+	require.NoError(t, err, "stats_only output should be valid JSON")
+
+	_, hasTotalEntries := result["total_entries"]
+	assert.True(t, hasTotalEntries, "stats_only result should have total_entries field")
+
+	_, hasEventTypeCounts := result["event_type_counts"]
+	assert.True(t, hasEventTypeCounts, "stats_only result should have event_type_counts field")
+
+	_, hasEvents := result["events"]
+	assert.False(t, hasEvents, "stats_only result should not have events field")
+}
+
 // TestGetTimelineToolExecution loads test.jsonl and verifies output has events and total_span fields
 func TestGetTimelineToolExecution(t *testing.T) {
 	testJSONL, err := filepath.Abs("test.jsonl")

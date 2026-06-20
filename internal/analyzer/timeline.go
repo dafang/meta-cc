@@ -18,8 +18,24 @@ type TimelineEvent struct {
 
 // TimelineResult holds the chronological event list and total span.
 type TimelineResult struct {
-	Events    []TimelineEvent `json:"events"`
-	TotalSpan string          `json:"total_span"`
+	Events      []TimelineEvent `json:"events"`
+	TotalSpan   string          `json:"total_span"`
+	Truncated   bool            `json:"truncated,omitempty"`
+	TotalEvents int             `json:"total_events,omitempty"`
+}
+
+// TimelineStats holds aggregate statistics for a set of session entries.
+type TimelineStats struct {
+	TotalEntries    int            `json:"total_entries"`
+	TimeRange       *TimeRange     `json:"time_range,omitempty"`
+	EventTypeCounts map[string]int `json:"event_type_counts"`
+}
+
+// TimeRange holds the first and last timestamps plus a human-readable span.
+type TimeRange struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Span string `json:"span"`
 }
 
 // entryTypeLabel maps raw entry types to human-readable event types.
@@ -119,9 +135,11 @@ func GetTimeline(entries []types.SessionEntry, limit int) (*TimelineResult, erro
 	}
 
 	// Apply limit.
+	totalMerged := len(merged)
 	if limit > 0 && len(merged) > limit {
 		merged = merged[:limit]
 	}
+	truncated := len(merged) < totalMerged
 
 	// Calculate total span.
 	span := "0s"
@@ -131,5 +149,44 @@ func GetTimeline(entries []types.SessionEntry, limit int) (*TimelineResult, erro
 		span = formatSpan(last.Sub(first))
 	}
 
-	return &TimelineResult{Events: merged, TotalSpan: span}, nil
+	result := &TimelineResult{Events: merged, TotalSpan: span}
+	if truncated {
+		result.Truncated = true
+		result.TotalEvents = totalMerged
+	}
+	return result, nil
+}
+
+// GetTimelineStats returns aggregate statistics without returning the full event list.
+func GetTimelineStats(entries []types.SessionEntry) *TimelineStats {
+	counts := map[string]int{}
+	if len(entries) == 0 {
+		return &TimelineStats{TotalEntries: 0, EventTypeCounts: counts}
+	}
+
+	var earliest, latest time.Time
+	for _, e := range entries {
+		label := entryTypeLabel(e.Type)
+		counts[label]++
+		ts := entryToTimestamp(e.Timestamp)
+		if ts.IsZero() {
+			continue
+		}
+		if earliest.IsZero() || ts.Before(earliest) {
+			earliest = ts
+		}
+		if latest.IsZero() || ts.After(latest) {
+			latest = ts
+		}
+	}
+
+	stats := &TimelineStats{TotalEntries: len(entries), EventTypeCounts: counts}
+	if !earliest.IsZero() {
+		stats.TimeRange = &TimeRange{
+			From: earliest.UTC().Format(time.RFC3339),
+			To:   latest.UTC().Format(time.RFC3339),
+			Span: formatSpan(latest.Sub(earliest)),
+		}
+	}
+	return stats
 }

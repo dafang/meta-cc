@@ -191,6 +191,13 @@ func intArg(args map[string]interface{}, key string) int {
 	return 0
 }
 
+func boolArg(args map[string]interface{}, key string) bool {
+	if v, ok := args[key].(bool); ok {
+		return v
+	}
+	return false
+}
+
 func marshalResult(v interface{}) (string, error) {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -257,7 +264,19 @@ func (s *Service) GetTimeline(args map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to load session data: %w", err)
 	}
-	result, err := s.analyzers.Timeline.GetTimeline(entries, intArg(args, "limit"))
+
+	if boolArg(args, "stats_only") {
+		stats := analyzer.GetTimelineStats(entries)
+		return marshalResult(stats)
+	}
+
+	limit := intArg(args, "limit")
+	// Auto-limit large project-scope queries to prevent context overflow.
+	if limit == 0 && stringArg(args, "scope") != "session" && len(entries) > 2000 {
+		limit = 500
+	}
+
+	result, err := s.analyzers.Timeline.GetTimeline(entries, limit)
 	if err != nil {
 		return "", fmt.Errorf("get timeline failed: %w", err)
 	}
