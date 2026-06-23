@@ -29,5 +29,6 @@
     "./commands/prompt-find.md",
     "./commands/prompt-list.md",
     "./commands/prompt-show.md"
-  ]
+  ],
+  "skills": "./skills/"
 }
